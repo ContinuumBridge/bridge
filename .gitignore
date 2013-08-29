@@ -1,3 +1,5 @@
+aggregator/node-modules
+build
 *.py[cod]
 
 # C extensions

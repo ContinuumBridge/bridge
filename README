@@ -1,0 +1,32 @@
+aggregator - really not worthy of the name, just a couple of very
+simple servers to display the data coming in from a socket
+
+apps - a couple of C apps and one in python, they simply read data
+from a socket and write it to another at the moment (these are always
+run inside an LXC)
+
+concentrator - the idea behind this is that it takes the socket output
+from apps and allows communications to the outside world (the
+aggregator). Only setupChannel.c is currently used. Also contains a
+management script manager.sh which allows various configurations to be
+run, it attempts to clear up all of the processes after completion.
+
+devices - this is where some code is needed on a (remote) device
+itself (the first device was a wifi connected RaspberryPi so all this
+did was to generate a stream of data and send it to a socket)
+
+drivers - this currently holds the "driver" for the sensor tag,
+connecting to the device through Bluetooth and using gatttool to
+actually get the data
+
+lib - this is the communications library that tries to hide all of the
+nastiness in one place. Allows local and remote sockets to be created
+and uses SWIG to generate a library that can be used from within
+python
+
+lxc-scripts - scripts to allow an LXC to be generated (lxc-cb is a template)
+
+rpi-setup - various things needed for Raspberry Pi setup, the README
+lists all of the packages that are needed to run the demo
+
+scripts - currently not used

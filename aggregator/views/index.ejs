@@ -1,0 +1,34 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>D3 real-time graphs</title>
+  <link rel="stylesheet" href="/css/envision.min.css" />
+  <link href='http://fonts.googleapis.com/css?family=Oxygen' rel='stylesheet' type='text/css'>
+  <link rel="stylesheet" href="/css/main.css" />
+</head>
+<body>
+  <div class="container">
+    <h1>Aggregator</h1>
+    <div class="row">
+      <div id="temperature-time0" class="graph">
+        <header>Temperature</header>
+      </div>
+    </div>
+  </div>
+  <script type="text/javascript" src="/js/d3.v2.min.js"></script>
+  <script type="text/javascript" src="/js/cubism.v1.min.js"></script>
+  <script type="text/javascript" src="/js/envision.min.js"></script>
+  <script type="text/javascript" src="/js/realtime-graphs.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="text/javascript">
+    var voltageChart = new Chart("#temperature-time0", "green");
+    var socket = io.connect('http://<%= host %>');
+
+    socket.on('temperature-update', function(newData) {
+      voltageChart.data.push(newData.temperature);
+      voltageChart.tick();
+    });
+  </script>
+</body>
+</html>
