@@ -9,12 +9,10 @@ import subprocess
 import json
 from twisted.internet.protocol import Protocol, Factory
 from twisted.internet import reactor, defer
+from twisted.internet import task
 from autobahn.websocket import WebSocketClientFactory, \
                                WebSocketClientProtocol, \
                                connectWS
-
-def callback_func(result):
-    print result
 
 class ManageBridge:
 
@@ -79,31 +77,61 @@ class ManageBridge:
             except:
                 print ModuleName, self.apps[app]["name"], " failed to start"
 
+    def discover(self):
+        exe = "/home/pi/bridge/manager/discovery.py"
+        type = "btle"
+        subprocess.Popen([exe, type])
+
+
+    def processControlMsg(self, msg):
+        if msg["cmd"] == "start":
+            print ModuleName, "starting adaptors and apps"
+            self.startAll()
+        elif msg["cmd"] == "discover":
+            self.discover()
+        elif msg["cmd"] == "stop":
+            self.stopBridge()
+
+    def stopBridge(self):
+        pass
+
+    def checkBridge(self):
+        return True
+
+    def getManagerMsg(self):
+        msg = {"status": "ok"}
+        return msg
+      
+
 class BridgeControllerProtocol(WebSocketClientProtocol):
 
     def sendHello(self):
-        msg = {}
-        msg["status"] = "ready"
+        msg = {"status": "ready"}
         self.sendMessage(json.dumps(msg))
 
     def onOpen(self):
         self.sendHello()
+        self.monitorBridge()
 
     def onMessage(self, rawMsg, binary):
         print ModuleName, "Received message from Bridge Controller: " + rawMsg
         msg = json.loads(rawMsg)
-        if msg["cmd"] == "start":
-            print ModuleName, "starting adaptors and apps"
-            m.startAll()
+        m.processControlMsg(msg)
+
+    def monitorBridge(self):
+        if m.checkBridge():
+            msg = m.getManagerMsg()
+            self.sendMessage(json.dumps(msg))
+        reactor.callLater(2, self.monitorBridge)
 
 class ManagerSockets(Protocol):
+
     def dataReceived(self, data):
-        #response = m.processReq(json.loads(data))
-        #line = json.dumps(str(m.getAccel(gatttool))) + "\r\n" 
-        #self.transport.write(json.dumps(response) + "\r\n")
-        print ModuleName, "Received data on socket"
+        print ModuleName, "Received data on socket: ", json.loads(data)
+
     def connectionMade(self):
-        print Modulename, "Connection made to ", self.transport.getPeer()
+        print ModuleName, "Connection made to ", self.transport.getPeer()
+
     def connectionLost(self, reason):
         print ModuleName, "Disconnected"
 
@@ -119,6 +147,8 @@ if __name__ == '__main__':
     # Sockets for communicating with each adaptor and app
     mgrSocFactory=Factory()
     mgrSocFactory.protocol = ManagerSockets
+
+    # Open sockets for communicating with all apps and adaptors
     mgrSocs = m.listMgrSocs()
     for item in mgrSocs:
         try:
@@ -127,9 +157,7 @@ if __name__ == '__main__':
         except:
             print ModuleName, "Failed to open socket ", mgrSocs[item]
 
-    #d = defer.Deferred()
-    #reactor.callLater(10, d.callback, "Manager has finished its job")
-    #d.addCallback(callback_func)
+    # Start watchdog
+    #l = task.LoopingCall(m.watchdog)
+    #l.start(10.0) # call every 10 seconds
     reactor.run()
-
-
