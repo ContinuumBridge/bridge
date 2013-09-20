@@ -7,6 +7,7 @@ import time
 import os
 import subprocess
 import json
+from twisted.internet import threads
 from twisted.internet.protocol import Protocol, Factory
 from twisted.internet import reactor, defer
 from twisted.internet import task
@@ -19,6 +20,8 @@ class ManageBridge:
     def __init__(self):
         """ apps and adts data structures will be stored in a local file.
             For now just create them here as static structures. """
+        self.discovered = False
+        self.reqSync = False
         self.apps = {"app1": 
                {"name": "accelapp",
                 "exe": "/home/pi/bridge/apps/accelapp2.py",
@@ -77,11 +80,16 @@ class ManageBridge:
             except:
                 print ModuleName, self.apps[app]["name"], " failed to start"
 
-    def discover(self):
+    def doDiscover(self):
         exe = "/home/pi/bridge/manager/discovery.py"
         type = "btle"
-        subprocess.Popen([exe, type])
+        output = subprocess.check_output([exe, type])
+        self.devices = json.loads(output)
+        print ModuleName, "Devices: ", self.devices
+        self.discovered = True
 
+    def discover(self):
+        d = threads.deferToThread(self.doDiscover)
 
     def processControlMsg(self, msg):
         if msg["cmd"] == "start":
@@ -91,15 +99,26 @@ class ManageBridge:
             self.discover()
         elif msg["cmd"] == "stop":
             self.stopBridge()
+        elif msg["cmd"] == "update":
+            self.reqSync = True
 
     def stopBridge(self):
-        pass
+        print ModuleName, "Stopping bridge"
+        reactor.stop()
+        sys.exit
 
     def checkBridge(self):
         return True
 
     def getManagerMsg(self):
-        msg = {"status": "ok"}
+        if self.discovered:
+            msg = self.devices
+            self.discovered = False
+        elif self.reqSync:
+            msg = {"status": "reqSync"}
+            self.reqSync = False
+        else:
+            msg = {"status": "ok"}
         return msg
       
 

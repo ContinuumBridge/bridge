@@ -10,6 +10,8 @@ import atexit
 import pdb
 import json
 from twisted.internet.protocol import Protocol, Factory
+from twisted.protocols.basic import LineReceiver
+from twisted.internet.protocol import ReconnectingClientFactory
 from twisted.internet import reactor
 
 class ManageAccelerometer:
@@ -69,6 +71,15 @@ class ManageAccelerometer:
                         "data": self.getAccel(gatttool)}
         return response
 
+    def processManagerCmd(self, cmd):
+        print ModuleName, "Received from manager: ", cmd
+        if cmd["cmd"] == "exit":
+            msg = {"id": "acceladaptor2",
+                   "msg": "exiting"}
+        else:
+            print ModuleName, "Received unknown command from manager"
+        return msg
+
 class Accel(Protocol):
     def dataReceived(self, data):
         response = m.processReq(json.loads(data))
@@ -79,30 +90,55 @@ class Accel(Protocol):
     def connectionLost(self, reason):
         print ModuleName, "Disconnected"
 
-print ModuleName, "Hello from the twisted accelerometer adaptor"
+class ManagerClient(LineReceiver):
+    def connectionMade(self):
+        msg = {"id": "acceladaptor2",
+               "msg": "hello"}
+        self.sendLine(json.dumps(msg) + "\r\n")
 
-if len(sys.argv) < 4:
-    print ModuleName, "Wrong number of arguments"
-    exit(1)
+    def lineReceived(self, line):
+        managerMsg = json.loads(line)
+        msg = m.processManagerMsg(managerMsg)
+        self.sendLine(json.dumps(msg) + "\r\n")
 
-device = sys.argv[1]
-addr = sys.argv[2]
-mgrSocket = sys.argv[3]
-adaptorSocket = sys.argv[4]
+class cbClientFactory(ReconnectingClientFactory):
 
-#print ModuleName, "Args: ", device, addr, mgrSocket, adaptorSocket
-#os.system("sudo hciconfig " + device + " reset")
+    def clientConnectionFailed(self, connector, reason):
+        print ModuleName, "Failed to connect:", \
+              reason.getErrorMessage()
+        ReconnectingClientFactory.clientConnectionLost(self, connector, reason)
 
-m = ManageAccelerometer()
-gatttool = m.initSensorTag(device, addr)
+    def clientConnectionLost(self, connector, reason):
+        print ModuleName, "Connection lost:", \
+              reason.getErrorMessage()
+        ReconnectingClientFactory.clientConnectionLost(self, connector, reason)
 
-if m.isConnected():
-    print ModuleName, "Successfully connected to SensorTag"
-else:
-    print ModuleName, "Could not connect to Sensortag"
-
-f=Factory()
-f.protocol = Accel
-reactor.listenUNIX(adaptorSocket, f, backlog=4)
-reactor.run()
-
+if __name__ == '__main__':
+    print ModuleName, "Hello from the twisted accelerometer adaptor"
+    
+    if len(sys.argv) < 4:
+        print ModuleName, "Wrong number of arguments"
+        exit(1)
+    
+    device = sys.argv[1]
+    addr = sys.argv[2]
+    managerSocket = sys.argv[3]
+    adaptorSocket = sys.argv[4]
+    
+    m = ManageAccelerometer()
+    gatttool = m.initSensorTag(device, addr)
+    
+    if m.isConnected():
+        print ModuleName, "Successfully connected to SensorTag"
+    else:
+        print ModuleName, "Could not connect to Sensortag"
+    
+    managerFactory = cbClientFactory()
+    managerFactory.protocol = ManagerClient
+    reactor.connectUNIX(managerSocket, managerFactory, timeout=10)
+    
+    f=Factory()
+    f.protocol = Accel
+    reactor.listenUNIX(adaptorSocket, f, backlog=4)
+    reactor.run()
+    

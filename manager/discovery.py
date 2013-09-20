@@ -16,22 +16,21 @@ from twisted.internet import reactor, defer
 from twisted.internet import task
 
 if __name__ == '__main__':
-    print ModuleName, "Discovering"
     discoveredAddresses = []
     try:
         cmd = "sudo hcitool lescan"
         p = pexpect.spawn(cmd)
     except:
-        print ModuleName, "lescan failed to spawn"
+        sys.stderr.write("Error: lescan failed to spawn\n")
         sys.exit()
     try:
         p.expect('.*', timeout=10)
         p.expect('.*', timeout=10)
     except:
-        print ModuleName, "Error. Nothing returned from pexpect"
+        sys.stderr.write("Error. Nothing returned from pexpect\n")
         sys.exit()
     startTime = time.time()
-    endTime = startTime + 20
+    endTime = startTime + 10
     while time.time() < endTime:
         try:
             p.expect('.*', timeout=10)
@@ -47,6 +46,16 @@ if __name__ == '__main__':
                 if found == False:
                     discoveredAddresses.append(addr)
         except:
-            print ModuleName, "lescan proessing error"
-    
-    print ModuleName, "Addresses: ", discoveredAddresses
+            sys.stderr.write("Error: lescan error\n")
+    try:
+        p.sendcontrol("c")
+    except:
+        sys.stderr.write("Error: Could not kill lescan process\n")
+
+    d = {}
+    d["status"] = "discovered"
+    d["num"] = len(discoveredAddresses)
+    if len(discoveredAddresses) != 0:
+        for a in range (len(discoveredAddresses)):
+            d[str(a)] = ["SensorTag", discoveredAddresses[a]]
+    print json.dumps(d)
