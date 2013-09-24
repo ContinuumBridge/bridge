@@ -25,9 +25,9 @@ class ManageBridge:
         self.reqSync = False
         self.stopping = False
         self.apps = {"app1": 
-               {"name": "accelapp",
-                "exe": "/home/pi/bridge/apps/accelapp2.py",
-                "mgrSoc": "/tmp/accelManagerSocket",
+               {"name": "living",
+                "exe": "/home/pi/bridge/apps/living.py",
+                "mgrSoc": "/tmp/livingManagerSocket",
                 "numAdtSocs": 1,
                 "adtSocs": ["/tmp/tagAppSocket1"]}
            }
@@ -54,6 +54,7 @@ class ManageBridge:
         return mgrSocs
 
     def startAll(self):
+        self.stopping = False
         # Start adaptors
         for adaptor in self.adts:
             try:
@@ -99,8 +100,11 @@ class ManageBridge:
             self.startAll()
         elif msg["cmd"] == "discover":
             self.discover()
-        elif msg["cmd"] == "stop":
-            self.stopBridge()
+        elif msg["cmd"] == "stopapps":
+            self.stopApps()
+        elif msg["cmd"] == "stopall":
+            self.stopApps()
+            reactor.callLater(8, self.stopManager)
         elif msg["cmd"] == "update":
             self.reqSync = True
 
@@ -109,10 +113,9 @@ class ManageBridge:
         reactor.stop()
         sys.exit
 
-    def stopBridge(self):
+    def stopApps(self):
         print ModuleName, "Stopping apps and adaptors"
         self.stopping = True
-        reactor.callLater(8, self.stopManager)
 
     def checkBridge(self):
         return True
@@ -174,10 +177,17 @@ class ManagerSockets(LineReceiver):
 
 if __name__ == '__main__':
 
+    if len(sys.argv) < 2:
+        print "Usage: manager <aggregator ip address>:<aggregator socket>"
+        exit(1)
+    aggregator = "ws://" + sys.argv[1]
+    print ModuleName, "Aggregator = ", aggregator
+
     m = ManageBridge()
     m.initBridge()
     # WebSocket for communicating with bridge controller
-    wsfactory = WebSocketClientFactory("ws://192.168.0.15:9000", debug = False)
+    #wsfactory = WebSocketClientFactory("ws://192.168.0.15:9000", debug = False)
+    wsfactory = WebSocketClientFactory(aggregator, debug = False)
     wsfactory.protocol = BridgeControllerProtocol
     connectWS(wsfactory)
 

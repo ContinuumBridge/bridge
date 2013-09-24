@@ -60,7 +60,13 @@ class BridgeControlProtocol (WebSocketServerProtocol):
  
 if __name__ == '__main__':
  
-    factory = WebSocketServerFactory("ws://192.168.0.19:9000", debug = False)
+    if len(sys.argv) < 2:
+        print "Usage: manager <bridge ip address>:<bridge socket>"
+        exit(1)
+    bridge = "ws://" + sys.argv[1]
+    print "Bridge = ", bridge
+
+    factory = WebSocketServerFactory(bridge, debug = False)
     factory.protocol = BridgeControlProtocol
     listenWS(factory)
     reactor.run()

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 ModuleName = "Accel Adaptor       "
+id = "acceladaptor2"
 
 import pexpect
 import sys
@@ -15,8 +16,10 @@ from twisted.internet.protocol import ReconnectingClientFactory
 from twisted.internet import reactor
 
 class ManageAccelerometer:
+    status = "ok"
     def __init__(self):
         self.connected = False
+        self.status = "ok"
 
     def initSensorTag(self, device, addr):
         try:
@@ -71,35 +74,65 @@ class ManageAccelerometer:
                         "data": self.getAccel(gatttool)}
         return response
 
-    def processManagerCmd(self, cmd):
-        print ModuleName, "Received from manager: ", cmd
-        if cmd["cmd"] == "exit":
-            msg = {"id": "acceladaptor2",
-                   "msg": "exiting"}
+    def processManagerMsg(self, cmd):
+        #print ModuleName, "Received from manager: ", cmd
+        if cmd["cmd"] == "stop":
+            print ModuleName, "Stopping"
+            msg = {"id": id,
+                   "status": "stopping"}
+            reactor.stop()
+            sys.exit
+        elif cmd["cmd"] != "ok":
+            msg = {"id": id,
+                   "status": "unknown"}
         else:
-            print ModuleName, "Received unknown command from manager"
+            msg = {"status": "none"}
         return msg
+
+    def reportStatus(self):
+        return self.status
+
+    def setStatus(self, newStatus):
+        self.status = newStatus
 
 class Accel(Protocol):
     def dataReceived(self, data):
-        response = m.processReq(json.loads(data))
-        #line = json.dumps(str(m.getAccel(gatttool))) + "\r\n" 
+        response = p.processReq(json.loads(data))
+        #line = json.dumps(str(p.getAccel(gatttool))) + "\r\n" 
         self.transport.write(json.dumps(response) + "\r\n")
+
     def connectionMade(self):
-        print ModuleName, "Connection made to ", self.transport.getPeer()
+        print ModuleName, "Connection made to app ", self.transport.getPeer()
+
     def connectionLost(self, reason):
-        print ModuleName, "Disconnected"
+        print ModuleName, "Disconnected from app"
 
 class ManagerClient(LineReceiver):
     def connectionMade(self):
-        msg = {"id": "acceladaptor2",
-               "msg": "hello"}
-        self.sendLine(json.dumps(msg) + "\r\n")
+        msg = {"id": id,
+               "status": "hello"}
+        self.sendLine(json.dumps(msg))
+        reactor.callLater(5, self.monitorProcess)
 
     def lineReceived(self, line):
         managerMsg = json.loads(line)
-        msg = m.processManagerMsg(managerMsg)
-        self.sendLine(json.dumps(msg) + "\r\n")
+        msg = p.processManagerMsg(managerMsg)
+        if msg["status"] != "none":
+            self.sendLine(json.dumps(msg))
+
+    def monitorProcess(self):
+        msg = {"id": id,
+               "status": p.status}
+        self.sendLine(json.dumps(msg))
+        p.status = "ok"
+        reactor.callLater(2, self.monitorProcess)
+
+    def monitorProcess(self):
+        msg = {"id": id,
+               "status": p.reportStatus()}
+        self.sendLine(json.dumps(msg))
+        p.setStatus("ok")
+        reactor.callLater(2, self.monitorProcess)
 
 class cbClientFactory(ReconnectingClientFactory):
 
@@ -114,7 +147,7 @@ class cbClientFactory(ReconnectingClientFactory):
         ReconnectingClientFactory.clientConnectionLost(self, connector, reason)
 
 if __name__ == '__main__':
-    print ModuleName, "Hello from the twisted accelerometer adaptor"
+    print ModuleName, "Hello"
     
     if len(sys.argv) < 4:
         print ModuleName, "Wrong number of arguments"
@@ -125,10 +158,10 @@ if __name__ == '__main__':
     managerSocket = sys.argv[3]
     adaptorSocket = sys.argv[4]
     
-    m = ManageAccelerometer()
-    gatttool = m.initSensorTag(device, addr)
+    p = ManageAccelerometer()
+    gatttool = p.initSensorTag(device, addr)
     
-    if m.isConnected():
+    if p.isConnected():
         print ModuleName, "Successfully connected to SensorTag"
     else:
         print ModuleName, "Could not connect to Sensortag"
