@@ -12,6 +12,10 @@ from twisted.internet import task
 from twisted.internet import reactor
 
 class Accelerometer:
+    """ Takes x, y, z accelerometer values & produces an energy output.
+        The energy output is the deviation of the absolute values from
+        a moving average that is calculated over the last averageLength
+        samples. """
 
     averageLength = 64 
     Loc = 0
@@ -45,34 +49,38 @@ class Accelerometer:
         return energy
 
 class App:
+    """ This is what actually does the work """
     status = "ok"
     energyThreshold = 2.0
     def __init___(self):
         self.status = "ok"
 
-    def process(self, response):
+    def processResp(self, resp):
         req = {}
-        #print "response: ", response
-        if response["id"] != "accel":
+        #print "response: ", resp
+        if resp["name"] != "sensorTag":
             pass
-        if response["content"] == "data":
-            accel = [response["data"]["x"], response["data"]["y"], \
-                    response["data"]["z"]]
+        if resp["content"] == "accel":
+            accel = [resp["data"]["x"], resp["data"]["y"], \
+                    resp["data"]["z"]]
             #print ModuleName, "accel = ", accel
             energy = accel1.detectEvent(accel)
             if energy > self.energyThreshold:
                 print ModuleName, "Energy = ", energy
+                #processData(energy)
             req = {"id": id,
-                   "cmd": "send-accel"}
-        elif response["content"] == "none" and response["status"] == "ok":
+                   "req": "req-accel"}
+        elif resp["content"] == "none" and resp["status"] == "ok":
             req = {"id": id,
-                   "cmd": "send-accel"}
+                   "req": "req-accel"}
         else:
+            req = {"id": id,
+                   "req": "none"}
             # A problem has occured. Report it to bridge manager
             self.status = "adaptor problem"
         return req 
 
-    def processManagerMsg(self, cmd):
+    def cbManagerMsg(self, cmd):
         #print ModuleName, "Received from manager: ", cmd
         if cmd["cmd"] == "stop":
             print ModuleName, "Stopping"
@@ -93,18 +101,18 @@ class App:
     def setStatus(self, newStatus):
         self.status = newStatus
 
-class AccelADTClient(LineReceiver):
+class cbAdaptorClient(LineReceiver):
     def connectionMade(self):
         req = {"id": id,
-               "cmd": "init"} 
-        self.sendLine(json.dumps(req) + "\r\n")
+               "req": "init"}
+        self.sendLine(json.dumps(req))
 
-    def lineReceived(self, line):
-        response = json.loads(line)
-        req = p.process(response)
-        self.sendLine(json.dumps(req) + "\r\n")
+    def lineReceived(self, data):
+        resp = json.loads(data)
+        req = p.processResp(resp)
+        self.sendLine(json.dumps(req))
 
-class ManagerClient(LineReceiver):
+class cbManagerClient(LineReceiver):
     def connectionMade(self):
         msg = {"id": id,
                "status": "hello"} 
@@ -113,7 +121,7 @@ class ManagerClient(LineReceiver):
 
     def lineReceived(self, line):
         managerMsg = json.loads(line)
-        msg = p.processManagerMsg(managerMsg)
+        msg = p.cbManagerMsg(managerMsg)
         if msg["status"] != "none":
             self.sendLine(json.dumps(msg))
 
@@ -148,11 +156,11 @@ if __name__ == '__main__':
     
     p = App()
     accel1 = Accelerometer()
-    accelADTfactory = cbClientFactory()
-    accelADTfactory.protocol = AccelADTClient 
-    reactor.connectUNIX(adaptorSocket, accelADTfactory, timeout=10)
+    sensorTagfactory = cbClientFactory()
+    sensorTagfactory.protocol = cbAdaptorClient 
+    reactor.connectUNIX(adaptorSocket, sensorTagfactory, timeout=10)
     managerFactory = cbClientFactory()
-    managerFactory.protocol = ManagerClient
+    managerFactory.protocol = cbManagerClient
     reactor.connectUNIX(managerSocket, managerFactory, timeout=10)
     reactor.run()
     
