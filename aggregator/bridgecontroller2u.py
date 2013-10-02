@@ -1,14 +1,13 @@
 import json
 import sys
 import time
-from twisted.internet import reactor
 from twisted.internet import threads
-from autobahn.websocket import WebSocketServerFactory, \
-                               WebSocketServerProtocol, \
-                               listenWS
+from twisted.internet.protocol import Protocol, Factory
+from twisted.internet import reactor, defer
+from twisted.protocols.basic import LineReceiver
 from pprint import pprint
  
-class BridgeControlProtocol (WebSocketServerProtocol):
+class BridgeControlProtocol(LineReceiver):
  
     def __init__(self):
         self.watchTime = time.time()
@@ -17,7 +16,10 @@ class BridgeControlProtocol (WebSocketServerProtocol):
         w = threads.deferToThread(self.watchDog)
         self.config = {}
 
-    def onClose(self, wasClean, code, reason):
+    def connectionMade(self):
+        print "Connection made from Bridge"
+
+    def connectionLost(self, reason):
         print "Bridge closed connection"
 
     def checkCmd(self):
@@ -30,7 +32,7 @@ class BridgeControlProtocol (WebSocketServerProtocol):
                     process = False
                 else:
                     msg  = {"cmd": cmd}
-                    self.sendMessage(json.dumps(msg))
+                    self.sendLine(json.dumps(msg))
             except:
                 print "Problem with command processing"
         self.checkWatchDog = False
@@ -69,9 +71,9 @@ class BridgeControlProtocol (WebSocketServerProtocol):
             self.config["apps"] = apps
         else:
             self.config["cmd"] = "none"
-        self.sendMessage(json.dumps(self.config))
+        self.sendLine(json.dumps(self.config))
 
-    def onMessage(self, rawMsg, binary):
+    def lineReceived(self, rawMsg):
         #print "Message received: ", rawMsg
         self.watchTime = time.time()
         msg = json.loads(rawMsg)
@@ -85,7 +87,7 @@ class BridgeControlProtocol (WebSocketServerProtocol):
             self.processDiscovered(msg)
         elif msg["status"] == "reqSync":
             print "Sync requested"
-            self.sendMessage(json.dumps(self.config))
+            self.sendLine(json.dumps(self.config))
         elif msg["status"] != "ok":
             print "Unknown message received from bridge" 
  
@@ -94,10 +96,16 @@ if __name__ == '__main__':
     if len(sys.argv) < 2:
         print "Usage: manager <bridge ip address>:<bridge socket>"
         exit(1)
-    bridge = "ws://" + sys.argv[1]
-    print "Bridge = ", bridge
+    bridgeSoc = sys.argv[1]
+    print "Bridge socket: ", bridgeSoc
 
-    factory = WebSocketServerFactory(bridge, debug = False)
-    factory.protocol = BridgeControlProtocol
-    listenWS(factory)
+    bridgeSocFactory=Factory()
+    bridgeSocFactory.protocol = BridgeControlProtocol
+
+    try:
+        reactor.listenUNIX(bridgeSoc, bridgeSocFactory, backlog=4)
+        print "Opened Bridge socket ", bridgeSoc
+    except:
+        print "Failed to open Bridge socket ", bridgeSoc
+
     reactor.run()
