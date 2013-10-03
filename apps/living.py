@@ -57,7 +57,6 @@ class App:
 
     def processResp(self, resp):
         req = {}
-        #print "response: ", resp
         if resp["name"] != "sensorTag":
             pass
         if resp["content"] == "accel":
@@ -70,7 +69,7 @@ class App:
                 #processData(energy)
             req = {"id": id,
                    "req": "req-accel"}
-        elif resp["content"] == "none" and resp["status"] == "ok":
+        elif resp["content"] == "none":
             req = {"id": id,
                    "req": "req-accel"}
         else:

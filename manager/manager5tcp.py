@@ -233,7 +233,7 @@ if __name__ == '__main__':
 
     concFactory = ConcFactory()
     concFactory.protocol = ConcProtocol
-    reactor.connectUNIX(concSocket, concFactory, timeout=10)
+    reactor.connectTCP("localhost", int(concSocket), concFactory, timeout=10)
 
     # Sockets factory for communicating with each adaptor and app
     mgrSocFactory=Factory()

@@ -103,7 +103,8 @@ if __name__ == '__main__':
     bridgeSocFactory.protocol = BridgeControlProtocol
 
     try:
-        reactor.listenUNIX(bridgeSoc, bridgeSocFactory, backlog=4)
+        #reactor.listenTCP(bridgeSoc, bridgeSocFactory, backlog=4)
+        reactor.listenTCP(int(bridgeSoc), bridgeSocFactory)
         print "Opened Bridge socket ", bridgeSoc
     except:
         print "Failed to open Bridge socket ", bridgeSoc
