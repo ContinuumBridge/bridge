@@ -1,26 +1,37 @@
 // Set up the socket client
 var io = require('socket.io-client'),
-socket = io.connect('54.200.16.244', {
+serverSocket = io.connect('54.200.16.244', {
     port: 4000 
 });
-socket.on('connect', function () { console.log("socket connected"); });
-socket.emit('status', { status: 'ready' });
+serverSocket.on('connect', function () { console.log("Web socket connected"); });
+serverSocket.emit('status', { status: 'ready' });
 
-// Imports for unix socket
-var net = require('net'),
-    fs = require('fs'),
-    sock;
+// Set up the TCP socket for the bridge
+var net = require('net');
+var BRIDGE_PORT = 5000;
+//var bridgeSocket;
 
-// Create socket file
-fs.open('/tmp/node.test.sock', 'w+', function(err, fdesc){
+net.createServer(function(bridgeSocket) {
 
-    if (err || !fdesc) {
-        throw 'Error: ' + (err || 'No fdesc');
-    }
+    bridgeSocket.on('connect', function() {
 
-    // Create socket
-    sock = new net.Socket({ fd : fdesc });
-    console.log(sock);
+        console.log('Local TCP socket connected on: ' + HOST + ':' + PORT);
+        bridgeSocket.write('Hi from node!');
+    });
+    // Relay data from the TCP socket to the websocket
+    bridgeSocket.on('data', function(data) {
+        
+        console.log('Data from bridge: ' + data);
+        wSocket.emit('data', data);
+    });
+    
+    // Add a 'close' event handler for the bridgeTCPClient socket
+    bridgeSocket.on('close', function() {
+        console.log('Bridge connection closed');
+    });
 });
 
-
+serverSocket.on('cmd', function(cmd) {
+    console.log('Command from server: ' + cmd);
+    bridgeSocket.write('cmd', cmd);
+});
