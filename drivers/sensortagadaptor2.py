@@ -24,9 +24,11 @@ class ManageTag:
         self.addr = addr
         self.connected = False
         self.status = "ok"
+        self.fetchAccel = True #Set to False to stop fetch thread
         self.accel = {} #To hold latest accel values
         self.accelReady = False #No accel values at start of time
-        self.fetchAccel = False
+        self.startTime = time.time()
+        self.accelCount = 0
 
     def initSensorTag(self):
         try:
@@ -51,8 +53,8 @@ class ManageTag:
             self.gatt.expect('\[LE\]>')
             self.gatt.sendline('char-write-cmd 0x2e 0100')
             self.gatt.expect('\[LE\]>')
-            # Period = 0x34 value x 10 ms
-            self.gatt.sendline('char-write-cmd 0x34 0a')
+            # Period = 0x34 value x 10 ms (thought to be 0x0a)
+            self.gatt.sendline('char-write-cmd 0x34 0A')
             self.gatt.expect('\[LE\]>')
             self.connected = True
             return "ok"
@@ -65,22 +67,29 @@ class ManageTag:
     def getAccel(self):
         """ Updates accel values
         """
-        # Need first gatt.expect as there is always a command prompt 
-        #print ModuleName, "In getAccel"
-        self.gatt.expect('\[LE\]>')
-        self.gatt.expect('value: .*')
-        raw = self.gatt.after.split()
-        updatingAccel = True #To prevent access during update
-        accel = {}
-        accel["x"] = self.signExtend(int(raw[1], 16))
-        accel["y"] = self.signExtend(int(raw[2], 16))
-        accel["z"] = self.signExtend(int(raw[3], 16))
-        accel["time"] = time.time()
-        self.updatingAccel = False
-        return accel
-
+        while self.fetchAccel:
+            # Need first gatt.expect as there is always a command prompt 
+            # Turned out above not needed, but keep in comment in case
+            #self.gatt.expect('\[LE\]>')
+            self.gatt.expect('value: .*')
+            raw = self.gatt.after.split()
+            self.accel["x"] = self.signExtend(int(raw[1], 16))
+            self.accel["y"] = self.signExtend(int(raw[2], 16))
+            self.accel["z"] = self.signExtend(int(raw[3], 16))
+            self.accel["timeStamp"] = time.time()
+            self.accelReady = True
+    
     def reqAccel(self):
-        accel = self.getAccel()
+        while self.accelReady == False:
+            time.sleep(0.05) 
+        accel = self.accel
+        # Check how often we're actually getting accel values
+        self.accelCount = self.accelCount + 1
+        if accel["timeStamp"] - self.startTime > 10:
+            print ModuleName, "Readings in 10s = ", self.accelCount
+            self.accelCount = 0
+            self.startTime = accel["timeStamp"]        
+        self.accelReady = False
         return accel 
     
     def processReq(self, req):
@@ -89,6 +98,9 @@ class ManageTag:
         d1 = defer.Deferred()
         if req["req"] == "init" or req["req"] == "char":
             tagStatus = self.initSensorTag()    
+            if tagStatus == "ok":
+                # Start a thread that continually gets accel values
+                d2 = threads.deferToThread(self.getAccel)
             resp = {"name": "sensortag",
                     "instance": "sensortag1",
                     "status": tagStatus,
