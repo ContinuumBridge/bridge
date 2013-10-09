@@ -6,6 +6,7 @@ import sys
 import os.path
 import time
 import json
+import anydbm
 from twisted.internet.protocol import ReconnectingClientFactory
 from twisted.protocols.basic import LineReceiver
 from twisted.internet import task
@@ -17,7 +18,7 @@ class Accelerometer:
         a moving average that is calculated over the last averageLength
         samples. """
 
-    averageLength = 64 
+    averageLength = 128 
     Loc = 0
     total = [0.0, 0.0, 0.0]
     learnt = False
@@ -26,6 +27,7 @@ class Accelerometer:
     def __init__(self):
         for i in xrange(self.averageLength):
             self.values.append([0.0, 0.0, 0.0])
+        self.accelFile = open("accel.csv", mode="w")
 
     def detectEvent(self, accel):
         """ Compute moving averages for x, y and z over averageLen samples """
@@ -41,17 +43,31 @@ class Accelerometer:
             #print ModuleName, "Av: ", av[0], av[1], av[2]
 
         if self.learnt:
-            energy = (abs(accel[0])-abs(av[0])) + \
-                     (abs(accel[1])-abs(av[1])) + \
-                     (abs(accel[2])-abs(av[2]))
+            energy = [(abs(accel[0])-abs(av[0])), \
+                      (abs(accel[1])-abs(av[1])), \
+                      (abs(accel[2])-abs(av[2]))]
         else:
-            energy = 0.0
+            energy = [0.0, 0.0, 0.0]
         return energy
 
+    def processAccel(self, resp):
+        energyThreshold = 1.5
+        accel = [resp["data"]["x"], resp["data"]["y"], \
+                resp["data"]["z"]]
+        energy = accel1.detectEvent(accel)
+        now = time.ctime(resp["data"]["timeStamp"])
+        self.accelFile.write(now + ",   " + str(accel[0]) + ",   " \
+                             + str(accel[1]) + ",   " \
+                             + str(accel[2]) + "\n\r")
+        for e in range(3):
+            if energy[e] > energyThreshold:
+                self.inEvent = True
+                now = time.ctime(resp["data"]["timeStamp"])
+                print ModuleName, now, " Energy ", e, " = ", energy[e] 
+ 
 class App:
     """ This is what actually does the work """
     status = "ok"
-    energyThreshold = 2.0
     def __init___(self):
         self.status = "ok"
 
@@ -60,13 +76,7 @@ class App:
         if resp["name"] != "sensorTag":
             pass
         if resp["content"] == "accel":
-            accel = [resp["data"]["x"], resp["data"]["y"], \
-                    resp["data"]["z"]]
-            #print ModuleName, "accel = ", accel
-            energy = accel1.detectEvent(accel)
-            if energy > self.energyThreshold:
-                print ModuleName, "Energy = ", energy
-                #processData(energy)
+            accel1.processAccel(resp)
             req = {"id": id,
                    "req": "req-accel"}
         elif resp["content"] == "none":
