@@ -1,7 +1,7 @@
 
 // Set up the TCP socket for the bridge
 var net = require('net');
-    JsonSocket = require('json-socket');
+    //JsonSocket = require('json-socket');
 //var BRIDGE_PORT = 5000;
 var Bacon = require('baconjs').Bacon;
 //var bridgeSocket;

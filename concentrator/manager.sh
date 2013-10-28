@@ -220,7 +220,7 @@ fi
 if [ "$#" == "1" ]; then
     basedir=$1
 else
-    basedir=/home/pi/cbr-proto2
+    basedir=/home/pi/bridge
 fi
 if [ ! -d $basedir ]; then
     echo "$basedir not found"

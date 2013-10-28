@@ -19,7 +19,14 @@ controllerSocket.commands.onValue(function(value) { console.log('Controller >', 
 //});
 
 controllerSocket.commands.onValue(function(value) {
-    console.log('controllerSocket', value);
     //bridgeConcentrator.socket.write(value + '\r\n');
-    bridgeConcentrator.socket.write('{ "cmd": "start" }\r\n');
+
+    message = JSON.parse(value);
+    console.log('controllerSocket', message);
+    if (message.cmd == 'start') {
+        bridgeConcentrator.socket.write('{ "cmd": "start" }\r\n');
+    } else {
+        bridgeConcentrator.socket.write('{ "cmd": "discover" }\r\n');
+    }
+        
 });

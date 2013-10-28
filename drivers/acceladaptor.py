@@ -7,6 +7,8 @@ import os
 import atexit
 from signal import signal, SIGTERM
 import pdb
+import json
+import pprint
 
 from cbcomms import *
 
@@ -109,11 +111,14 @@ time.sleep(1)
 while True:
     readChannel(ch)
     buffer = getChannelData(ch)
+    action = json.loads(buffer)
+    print "JSON:"
+    pprint (action)
     # Get the required data and then send it
-    if "accel" in buffer:
-        setChannelData(ch, str(getAccel(gatttool)))
-    else:
-        setChannelData(ch, "unknown request")
+    #if "accel" in buffer:
+    setChannelData(ch, str(getAccel(gatttool)))
+    #else:
+    #    setChannelData(ch, "unknown request")
 
     writeChannel(ch)
 

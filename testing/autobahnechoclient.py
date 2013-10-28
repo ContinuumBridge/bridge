@@ -1,4 +1,4 @@
-from twisted.internet import reactor
+from twisted.internet import reactor, task
 from autobahn.websocket import WebSocketClientFactory, \
                                WebSocketClientProtocol, \
                                connectWS
@@ -16,10 +16,16 @@ class EchoClientProtocol(WebSocketClientProtocol):
       print "Got echo: " + msg
       reactor.callLater(1, self.sendHello)
  
+def runEverySecond():
+    print "A second has passed"
+
  
 if __name__ == '__main__':
  
-   factory = WebSocketClientFactory("ws://localhost:9000", debug = False)
-   factory.protocol = EchoClientProtocol
-   connectWS(factory)
-   reactor.run()
+    l = task.LoopingCall(runEverySecond)
+    l.start(1.0) # call every second
+
+    factory = WebSocketClientFactory("ws://192.168.0.15:9000", debug = False)
+    factory.protocol = EchoClientProtocol
+    connectWS(factory)
+    reactor.run()

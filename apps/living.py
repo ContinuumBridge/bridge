@@ -7,6 +7,8 @@ import os.path
 import time
 import json
 import anydbm
+from pprint import pprint
+from collections import defaultdict
 from twisted.internet.protocol import ReconnectingClientFactory
 from twisted.protocols.basic import LineReceiver
 from twisted.internet import task
@@ -23,11 +25,17 @@ class Accelerometer:
     total = [0.0, 0.0, 0.0]
     learnt = False
     values = []
+    prevMinOfDay = 0
+    startOfTime = True
 
     def __init__(self):
         for i in xrange(self.averageLength):
             self.values.append([0.0, 0.0, 0.0])
-        self.accelFile = open("accel.csv", mode="w")
+        self.livingData = self.dictTree()
+        self.accelFile = open("l.csv", mode="w")
+
+    def dictTree(self):
+        return defaultdict(self.dictTree)
 
     def detectEvent(self, accel):
         """ Compute moving averages for x, y and z over averageLen samples """
@@ -51,19 +59,45 @@ class Accelerometer:
         return energy
 
     def processAccel(self, resp):
-        energyThreshold = 1.5
+        energyThreshold = 1.7
         accel = [resp["data"]["x"], resp["data"]["y"], \
                 resp["data"]["z"]]
         energy = accel1.detectEvent(accel)
         now = time.ctime(resp["data"]["timeStamp"])
-        self.accelFile.write(now + ",   " + str(accel[0]) + ",   " \
-                             + str(accel[1]) + ",   " \
-                             + str(accel[2]) + "\n\r")
+        trigger = False
         for e in range(3):
             if energy[e] > energyThreshold:
-                self.inEvent = True
-                now = time.ctime(resp["data"]["timeStamp"])
-                print ModuleName, now, " Energy ", e, " = ", energy[e] 
+                trigger = True
+                energy[e] = energy[e] - energyThreshold
+            else:
+                energy[e] = 0
+        if trigger:
+            now = time.ctime(resp["data"]["timeStamp"])
+            print ModuleName, now, " Energy ", e, " = ", energy[e] 
+            timeStamp = resp["data"]["timeStamp"] 
+            minOfDay = int(timeStamp - timeStamp%60)
+            if minOfDay != self.prevMinOfDay:
+                print ModuleName, "New minOfDay = ", minOfDay
+                for e in range(3):
+                    self.livingData["dev1"][minOfDay][e] = int(energy[e] * 100)
+                #dat = json.dumps(self.livingData)
+                #pprint(dat)
+                if self.prevMinOfDay != 0:
+                    self.accelFile.write(time.ctime(self.prevMinOfDay) \
+                         + ",  " \
+                         + str(self.prevMinOfDay) + ",  " + \
+                         str(self.livingData["dev1"][self.prevMinOfDay][0]) \
+                         + ",  " + \
+                         str(self.livingData["dev1"][self.prevMinOfDay][1]) \
+                         + ",  " + \
+                         str(self.livingData["dev1"][self.prevMinOfDay][2]) \
+                         + "\r\n")
+                self.prevMinOfDay = minOfDay
+            else:       
+                print ModuleName, "Same minOfDay as before = ", minOfDay
+                for e in range(3):
+                    self.livingData["dev1"][minOfDay][e] += \
+                    int(energy[e] * 100)
  
 class App:
     """ This is what actually does the work """

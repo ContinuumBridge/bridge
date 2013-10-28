@@ -21,13 +21,13 @@ if __name__ == '__main__':
         cmd = "sudo hcitool lescan"
         p = pexpect.spawn(cmd)
     except:
-        sys.stderr.write("Error: lescan failed to spawn\n")
+        sys.stderr.write(ModuleName + "Error: lescan failed to spawn\n")
         sys.exit()
     try:
         p.expect('.*', timeout=10)
         p.expect('.*', timeout=10)
     except:
-        sys.stderr.write("Error. Nothing returned from pexpect\n")
+        sys.stderr.write(ModuleName + "Error. Nothing returned from pexpect\n")
         sys.exit()
     startTime = time.time()
     endTime = startTime + 10
@@ -46,11 +46,11 @@ if __name__ == '__main__':
                 if found == False:
                     discoveredAddresses.append(addr)
         except:
-            sys.stderr.write("Error: lescan error\n")
+            sys.stderr.write(ModuleName + "lescan skip \n")
     try:
         p.sendcontrol("c")
     except:
-        sys.stderr.write("Error: Could not kill lescan process\n")
+        sys.stderr.write(ModuleName + "Error: Could not kill lescan process\n")
 
     d = {}
     d["status"] = "discovered"

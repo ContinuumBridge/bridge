@@ -1,3 +1,4 @@
+node_modules/*
 aggregator/node-modules
 build
 *.py[cod]

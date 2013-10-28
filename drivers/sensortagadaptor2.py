@@ -97,16 +97,22 @@ class ManageTag:
         #print ModuleName, "processReq", req
         d1 = defer.Deferred()
         if req["req"] == "init" or req["req"] == "char":
-            tagStatus = self.initSensorTag()    
-            if tagStatus == "ok":
-                # Start a thread that continually gets accel values
-                d2 = threads.deferToThread(self.getAccel)
+            while self.connected == False:
+                tagStatus = self.initSensorTag()    
+                if tagStatus != "ok":
+                    print ModuleName
+                    print ModuleName, "ERROR. SensorTag failed to initialise"
+                    print ModuleName, "Please press side button"
+                    print ModuleName, \
+                          "If problem persists SensorTag may be out of range"
+            # Start a thread that continually gets accel values
+            d2 = threads.deferToThread(self.getAccel)
+            print ModuleName, "SensorTag successfully initialised"
             resp = {"name": "sensortag",
                     "instance": "sensortag1",
                     "status": tagStatus,
                     "capabilities": {"accelerometer": "0.1"},
                     "content": "none"}
-            print ModuleName, "SensorTag initialised"
         elif req["req"] == "req-accel":
             resp = {"name": "sensortag",
                     "instance": "sensortag1",

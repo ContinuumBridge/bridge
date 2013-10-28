@@ -183,6 +183,7 @@ class ConcProtocol(LineReceiver):
         reactor.callLater(2, self.monitorBridge)
 
     def lineReceived(self, line):
+        print ModuleName, line
         managerMsg = json.loads(line)
         msg = json.loads(line)
         m.processControlMsg(msg)
