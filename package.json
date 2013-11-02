@@ -1,0 +1,21 @@
+{
+  "author": "",
+  "name": "bridge",
+  "description": "Continuum Bridge Raspberry Pi development package",
+  "version": "0.0.0",
+  "homepage": "http://www.continuumbridge.com/",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/ContinuumBridge/bridge.git"
+  },
+  "dependencies": {
+    "baconjs": "~0.6.21",
+    "socket.io": "~0.9.16",
+    "socket.io-client": "~0.9.16"
+  },
+  "devDependencies": {},
+  "optionalDependencies": {},
+  "engines": {
+    "node": "*"
+  }
+}
