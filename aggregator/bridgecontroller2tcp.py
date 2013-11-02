@@ -46,29 +46,40 @@ class BridgeControlProtocol(LineReceiver):
             time.sleep(5)
 
     def processDiscovered(self, msg):
-        """ For now, just hard-wire config for 1 SensorTag & 1 App """
-        adts = {}
+        """ Build the apps and adaptors """
+        adts =[] 
         if msg["num"] != 0:
             for d in range(msg["num"]):
                 adt = {"name": msg[str(d)][0],
+                      "id": "tag" + str(msg["num"]),
                       "method": "btle",
                       "btAddr": msg[str(d)][1],
-                      "exe": '/home/pi/bridge/drivers/sensortagadaptor2.py',
-                      "mgrSoc": "/tmp/tag1ManagerSocket",
-                      "numAppSoc": 1,
-                      "appSocs": ["/tmp/tagAdtSocket1"],
+                      "exe": '/home/pi/bridge/drivers/sensortagadaptor3.py',
+                      "mgrSoc": "/tmp/ManagerSocket" + str(msg["num"]),
+                      "apps": [
+                          {"name": "living",
+                           "id": "living",
+                           "adtSoc": "/tmp/adtSocket" + str(msg["num"])}],
                       "btAdpt": "hci0"}
-                adts["adt1"] = adt
+                adts.append(adt)
 
-            apps = {"app1":
-                   {"name": "living",
-                    "exe": "/home/pi/bridge/apps/living.py",
-                    "mgrSoc": "/tmp/livingManagerSocket",
-                    "numAdtSocs": 1,
-                    "adtSocs": ["/tmp/tagAdtSocket1"]}}
-            self.config["cmd"] = "config"
-            self.config["adpt"] = adts
-            self.config["apps"] = apps
+            apps = [{"name": "living",
+                     "id": "living",
+                     "exe": "/home/pi/bridge/apps/living3.py",
+                     "mgrSoc": "/tmp/livingManagerSocket",
+                     "adts": [
+                         {"name": "SensorTag",
+                          "id": "tag1",
+                          "friendlyName": "tag1",
+                          "purpose": "Outside door",
+                          "adtSoc": "/tmp/adtSocket" + str(msg["num"])}
+                             ]
+                     }]
+            self.config = {"cmd": "config",
+                           "bridge": {"id": 42,
+                                      "friendly": "Friendly Bridge",
+                                       "adpt": adts,
+                                       "apps": apps}}
         else:
             self.config["cmd"] = "none"
         self.sendLine(json.dumps(self.config))
