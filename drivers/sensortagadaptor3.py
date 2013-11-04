@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 ModuleName = "SensorTag           "
-id = "sensortagadaptor2"
 
 import pexpect
 import sys
@@ -133,7 +132,7 @@ class ManageTag:
         # Check how often we're actually getting accel values
         self.accelCount = self.accelCount + 1
         if accel["timeStamp"] - self.startTime > 10:
-            print ModuleName, "Readings in 10s = ", self.accelCount
+            print ModuleName, id, " readings in 10s = ", self.accelCount
             self.accelCount = 0
             self.startTime = accel["timeStamp"]        
         self.accelReady = False
@@ -153,29 +152,30 @@ class ManageTag:
                 tagStatus = self.initSensorTag()    
                 if tagStatus != "ok":
                     print ModuleName
-                    print ModuleName, "ERROR. SensorTag failed to initialise"
+                    print ModuleName, "ERROR. SensorTag ", id, \
+                        " failed to initialise"
                     print ModuleName, "Please press side button"
                     print ModuleName, \
                           "If problem persists SensorTag may be out of range"
             # Start a thread that continually gets accel and temp values
             d2 = threads.deferToThread(self.getValues)
-            print ModuleName, "SensorTag successfully initialised"
-            resp = {"name": "sensortag",
-                    "instance": "sensortag1",
+            print ModuleName, id, " successfully initialised"
+            resp = {"name": self.name,
+                    "id": id,
                     "status": tagStatus,
                     "capabilities": {"accelerometer": "0.1",
                                      "temperature": "5"},
                     "content": "none"}
         elif req["req"] == "req-data":
-            resp = {"name": "sensortag",
-                    "instance": "sensortag1",
+            resp = {"name": self.name,
+                    "id": id,
                     "status": "ok",
                     "content": "data", 
                     "accel": self.reqAccel(),
                     "temp": self.reqTemp()}
         else:
-            resp = {"name": "sensortag",
-                    "instance": "sensortag1",
+            resp = {"name": self.name,
+                    "id": id,
                     "status": "bad-req",
                     "content": "none"}
         d1.callback(resp)
@@ -184,6 +184,7 @@ class ManageTag:
     def configure(self, config):
         """ Config is based on what sensors are available """
         print ModuleName, "configure: ", config
+        self.name = config["name"]
         self.device = config["btAdpt"]
         self.addr = config["btAddr"]
         self.cbFactory = []
@@ -198,9 +199,10 @@ class ManageTag:
             reactor.listenUNIX(adtSoc, self.cbFactory[-1])
 
     def cbManagerMsg(self, cmd):
-        #print ModuleName, "Received from manager: ", cmd
+        #print ModuleName, id, " received from manager: ", cmd
         if cmd["cmd"] == "stop":
-            print ModuleName, "Stopping"
+            print ModuleName, id, " stopping"
+            self.fetchValues = False
             msg = {"id": id,
                    "status": "stopping"}
             time.sleep(1)
@@ -214,7 +216,8 @@ class ManageTag:
             msg = {"id": id,
                    "status": "unknown"}
         else:
-            msg = {"status": "none"}
+            msg = {"id": id,
+                   "status": "none"}
         return msg
 
     def reportStatus(self):
