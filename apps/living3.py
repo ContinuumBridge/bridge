@@ -21,52 +21,87 @@ class DataManager:
         self.db = sqlite3.connect('living.db')
         cursor = self.db.cursor()
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS sensors(id INTEGER PRIMARY KEY, 
-                       name TEXT,
-                       epochTime INT, e0 INT, e1 INT, e2 INT, objT INT, 
-                       ambT INT)
+            CREATE TABLE IF NOT EXISTS devData(id INTEGER PRIMARY KEY, 
+               epochTime INT, 
+               dev1E0 INT, dev1E1 INT, dev1E2 INT, dev1ObjT INT, dev1AmbT INT
+               dev2E0 INT, dev2E1 INT, dev2E2 INT, dev2ObjT INT, dev2AmbT INT
+               dev3E0 INT, dev3E1 INT, dev3E2 INT, dev3ObjT INT, dev3AmbT INT
+               dev4E0 INT, dev4E1 INT, dev4E2 INT, dev4ObjT INT, dev4AmbT INT)
         ''')
         self.db.commit()
-        reactor.callLater(60, self.dumpData)
 
-    def storeAccel(self, thingName, epochMin, energy):
-        print ModuleName, "storeAccel: ", thingName, epochMin, energy
-        cursor = self.db.cursor()
-        cursor.execute("SELECT rowid FROM sensors WHERE epochTime = ?", 
-                       (epochMin,))
-        data=cursor.fetchone()
-        if data is None:
-            print ModuleName, "storeAccel new epochMin"
-            cursor.execute('''INSERT INTO sensors(name, epochTime, e0, e1, e2)
-                      VALUES(?,?,?,?,?)''', 
-                      (thingName, epochMin, energy[0], energy[1], energy[2]))
-        else:
-            print ModuleName, "storeAccel epochMin already exists"
-            cursor.execute('''UPDATE sensors SET e0 = ? 
-                      WHERE epochTime = ? ''', (energy[0], epochMin))
-            cursor.execute('''UPDATE sensors SET e1 = ? 
-                      WHERE epochTime = ? ''', (energy[1], epochMin))
-            cursor.execute('''UPDATE sensors SET e2 = ? 
-                      WHERE epochTime = ? ''', (energy[2], epochMin))
-        self.db.commit()
+    def initDevice(self, deviceID):
+        print ModuleName, "initDevices, deviceID = ", deviceID
+        self.devs = {}
+        try:
+            with open('living.dev', 'r+') as devFile:
+                self.devs = json.load(devFile)
+                devFile.close()
+                print ModuleName, "File exists, ", deviceID
+                if not self.devs.has_key(deviceID):
+                    numDevs = len(self.devs)
+                    self.devs[deviceID] = "dev" + str(numDevs + 1)
+                    with open('living.dev', 'w') as devFile:
+                        json.dump(self.devs, devFile)
+                        devFile.close()
+        except:
+            with open('living.dev', 'w') as devFile:
+                self.devs[deviceID] = "dev1"
+                json.dump(self.devs, devFile)
+                devFile.close()
+        print ModuleName, "self.devs: ", self.devs
 
-    def storeTemp(self, thingName, epochMin, objT, ambT):
-        print ModuleName, "storeTemp: ", thingName, epochMin, objT, ambT
+    def storeAccel(self, deviceName, epochMin, energy):
+        print ModuleName, "storeAccel: ", deviceName, epochMin, energy
+#        cursor = self.db.cursor()
+#        cursor.execute("SELECT rowid FROM deviceName WHERE epochTime = ?", 
+#                       (epochMin,))
+#        data=cursor.fetchone()
+#        if data is None:
+#            print ModuleName, "storeAccel new epochMin"
+#            cursor.execute('''INSERT INTO deviceName(epochTime, e0, e1, e2)
+#                      VALUES(?,?,?,?)''', 
+#                      (epochMin, energy[0], energy[1], energy[2]))
+#        else:
+#            print ModuleName, "storeAccel epochMin already exists"
+#            cursor.execute('''UPDATE deviceName SET e0 = ? 
+#                      WHERE epochTime = ? ''', (energy[0], epochMin))
+#            cursor.execute('''UPDATE deviceName SET e1 = ? 
+#                      WHERE epochTime = ? ''', (energy[1], epochMin))
+#            cursor.execute('''UPDATE deviceName SET e2 = ? 
+#                      WHERE epochTime = ? ''', (energy[2], epochMin))
+#        self.db.commit()
+
+    def storeTemp(self, deviceName, epochMin, objT, ambT):
+        print ModuleName, "storeTemp: ", deviceName, epochMin, objT, ambT
         cursor = self.db.cursor()
-        cursor.execute("SELECT rowid FROM sensors WHERE epochTime = ?", 
+        cursor.execute("SELECT rowid FROM devData WHERE epochTime = ?", 
                        (epochMin,))
         data=cursor.fetchone()
         if data is None:
             print ModuleName, "storeTemp new epochMin"
-            cursor.execute('''INSERT INTO sensors(name, epochTime, objT, ambT)
-                      VALUES(?,?,?,?)''', 
-                      (thingName, epochMin, objT, ambT))
+            if self.devs[deviceName] == "dev1":
+                cursor.execute('''INSERT INTO devData(
+                          epochTime, dev1ObjT, dev1AmbT)
+                          VALUES(?,?,?)''', 
+                          (epochMin, objT, ambT))
+            if self.devs[deviceName] == "dev22":
+                cursor.execute('''INSERT INTO devData(
+                          epochTime, dev2ObjT, dev2AmbT)
+                          VALUES(?,?,?)''', 
+                          (epochMin, objT, ambT))
         else:
             print ModuleName, "storeTemp epochMin already exists"
-            cursor.execute('''UPDATE sensors SET objT = ? 
-                      WHERE epochTime = ? ''', (objT, epochMin))
-            cursor.execute('''UPDATE sensors SET ambT = ? 
-                      WHERE epochTime = ? ''', (ambT, epochMin))
+            if self.devs[deviceName] == "dev1":
+                cursor.execute('''UPDATE deviceName SET dev1ObjT = ? 
+                          WHERE epochTime = ? ''', (objT, epochMin))
+                cursor.execute('''UPDATE deviceName SET dev1AmbT = ? 
+                          WHERE epochTime = ? ''', (ambT, epochMin))
+            elif self.devs[deviceName] == "dev2":
+                cursor.execute('''UPDATE deviceName SET dev2ObjT = ? 
+                          WHERE epochTime = ? ''', (objT, epochMin))
+                cursor.execute('''UPDATE deviceName SET dev2AmbT = ? 
+                          WHERE epochTime = ? ''', (ambT, epochMin))
         self.db.commit()
 
 #    def dumpThread(self):
@@ -78,10 +113,16 @@ class DataManager:
 #        d = threads.deferToThread(self.dumpThread())
         cursor = self.db.cursor()
         cursor.execute('''SELECT epochTime, e0, e1, e2, objT, ambT 
-                       FROM sensors''')
+                       FROM tag1''')
         all_rows = cursor.fetchall()
         for row in all_rows:
-            print ModuleName, row[0], ": ", row[1], "  ", row[2], "  ", \
+            print ModuleName, "tag1 ", row[0], ": ", row[1], "  ", row[2], "  ", \
+                row[3], "  ", row[4], "  ", row[5] 
+        cursor.execute('''SELECT epochTime, e0, e1, e2, objT, ambT 
+                       FROM tag2''')
+        all_rows = cursor.fetchall()
+        for row in all_rows:
+            print ModuleName, "tag1 ", row[0], ": ", row[1], "  ", row[2], "  ", \
                 row[3], "  ", row[4], "  ", row[5] 
         reactor.callLater(300, self.dumpData)
 
@@ -103,8 +144,8 @@ class Accelerometer:
     prevEpochMin = 0
     energySum = [0, 0, 0] 
 
-    def __init__(self, name):
-        self.name = name
+    def __init__(self, id):
+        self.id = id
         for i in xrange(self.averageLength):
             self.values.append([0.0, 0.0, 0.0])
 
@@ -152,7 +193,7 @@ class Accelerometer:
                 for e in range(3):
                     self.energySum[e] = int(energy[e] * 100)
                 if self.prevEpochMin != 0:
-                    dm.storeAccel(self.name, self.prevEpochMin, self.energySum) 
+                    dm.storeAccel(self.id, self.prevEpochMin, self.energySum) 
                 self.prevEpochMin = epochMin
             else:       
                 #print ModuleName, "Same epochMin as before = ", epochMin
@@ -161,8 +202,8 @@ class Accelerometer:
  
 class TemperatureMeasure():
 
-    def __init__(self, name):
-        self.name = name
+    def __init__(self, id):
+        self.id = id
         self.prevEpochMin = time.time()
 
     def processTemp (self, resp):
@@ -171,10 +212,11 @@ class TemperatureMeasure():
         if epochMin != self.prevEpochMin:
             objT = resp["temp"]["objT"]
             ambT = resp["temp"]["ambT"] 
-            dm.storeTemp(self.name, self.prevEpochMin, objT, ambT) 
+            dm.storeTemp(self.id, self.prevEpochMin, objT, ambT) 
             self.prevEpochMin = epochMin
             now = time.ctime(resp["temp"]["timeStamp"])
-            print ModuleName, now, " ObjT = ", objT, " AmbT = ", ambT
+            print ModuleName, now, "  ", self.id, " ObjT = ", objT, \
+                " AmbT = ", ambT
 
 class App:
     """ This is what actually does the work """
@@ -185,11 +227,17 @@ class App:
 
     def processResp(self, resp):
         req = {}
-        if resp["name"] != "sensorTag":
-            pass
+        #print ModuleName, "Response received: ", resp
         if resp["content"] == "data":
-            self.accel[0].processAccel(resp)
-            self.temp[0].processTemp(resp)
+            for a in self.accel:
+                if a.id == resp["id"]: 
+                    a.processAccel(resp)
+                    break
+            for t in self.temp:
+                #print ModuleName, "t.id = ", t.id, " resp id = ", resp["id"]
+                if t.id == resp["id"]:
+                    t.processTemp(resp)
+                    break
             req = {"id": id,
                    "req": "req-data"}
         elif resp["content"] == "none":
@@ -219,6 +267,7 @@ class App:
             if name == "SensorTag":
                 self.accel.append(Accelerometer(id))
                 self.temp.append(TemperatureMeasure(id))
+                dm.initDevice(id)
             self.cbFactory.append(cbClientFactory())
             self.cbFactory[-1].protocol = cbAdaptorClient 
             reactor.connectUNIX(adtSoc, self.cbFactory[-1], timeout=10)

@@ -177,8 +177,9 @@ class ManageBridge:
                         response = {
                         "cmd": "config",
                         "config": {"apps": a["apps"], 
-                                  "btAddr": a["btAddr"],
-                                  "btAdpt": a["btAdpt"]
+                                   "name": a["name"],
+                                   "btAddr": a["btAddr"],
+                                   "btAdpt": a["btAdpt"]
                                   }
                                }
             else:
