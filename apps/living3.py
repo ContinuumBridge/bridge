@@ -53,24 +53,43 @@ class DataManager:
 
     def storeAccel(self, deviceName, epochMin, energy):
         print ModuleName, "storeAccel: ", deviceName, epochMin, energy
-#        cursor = self.db.cursor()
-#        cursor.execute("SELECT rowid FROM deviceName WHERE epochTime = ?", 
-#                       (epochMin,))
-#        data=cursor.fetchone()
-#        if data is None:
-#            print ModuleName, "storeAccel new epochMin"
-#            cursor.execute('''INSERT INTO deviceName(epochTime, e0, e1, e2)
-#                      VALUES(?,?,?,?)''', 
-#                      (epochMin, energy[0], energy[1], energy[2]))
-#        else:
-#            print ModuleName, "storeAccel epochMin already exists"
-#            cursor.execute('''UPDATE deviceName SET e0 = ? 
-#                      WHERE epochTime = ? ''', (energy[0], epochMin))
-#            cursor.execute('''UPDATE deviceName SET e1 = ? 
-#                      WHERE epochTime = ? ''', (energy[1], epochMin))
-#            cursor.execute('''UPDATE deviceName SET e2 = ? 
-#                      WHERE epochTime = ? ''', (energy[2], epochMin))
-#        self.db.commit()
+        cursor = self.db.cursor()
+        cursor.execute("SELECT rowid FROM deviceName WHERE epochTime = ?", 
+                       (epochMin,))
+        data=cursor.fetchone()
+        if data is None:
+            print ModuleName, "storeAccel new epochMin"
+            if self.devs[deviceName] == "dev1":
+                cursor.execute('''INSERT INTO deviceName
+                      (epochTime, dev1E0, dev1E1, dev1E2)
+                      VALUES(?,?,?,?)''', 
+                      (epochMin, energy[0], energy[1], energy[2]))
+            elif self.devs[deviceName] == "dev2":
+                cursor.execute('''INSERT INTO deviceName
+                      (epochTime, dev2E0, dev2E1, dev2E2)
+                      VALUES(?,?,?,?)''', 
+                      (epochMin, energy[0], energy[1], energy[2]))
+            else:
+                print ModuleName, "Error. DB Unrecognised device ", deviceName
+        else:
+            print ModuleName, "storeAccel epochMin already exists"
+            if self.devs[deviceName] == "dev1":
+                cursor.execute('''UPDATE deviceName SET dev1E0 = ? 
+                          WHERE epochTime = ? ''', (energy[0], epochMin))
+                cursor.execute('''UPDATE deviceName SET dev1E1 = ? 
+                          WHERE epochTime = ? ''', (energy[1], epochMin))
+                cursor.execute('''UPDATE deviceName SET dev1E2 = ? 
+                          WHERE epochTime = ? ''', (energy[2], epochMin))
+            elif self.devs[deviceName] == "dev2":
+                cursor.execute('''UPDATE deviceName SET dev2E0 = ? 
+                          WHERE epochTime = ? ''', (energy[0], epochMin))
+                cursor.execute('''UPDATE deviceName SET dev2E1 = ? 
+                          WHERE epochTime = ? ''', (energy[1], epochMin))
+                cursor.execute('''UPDATE deviceName SET dev2E2 = ? 
+                          WHERE epochTime = ? ''', (energy[2], epochMin))
+            else:
+                print ModuleName, "Error. DB Unrecognised device ", deviceName
+        self.db.commit()
 
     def storeTemp(self, deviceName, epochMin, objT, ambT):
         print ModuleName, "storeTemp: ", deviceName, epochMin, objT, ambT
@@ -85,7 +104,7 @@ class DataManager:
                           epochTime, dev1ObjT, dev1AmbT)
                           VALUES(?,?,?)''', 
                           (epochMin, objT, ambT))
-            if self.devs[deviceName] == "dev22":
+            elif self.devs[deviceName] == "dev2":
                 cursor.execute('''INSERT INTO devData(
                           epochTime, dev2ObjT, dev2AmbT)
                           VALUES(?,?,?)''', 
@@ -113,13 +132,13 @@ class DataManager:
 #        d = threads.deferToThread(self.dumpThread())
         cursor = self.db.cursor()
         cursor.execute('''SELECT epochTime, e0, e1, e2, objT, ambT 
-                       FROM tag1''')
+                       FROM devData''')
         all_rows = cursor.fetchall()
         for row in all_rows:
             print ModuleName, "tag1 ", row[0], ": ", row[1], "  ", row[2], "  ", \
                 row[3], "  ", row[4], "  ", row[5] 
         cursor.execute('''SELECT epochTime, e0, e1, e2, objT, ambT 
-                       FROM tag2''')
+                       FROM devData''')
         all_rows = cursor.fetchall()
         for row in all_rows:
             print ModuleName, "tag1 ", row[0], ": ", row[1], "  ", row[2], "  ", \
