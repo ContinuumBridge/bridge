@@ -1,7 +1,7 @@
 #!/usr/bin/env python
-#manager5u.py
+#manager7.py
 ModuleName = "Bridge Manager      "
-id = "manager6tcp"
+id = "manager7"
 
 import sys
 import time

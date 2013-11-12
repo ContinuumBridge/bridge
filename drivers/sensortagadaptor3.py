@@ -23,17 +23,18 @@ class ManageTag:
         self.status = "ok"
         self.fetchValues = True #Set to False to stop fetch thread
         self.accel = {} #To hold latest accel values
-        self.temp = {}  #To hold temperature values
         self.accelReady = False #No accel values at start of time
         self.startTime = time.time()
         self.accelCount = 0
         self.tick = 0
+        self.temp = {}  #To hold temperature values
         self.temp["ambT"] = 0
         self.temp["objT"] = 0
         self.temp["timeStamp"] = time.time()
         self.doingTemp = False
 
     def initSensorTag(self):
+        print ModuleName, "initSensorTag"
         try:
             cmd = 'gatttool -i ' + self.device + ' -b ' + self.addr + \
                   ' --interactive'
@@ -48,9 +49,10 @@ class ManageTag:
         index = self.gatt.expect(['successful', pexpect.TIMEOUT], timeout=5)
         if index == 1:
             print ModuleName, "Connection to device timed out"
-            self.gatt.kill(0)
+            self.gatt.kill(9)
             return "timeout"
         else:
+            print ModuleName, "Connected"
             # Enable accelerometer
             self.gatt.sendline('char-write-cmd 0x31 01')
             self.gatt.expect('\[LE\]>')
@@ -84,57 +86,72 @@ class ManageTag:
                 self.gatt.sendline('char-write-cmd 0x26 0100')
                 self.tick = 0
                 self.doingTemp = True
-            self.gatt.expect('value: .*')
-            type = self.gatt.before.split()
-            if type[3] == "0x002d": 
-                # Accelerometer descriptor
-                raw = self.gatt.after.split()
-                self.accel["x"] = self.signExtend(int(raw[1], 16))
-                self.accel["y"] = self.signExtend(int(raw[2], 16))
-                self.accel["z"] = self.signExtend(int(raw[3], 16))
-                self.accel["timeStamp"] = time.time()
-                self.accelReady = True
-            elif type[3] == "0x0025" and self.doingTemp:
-                # Temperature descriptor
-                raw = self.gatt.after.split()
-                # Disable temperature notification & sensor
-                self.gatt.sendline('char-write-cmd 0x26 0100')
-                self.gatt.sendline('char-write-cmd 0x29 00')
-                self.doingTemp = False # So that we only do this once
-
-                # Calculate temperatures
-                objT = self.s16tofloat(raw[2] + \
-                                    raw[1]) * 0.00000015625
-                ambT = self.s16tofloat(raw[4] + raw[3]) / 128.0
-                Tdie2 = ambT + 273.15
-                S0 = 6.4E-14
-                a1 = 1.75E-3
-                a2 = -1.678E-5
-                b0 = -2.94E-5
-                b1 = -5.7E-7
-                b2 = 4.63E-9
-                c2 = 13.4
-                Tref = 298.15
-                S = S0 * (1 + a1 * (Tdie2 - Tref) + a2 * pow((Tdie2 - Tref), 2))
-                Vos = b0 + b1 * (Tdie2 - Tref) + b2 * pow((Tdie2 - Tref), 2)
-                fObj = (objT - Vos) + c2 * pow((objT - Vos), 2)
-                objT = pow(pow(Tdie2,4) + (fObj/S), .25)
-                objT -= 273.15
-                self.temp["ambT"] = ambT
-                self.temp["objT"] = objT
-                self.temp["timeStamp"] = time.time()
-                #print ModuleName, "temp = ", self.temp
- 
+            index = self.gatt.expect(['value:.*', pexpect.TIMEOUT], timeout=5)
+            if index == 1:
+                status = ""
+                #print ModuleName, "type = ", type
+                while status != "ok" and self.fetchValues:
+                    print ModuleName, "Gatt timeout"
+                    self.gatt.kill(9)
+                    time.sleep(1)
+                    status = self.initSensorTag()   
+                    print ModuleName, "Re-init status = ", status
+            else:
+                type = self.gatt.before.split()
+                if type[3].startswith("0x002d"): 
+                    # Accelerometer descriptor
+                    raw = self.gatt.after.split()
+                    self.accel["x"] = self.signExtend(int(raw[1], 16))
+                    self.accel["y"] = self.signExtend(int(raw[2], 16))
+                    self.accel["z"] = self.signExtend(int(raw[3], 16))
+                    self.accel["timeStamp"] = time.time()
+                    self.accelReady = True
+                elif type[3].startswith("0x0025") and self.doingTemp:
+                    # Temperature descriptor
+                    raw = self.gatt.after.split()
+                    # Disable temperature notification & sensor
+                    self.gatt.sendline('char-write-cmd 0x26 0100')
+                    self.gatt.sendline('char-write-cmd 0x29 00')
+                    self.doingTemp = False # So that we only do this once
+    
+                    # Calculate temperatures
+                    objT = self.s16tofloat(raw[2] + \
+                                        raw[1]) * 0.00000015625
+                    ambT = self.s16tofloat(raw[4] + raw[3]) / 128.0
+                    Tdie2 = ambT + 273.15
+                    S0 = 6.4E-14
+                    a1 = 1.75E-3
+                    a2 = -1.678E-5
+                    b0 = -2.94E-5
+                    b1 = -5.7E-7
+                    b2 = 4.63E-9
+                    c2 = 13.4
+                    Tref = 298.15
+                    S = S0 * (1 + a1 * (Tdie2 - Tref) + \
+                        a2 * pow((Tdie2 - Tref), 2))
+                    Vos = b0 + b1 * (Tdie2 - Tref) + b2 * pow((Tdie2 - Tref), 2)
+                    fObj = (objT - Vos) + c2 * pow((objT - Vos), 2)
+                    objT = pow(pow(Tdie2,4) + (fObj/S), .25)
+                    objT -= 273.15
+                    self.temp["ambT"] = ambT
+                    self.temp["objT"] = objT
+                    self.temp["timeStamp"] = time.time()
+                    #print ModuleName, "temp = ", self.temp
+                else:
+                   pass
+                   #print ModuleName, "Unknown gatt: ", type[3], "." \
+                         #" doingTemp = ", self.doingTemp
+     
     def reqAccel(self):
         while self.accelReady == False:
             time.sleep(0.05) 
         accel = self.accel
         # Check how often we're actually getting accel values
-        self.accelCount = self.accelCount + 1
-        if accel["timeStamp"] - self.startTime > 10:
-            print ModuleName, id, " readings in 10s = ", self.accelCount
-            self.accelCount = 0
-            self.startTime = accel["timeStamp"]        
+        #self.accelCount = self.accelCount + 1
+        #if accel["timeStamp"] - self.startTime > 10:
+            #print ModuleName, id, " readings in 10s = ", self.accelCount
+            #self.accelCount = 0
+            #self.startTime = accel["timeStamp"]        
         self.accelReady = False
         return accel 
 
@@ -205,7 +222,7 @@ class ManageTag:
             self.fetchValues = False
             msg = {"id": id,
                    "status": "stopping"}
-            time.sleep(1)
+            time.sleep(10)
             reactor.stop()
             sys.exit
         elif cmd["cmd"] == "config":
