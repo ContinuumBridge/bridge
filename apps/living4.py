@@ -20,9 +20,9 @@ class DataManager:
     tables = {} 
     def __init__(self):
         self.db = dataset.connect('sqlite:///living2.db')
-        self.firstDump = True
-        dumpdata = task.LoopingCall(self.dumpData)
-        dumpdata.start(90) # call every 90 seconds
+        #self.firstDump = True
+        #dumpdata = task.LoopingCall(self.dumpData)
+        #dumpdata.start(90) # call every 90 seconds
 
     def initDevice(self, deviceID):
         print ModuleName, "initDevices, deviceID = ", deviceID
@@ -330,7 +330,7 @@ class LivingProtocol(LineReceiver):
         msg = {"id": id,
                "status": "ready"}
         self.sendLine(json.dumps(msg))
-        reactor.callLater(30, self.monitorApp)
+        #reactor.callLater(30, self.monitorApp)
 
     def lineReceived(self, line):
         print ModuleName, line
@@ -374,9 +374,9 @@ if __name__ == '__main__':
         print "App improper usage"
         exit(1)
 
-    livingFactory = LivingFactory()
-    livingFactory.protocol = LivingProtocol
-    reactor.connectTCP("localhost", 3123, livingFactory, timeout=10)
+    #livingFactory = LivingFactory()
+    #livingFactory.protocol = LivingProtocol
+    #reactor.connectTCP("localhost", 3123, livingFactory, timeout=10)
     
     managerSocket = sys.argv[1]
     id = sys.argv[2]
