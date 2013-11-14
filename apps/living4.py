@@ -1,5 +1,5 @@
 #!/usr/bin/python
-ModuleName = "Living 3            " 
+ModuleName = "Living 4            " 
 
 import sys
 import os.path
@@ -29,7 +29,8 @@ class DataManager:
         self.tables[deviceID] = self.db[deviceID]
 
     def storeAccel(self, deviceName, epochMin, energy):
-        print ModuleName, "storeAccel: ", deviceName, epochMin, energy
+        now = time.strftime("%a %d %H:%M", time.localtime(epochMin))
+        print ModuleName, deviceName, now, " accel: ",  energy
         data = {"epochTime": epochMin,
                 "e0": energy[0],
                 "e1": energy[1],
@@ -37,24 +38,22 @@ class DataManager:
                }
         row = self.tables[deviceName].find_one(epochTime=epochMin)
         if row is None:
-            print ModuleName, "storeAccel new epochMin"
             self.tables[deviceName].insert(data)
         else:
-            print ModuleName, "storeAccel epochMin already exists"
             self.tables[deviceName].upsert(data, ["epochTime"])
 
     def storeTemp(self, deviceName, epochMin, objT, ambT):
-        print ModuleName, "storeTemp: ", deviceName, epochMin, objT, ambT
+        now = time.strftime("%a %d %H:%M", time.localtime(epochMin))
+        print ModuleName, deviceName, now, " temp: ", \
+            "obj: %4.1f" % objT, "amb: %4.1f" % ambT
         data = {"epochTime": epochMin,
                 "objT": objT,
                 "ambT": ambT
                }
         row = self.tables[deviceName].find_one(epochTime=epochMin)
         if row is None:
-            print ModuleName, "storeTemp new epochMin"
             self.tables[deviceName].insert(data)
         else:
-            print ModuleName, "storeTemp epochMin already exists"
             self.tables[deviceName].upsert(data, ["epochTime"])
 
 #    def dumpThread(self):
@@ -177,8 +176,6 @@ class TemperatureMeasure():
             dm.storeTemp(self.id, self.prevEpochMin, objT, ambT) 
             self.prevEpochMin = epochMin
             now = time.ctime(resp["temp"]["timeStamp"])
-            print ModuleName, now, "  ", self.id, " ObjT = ", objT, \
-                " AmbT = ", ambT
 
 class App:
     """ This is what actually does the work """
