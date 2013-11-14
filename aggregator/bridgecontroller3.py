@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# bridgecontroller3.py
+
 import json
 import sys
 import time
@@ -103,7 +106,7 @@ class BridgeControlProtocol(LineReceiver):
  
         apps = [{"name": "living",
                  "id": "living",
-                 "exe": "/home/pi/bridge/apps/living3.py",
+                 "exe": "/home/pi/bridge/apps/living4.py",
                  "mgrSoc": "/tmp/livingManagerSocket",
                  "adts": self.appAdts, 
                  }]
