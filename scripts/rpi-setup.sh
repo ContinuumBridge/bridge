@@ -34,12 +34,12 @@ setup_wifi() {
 ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
 update_config=1
 network={
-ssid="${SSID}"
-proto=RSN
-key_mgmt=WPA-PSK
-pairwise=CCMP 
-TKIPgroup=CCMP 
-TKIPpsk="${WPASK}"
+    ssid="${SSID}"
+    proto=RSN
+    key_mgmt=WPA-PSK
+    pairwise=CCMP 
+    TKIPgroup=CCMP 
+    TKIPpsk="${WPASK}"
 }
 EOF
     sudo cat > /etc/network/interfaces << EOF
@@ -48,7 +48,8 @@ iface lo inet loopback
 iface eth0 inet dhcp
 auto wlan0
 allow-hotplug wlan0
-iface wlan0 inet manual
+iface wlan0 inet dhcp
+wireless-essid myssid
 wpa-roam /etc/wpa_supplicant/wpa_supplicant.conf
 iface default inet dhcp
 EOF
@@ -69,7 +70,7 @@ else
     echo "No thanks to the WiFi"
 fi
 
-sudo apt-get install vim
+sudo apt-get install -y vim
 
 # From Andy's notes
 sudo apt-get install -y lxc
@@ -77,10 +78,30 @@ sudo apt-get install -y busybox-static
 sudo apt-get install -y swig
 
 sudo apt-get install -y python-dev
-sudo apt-get install python-pip
-sudo apt-get install python-software-properties
-apt-get install -y nodejs npm node-semver
+sudo apt-get install -y python-pip
+sudo apt-get install -y python-software-properties
+sudo apt-get install -y nodejs npm node-semver
 sudo apt-get install -y python-pexpect
 
 sudo apt-get install python-twisted
 
+# For Bluetooth LE
+sudo apt-get install -y libglib2.0-dev 
+sudo apt-get install -y libdbus-1-dev 
+sudo apt-get install -y libusb-dev 
+sudo apt-get install -y libudev-dev 
+sudo apt-get install -y libical-dev
+sudo apt-get install -y systemd 
+sudo apt-get install -y libreadline-dev
+
+mkdir /home/bridge/src
+cd /home/bridge/src
+wget https://www.kernel.org/pub/linux/bluetooth/bluez-5.5.tar.gz
+tar xvfz bluez-5.5.tar.gz
+cd bluez-5.5.tar.gz
+./configure --prefix=/usr --mandir=/usr/share/man --sysconfdir=/etc --localstatedir=/var --disable-systemd
+sudo make
+sudo make install
+
+# sqlite front-end
+pip install dataset
