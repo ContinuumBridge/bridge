@@ -87,16 +87,16 @@ class ManageTag:
                 self.gatt.sendline('char-write-cmd 0x26 0100')
                 self.tick = 0
                 self.doingTemp = True
-            index = self.gatt.expect(['value:.*', pexpect.TIMEOUT], timeout=5)
+            index = self.gatt.expect(['value:.*', pexpect.TIMEOUT], timeout=10)
             if index == 1:
                 status = ""
                 #print ModuleName, "type = ", type
                 while status != "ok" and self.fetchValues:
-                    print ModuleName, "Gatt timeout"
+                    print ModuleName, id, " gatt timeout"
                     self.gatt.kill(9)
                     time.sleep(1)
                     status = self.initSensorTag()   
-                    print ModuleName, "Re-init status = ", status
+                    print ModuleName, id, " re-init status = ", status
             else:
                 type = self.gatt.before.split()
                 if type[3].startswith("0x002d"): 
