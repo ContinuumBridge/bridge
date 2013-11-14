@@ -59,7 +59,8 @@ class ManageTag:
             self.gatt.sendline('char-write-cmd 0x2e 0100')
             self.gatt.expect('\[LE\]>')
             # Period = 0x34 value x 10 ms (thought to be 0x0a)
-            self.gatt.sendline('char-write-cmd 0x34 0A')
+            # Was running with 0x0A = 100 ms, now 0x22 = 500 ms
+            self.gatt.sendline('char-write-cmd 0x34 22')
             self.gatt.expect('\[LE\]>')
             self.connected = True
             return "ok"
@@ -80,8 +81,8 @@ class ManageTag:
         """
         while self.fetchValues:
             self.tick += 1
-            if self.tick == 100:
-                # Enable temperature sensor every 10 seconds & take reading
+            if self.tick == 60:
+                # Enable temperature sensor every 30 seconds & take reading
                 self.gatt.sendline('char-write-cmd 0x29 01')
                 self.gatt.sendline('char-write-cmd 0x26 0100')
                 self.tick = 0
