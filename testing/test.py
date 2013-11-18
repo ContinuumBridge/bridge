@@ -1,9 +1,8 @@
 #!/sr/bin/python
 import sys
 import os
-#from twisted.protocols import protocol
-from twisted.internet import protocol
-import twisted.protocols
+from twisted.protocols import protocol
+#import twisted.protocols
 from twisted.internet import main, tcp
 
 class Echo(protocol.Protocol):

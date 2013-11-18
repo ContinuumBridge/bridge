@@ -107,6 +107,8 @@ class ManageBridge:
             reactor.callLater(8, self.stopManager)
         elif msg["cmd"] == "update":
             self.reqSync = True
+        else:
+            print ModuleName, "Unrecognised command from aggregator"
 
     def stopManager(self):
         print ModuleName, "Stopping manager"

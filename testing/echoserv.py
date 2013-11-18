@@ -16,16 +16,12 @@ class Echo(Protocol):
         """
         print "Data received: ", data
         self.transport.write(data)
-    def connectionMade(self):
-        print "Connection made to ", self.transport.getPeer()
-    def connectionLost(self, reason):
-        print "Disconnected"
 
 
 def main():
     f = Factory()
     f.protocol = Echo
-    reactor.listenUNIX("/tmp/pcsocket", f, backlog=10)
+    reactor.listenTCP(8000, f)
     reactor.run()
 
 if __name__ == '__main__':

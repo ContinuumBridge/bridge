@@ -1,6 +1,8 @@
 node_modules/
 aggregator/node-modules
 build
+manager/*.db
+manager/*.config
 *.py[cod]
 
 # C extensions
