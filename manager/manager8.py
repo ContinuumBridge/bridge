@@ -22,6 +22,7 @@ class ManageBridge:
         """ apps and adts data structures are stored in a local file.
         """
         self.discovered = False
+        self.configured = False
         self.reqSync = False
         self.stopping = False
         status = self.readConfig()
@@ -78,11 +79,27 @@ class ManageBridge:
                 print ModuleName, id, " failed to start"
 
     def doDiscover(self):
+        self.discoveredDevices = {}
+        for d in self.discoveredDevices:
+            del self.discoveredDevices[d]
         #exe = "/home/pi/bridge/manager/discovery.py"
         exe = "/home/petec/bridge/manager/testDiscovery.py"
         type = "btle"
         output = subprocess.check_output([exe, type])
-        self.devices = json.loads(output)
+        discOutput = json.loads(output)
+        print ModuleName, "Discovered: ", discOutput
+        self.discoveredDevices["status"] = discOutput["status"]
+        self.discoveredDevices["devices"] = []
+        if self.configured:
+            for d in discOutput["devices"]:
+                if d["method"] == "btle":
+                    for oldDev in self.devices:
+                       if oldDev["method"] == "btle": 
+                           if d["addr"] != oldDev["btAddr"]:
+                               self.discoveredDevices["devices"].append(d)  
+        else:
+            for d in discOutput["devices"]:
+                self.discoveredDevices["devices"].append(d)  
         self.discovered = True
 
     def discover(self):
@@ -108,7 +125,7 @@ class ManageBridge:
             #try:
             # Process config to determine routing:
             for d in self.devices:
-                socket = "mngr-" + d["id"]
+                socket = "mgr-" + d["id"]
                 d["adt"]["mgrSoc"] = socket
                 d["adt"]["exe"] = self.adtRoot + d["adt"]["exe"]
                 # Add a apps list to each device adaptor
@@ -116,15 +133,21 @@ class ManageBridge:
             # Add socket descriptors to apps and devices
             for a in self.apps:
                 a["exe"] = self.appRoot + a["exe"]
-                socket = "mgr-" + a["id"]
-                a["mgrSoc"] = socket
+                a["mgrSoc"] = "mgr-" + a["id"]
                 for appDev in a["devices"]:
                     uri = appDev["resource_uri"]
                     for d in self.devices: 
                         if d["adt"]["resource_uri"] == uri:
-                            socket = "/tmp/skt-" \
+                            socket = "skt-" \
                                 + d["id"] + "-" + a["id"]
-                            d["adt"]["apps"].append({"adtSoc": socket})
+                            d["adt"]["apps"].append({"adtSoc": socket,
+                                                     "name": a["name"],
+                                                     "id": a["id"]
+                                                   }) 
+                            appDev["adtSoc"] = socket
+                            appDev["id"] = d["id"]
+                            appDev["name"] = d["adt"]["name"]
+                            appDev["friendlyName"] = d["friendlyName"]
                             appDev["adtSoc"] = socket
                             break
             #except:
@@ -144,7 +167,6 @@ class ManageBridge:
             json.dump(msg, configFile)
         status = self.readConfig()
         print ModuleName, status
-        self.configured = True
 
     def processControlMsg(self, msg):
         if msg["cmd"] == "start":
@@ -180,7 +202,7 @@ class ManageBridge:
 
     def getManagerMsg(self):
         if self.discovered:
-            msg = self.devices
+            msg = self.discoveredDevices
             self.discovered = False
         elif self.reqSync:
             msg = {"status": "reqSync"}
@@ -199,16 +221,17 @@ class ManageBridge:
                 for a in self.apps:
                     if a["id"] == msg["id"]:
                         response = {"cmd": "config",
-                                    "config": {"adts": a["adts"]}}
+                                    "config": {"adts": a["devices"]}}
+                        break
             elif msg["class"] == "adt": 
                 for d in self.devices:
                     if d["id"] == msg["id"]:
                         response = {
                         "cmd": "config",
-                        "config": {"apps": d["apps"], 
+                        "config": {"apps": d["adt"]["apps"], 
                                    "name": d["name"],
                                    "btAddr": d["btAddr"],
-                                   "btAdpt": d["btAdpt"]
+                                   "btAdpt": "hci0" 
                                   }
                                }
             else:

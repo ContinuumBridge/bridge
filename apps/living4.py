@@ -225,10 +225,11 @@ class App:
             id = adaptor["id"]
             adtSoc = adaptor["adtSoc"]
             friendlyName = adaptor["friendlyName"]
-            purpose = adaptor["purpose"]
+            #purpose = adaptor["purpose"]
             self.friendlyLookup.update({id: friendlyName})
             self.adtInstances.append(id)
-            if name == "SensorTag":
+            print ModuleName, "configure, adaptor name = ", name
+            if name == "CB SensorTag Adt":
                 self.accel.append(Accelerometer(id))
                 self.temp.append(TemperatureMeasure(id))
                 dm.initDevice(id)
@@ -371,10 +372,6 @@ if __name__ == '__main__':
         print "App improper usage"
         exit(1)
 
-    #livingFactory = LivingFactory()
-    #livingFactory.protocol = LivingProtocol
-    #reactor.connectTCP("localhost", 3123, livingFactory, timeout=10)
-    
     managerSocket = sys.argv[1]
     id = sys.argv[2]
     

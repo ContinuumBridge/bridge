@@ -60,10 +60,13 @@ class BridgeControlProtocol(LineReceiver):
             #time.sleep(1)
 
     def processDiscovered(self, msg):
-        if msg["num"] != 0:
-            if msg["num"] > 1: 
+        numDevs = len(msg["devices"])
+        if numDevs != 0:
+            if numDevs > 1: 
                 print("More than 1 device found. Processing only one")
-            print ("Device - SensorTag: " + msg[str(0)][1])
+            currentDev = msg["devices"][0]
+            #print ("Device - SensorTag: " + msg[str(0)][1])
+            print "Device - SensorTag: ", currentDev
             friendly = raw_input("Type friendly name  > ")
             gotPurpose = False
             while not gotPurpose:
@@ -74,24 +77,24 @@ class BridgeControlProtocol(LineReceiver):
                     print("Unrecognised purpose. Please re-enter.")
                 else:
                     gotPurpose = True
-            self.buildBridgeData(friendly, purpose, msg[str(0)][1]) 
+            self.buildBridgeData(friendly, purpose, currentDev) 
         else:
             print("No devices found. Try again.")
             self.checkCmd()
 
-    def buildBridgeData(self, friendly, purpose, btAddr):
+    def buildBridgeData(self, friendly, purpose, currentDev):
         numDevs = len(self.devs)
         devNum = numDevs + 1
-        dev = {"name": "SensorTag",
+        dev = {"name": currentDev["name"],
                "friendlyName": friendly,
                "id": "dev" + str(devNum),
-               "method": "btle",
-               "btAddr": btAddr,
+               "method": currentDev["method"],
+               "btAddr": currentDev["addr"],
                "adt": {"name": "CB SensorTag Adt",
                        "provider": "ContinuumBridge",
                        "version": 2,
                        "url": "www.continuumbridge.com/adt/cbSensorTagAdtV2",
-                       "exe": 'sensortagadaptor3.py',
+                       "exe": 'testSensorTagAdaptor.py',
                        "resource_uri": "/api/V1/device/" + str(devNum)
                       }
               }
@@ -103,18 +106,19 @@ class BridgeControlProtocol(LineReceiver):
         self.appDevs.append(appDev)
  
         numApps = len(self.apps)
-        appNum = numApps + 1
-        app = {"id": "app" + str(appNum),
-               "name": "living",
-               "provider": "ContinuumBridge",
-               "version": 2,
-               "url": "www.continuumbridge.com/apps/cbLivingV2",
-               "exe": "living4.py",
-               "devices": self.appDevs,
-               "resource_uri": "/api/v1/app/" + str(appNum)
-              }
-        self.apps.append(app)
-
+        if numApps == 0:
+            appNum = numApps + 1
+            app = {"id": "app" + str(appNum),
+                   "name": "living",
+                   "provider": "ContinuumBridge",
+                   "version": 2,
+                   "url": "www.continuumbridge.com/apps/cbLivingV2",
+                   "exe": "living4.py",
+                   "devices": self.appDevs,
+                   "resource_uri": "/api/v1/app/" + str(appNum)
+                  }
+            self.apps.append(app)
+    
         self.config = {"cmd": "config",
                        "bridge": {"id": 42,
                                   "friendlyName": "Friendly Bridge",

@@ -15,8 +15,14 @@ if __name__ == '__main__':
     time.sleep(2)
     d = {}
     d["status"] = "discovered"
-    d["num"] = 2
-    for a in range (2):
-        d[0] = ["SensorTag", "22.22.22.22.22.22"]
-        d[1] = ["SensorTag", "33.33.33.33.33.33"]
+    d["devices"] = []
+    d["devices"].append({"method": "btle",
+                         "name": "SensorTag", 
+                         "addr": "22.22.22.22.22.22"})
+    d["devices"].append({"method": "btle",
+                         "name": "SensorTag", 
+                         "addr": "33.33.33.33.33.33"})
+    d["devices"].append({"method": "btle",
+                         "name": "SensorTag", 
+                         "addr": "44.44.44.44.44.44"})
     print json.dumps(d)
