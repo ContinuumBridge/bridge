@@ -80,26 +80,28 @@ class ManageBridge:
 
     def doDiscover(self):
         self.discoveredDevices = {}
-        for d in self.discoveredDevices:
-            del self.discoveredDevices[d]
         #exe = "/home/pi/bridge/manager/discovery.py"
         exe = "/home/petec/bridge/manager/testDiscovery.py"
         type = "btle"
         output = subprocess.check_output([exe, type])
         discOutput = json.loads(output)
-        print ModuleName, "Discovered: ", discOutput
         self.discoveredDevices["status"] = discOutput["status"]
         self.discoveredDevices["devices"] = []
         if self.configured:
             for d in discOutput["devices"]:
+                addrFound = False
                 if d["method"] == "btle":
                     for oldDev in self.devices:
                        if oldDev["method"] == "btle": 
-                           if d["addr"] != oldDev["btAddr"]:
-                               self.discoveredDevices["devices"].append(d)  
+                           if d["addr"] == oldDev["btAddr"]:
+                               addrFound = True
+                if addrFound == False:
+                    self.discoveredDevices["devices"].append(d)  
         else:
             for d in discOutput["devices"]:
                 self.discoveredDevices["devices"].append(d)  
+        print ModuleName, "Discovered devices:"
+        print ModuleName, self.discoveredDevices
         self.discovered = True
 
     def discover(self):
