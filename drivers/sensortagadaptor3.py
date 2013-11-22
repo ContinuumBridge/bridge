@@ -81,12 +81,46 @@ class ManageTag:
         """
         while self.fetchValues:
             self.tick += 1
-            if self.tick == 60:
+            if self.tick == 56:
                 # Enable temperature sensor every 30 seconds & take reading
+                print ModuleName, "Enabled temperature"
                 self.gatt.sendline('char-write-cmd 0x29 01')
-                self.gatt.sendline('char-write-cmd 0x26 0100')
+                self.gatt.expect('\[LE\]>')
+                #self.gatt.sendline('char-write-cmd 0x26 0100')
+            elif self.tick == 60:
+                # Allow about a second before reading temperature
                 self.tick = 0
-                self.doingTemp = True
+                self.gatt.sendline('char-read-hnd 0x25')
+                self.gatt.expect('descriptor: .*')
+                raw = self.gatt.after.split()
+                #print ModuleName, "raw temp = ", raw 
+                self.gatt.sendline('char-write-cmd 0x29 00')
+                self.gatt.expect('\[LE\]>')
+                # Calculate temperatures
+                objT = self.s16tofloat(raw[2] + \
+                                    raw[1]) * 0.00000015625
+                ambT = self.s16tofloat(raw[4] + raw[3]) / 128.0
+                Tdie2 = ambT + 273.15
+                S0 = 6.4E-14
+                a1 = 1.75E-3
+                a2 = -1.678E-5
+                b0 = -2.94E-5
+                b1 = -5.7E-7
+                b2 = 4.63E-9
+                c2 = 13.4
+                Tref = 298.15
+                S = S0 * (1 + a1 * (Tdie2 - Tref) + \
+                    a2 * pow((Tdie2 - Tref), 2))
+                Vos = b0 + b1 * (Tdie2 - Tref) + b2 * pow((Tdie2 - Tref), 2)
+                fObj = (objT - Vos) + c2 * pow((objT - Vos), 2)
+                objT = pow(pow(Tdie2,4) + (fObj/S), .25)
+                objT -= 273.15
+                self.temp["ambT"] = ambT
+                self.temp["objT"] = objT
+                self.temp["timeStamp"] = time.time()
+                #print ModuleName, "objT = ", objT, " ambT = ", ambT
+                #self.doingTemp = True
+
             index = self.gatt.expect(['value:.*', pexpect.TIMEOUT], timeout=10)
             if index == 1:
                 status = ""
@@ -99,9 +133,11 @@ class ManageTag:
                     print ModuleName, id, " re-init status = ", status
             else:
                 type = self.gatt.before.split()
+                #print ModuleName, "Gatt type = ", type 
                 if type[3].startswith("0x002d"): 
                     # Accelerometer descriptor
                     raw = self.gatt.after.split()
+                    #print ModuleName, "raw accel = ", raw 
                     self.accel["x"] = self.signExtend(int(raw[1], 16))
                     self.accel["y"] = self.signExtend(int(raw[2], 16))
                     self.accel["z"] = self.signExtend(int(raw[3], 16))
@@ -112,7 +148,9 @@ class ManageTag:
                     raw = self.gatt.after.split()
                     # Disable temperature notification & sensor
                     self.gatt.sendline('char-write-cmd 0x26 0100')
+                    self.gatt.expect('\[LE\]>')
                     self.gatt.sendline('char-write-cmd 0x29 00')
+                    self.gatt.expect('\[LE\]>')
                     self.doingTemp = False # So that we only do this once
     
                     # Calculate temperatures
@@ -145,14 +183,15 @@ class ManageTag:
      
     def reqAccel(self):
         while self.accelReady == False:
-            time.sleep(0.05) 
+            #print ModuleName, "Waiting for accelReady"
+            time.sleep(0.3) 
         accel = self.accel
         # Check how often we're actually getting accel values
-        #self.accelCount = self.accelCount + 1
-        #if accel["timeStamp"] - self.startTime > 10:
-            #print ModuleName, id, " readings in 10s = ", self.accelCount
-            #self.accelCount = 0
-            #self.startTime = accel["timeStamp"]        
+        self.accelCount = self.accelCount + 1
+        if accel["timeStamp"] - self.startTime > 10:
+            print ModuleName, id, " readings in 10s = ", self.accelCount
+            self.accelCount = 0
+            self.startTime = accel["timeStamp"]        
         self.accelReady = False
         return accel 
 
@@ -246,10 +285,14 @@ class ManageTag:
 
 class cbAdaptorProtocol(LineReceiver):
     def lineReceived(self, data):
+        #now = time.strftime("%M:%S", time.localtime())
+        #print ModuleName, now, " line received from app"
         self.d1 = p.processReq(json.loads(data))
         self.d1.addCallback(self.sendResp)
 
     def sendResp(self, resp):
+        #now = time.strftime("%M:%S", time.localtime())
+        #print ModuleName, now, " sent resp to app"
         self.sendLine(json.dumps(resp))
 
 class cbManagerClient(LineReceiver):

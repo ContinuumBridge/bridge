@@ -80,8 +80,8 @@ class ManageBridge:
 
     def doDiscover(self):
         self.discoveredDevices = {}
-        #exe = "/home/pi/bridge/manager/discovery.py"
-        exe = "/home/petec/bridge/manager/testDiscovery.py"
+        exe = "/home/pi/bridge/manager/discovery.py"
+        #exe = "/home/petec/bridge/manager/testDiscovery.py"
         type = "btle"
         output = subprocess.check_output([exe, type])
         discOutput = json.loads(output)
@@ -108,7 +108,8 @@ class ManageBridge:
         d = threads.deferToThread(self.doDiscover)
 
     def readConfig(self):
-        self.bridgeRoot = "/home/petec/bridge/"
+        #self.bridgeRoot = "/home/petec/bridge/"
+        self.bridgeRoot = "/home/pi/bridge/"
         self.appRoot = self.bridgeRoot + "apps/"
         self.adtRoot = self.bridgeRoot + "drivers/"
         try:
@@ -182,9 +183,11 @@ class ManageBridge:
             self.discover()
         elif msg["cmd"] == "stopapps":
             self.stopApps()
+            reactor.callLater(5, self.delManagerSockets)
         elif msg["cmd"] == "stopall" or msg["cmd"] == "stop":
             self.stopApps()
-            reactor.callLater(5, self.stopManager)
+            reactor.callLater(5, self.delManagerSockets)
+            reactor.callLater(1, self.stopManager)
         elif msg["cmd"] == "update":
             self.reqSync = True
         elif msg["cmd"] == "config":
@@ -198,6 +201,15 @@ class ManageBridge:
     def stopApps(self):
         print ModuleName, "Stopping apps and adaptors"
         self.stopping = True
+
+    def delManagerSockets(self):
+        mgrSocs = self.listMgrSocs()
+        for s in mgrSocs:
+            try:
+                os.remove(s)
+                print ModuleName, "Removed manager socket ", s
+            except:
+                print ModuleName, "Unable to remove manager socket: ", s
 
     def checkBridge(self):
         return True
