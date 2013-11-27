@@ -186,8 +186,8 @@ class ManageBridge:
             reactor.callLater(5, self.delManagerSockets)
         elif msg["cmd"] == "stopall" or msg["cmd"] == "stop":
             self.stopApps()
-            reactor.callLater(5, self.delManagerSockets)
-            reactor.callLater(1, self.stopManager)
+            reactor.callLater(7, self.delManagerSockets)
+            reactor.callLater(8, self.stopManager)
         elif msg["cmd"] == "update":
             self.reqSync = True
         elif msg["cmd"] == "config":
