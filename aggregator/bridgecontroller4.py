@@ -94,7 +94,8 @@ class BridgeControlProtocol(LineReceiver):
                        "provider": "ContinuumBridge",
                        "version": 2,
                        "url": "www.continuumbridge.com/adt/cbSensorTagAdtV2",
-                       "exe": 'testSensorTagAdaptor.py',
+                       #"exe": 'testSensorTagAdaptor.py',
+                       "exe": 'sensortagadaptor4.py',
                        "resource_uri": "/api/V1/device/" + str(devNum)
                       }
               }
@@ -113,7 +114,8 @@ class BridgeControlProtocol(LineReceiver):
                    "provider": "ContinuumBridge",
                    "version": 2,
                    "url": "www.continuumbridge.com/apps/cbLivingV2",
-                   "exe": "living4.py",
+                   "exe": "living6.py",
+                   #"exe": "testLiving.py",
                    "devices": self.appDevs,
                    "resource_uri": "/api/v1/app/" + str(appNum)
                   }

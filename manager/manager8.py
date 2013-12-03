@@ -111,7 +111,7 @@ class ManageBridge:
         #self.bridgeRoot = "/home/petec/bridge/"
         self.bridgeRoot = "/home/pi/bridge/"
         self.appRoot = self.bridgeRoot + "apps/"
-        self.adtRoot = self.bridgeRoot + "drivers/"
+        self.adtRoot = self.bridgeRoot + "adaptors/"
         try:
             with open('bridge.config', 'r') as configFile:
                 config = json.load(configFile)
@@ -231,13 +231,13 @@ class ManageBridge:
         if self.stopping:
             response = {"cmd": "stop"}
         elif msg["status"] == "req-config":
-            if msg["class"] == "app":
+            if msg["type"] == "app":
                 for a in self.apps:
                     if a["id"] == msg["id"]:
                         response = {"cmd": "config",
                                     "config": {"adts": a["devices"]}}
                         break
-            elif msg["class"] == "adt": 
+            elif msg["type"] == "adt": 
                 for d in self.devices:
                     if d["id"] == msg["id"]:
                         response = {

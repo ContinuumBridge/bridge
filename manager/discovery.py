@@ -11,9 +11,9 @@ import time
 import os
 import pexpect
 import json
-from twisted.internet.protocol import Protocol, Factory
-from twisted.internet import reactor, defer
-from twisted.internet import task
+#from twisted.internet.protocol import Protocol, Factory
+#from twisted.internet import reactor, defer
+#from twisted.internet import task
 
 if __name__ == '__main__':
     discoveredAddresses = []

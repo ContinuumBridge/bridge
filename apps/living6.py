@@ -95,9 +95,11 @@ class Accelerometer:
         energy = self.detectEvent(self.accel)
         for e in range(3):
             if energy[e] > energyThreshold:
-                dm.storeAccel(self.id, timeStamp, energy) 
-                now = time.ctime(resp["accel"]["timeStamp"])
-                print ModuleName, now, " event: ", energy
+                self.dm.storeAccel(self.id, timeStamp, energy) 
+                #now = time.ctime(resp["accel"]["timeStamp"])
+                localTime = time.localtime(resp["accel"]["timeStamp"])
+                now = time.strftime("%H:%M:%S", localTime)
+                print ModuleName, self.id, now, " event: ", energy
                 break
  
 class TemperatureMeasure():
@@ -114,20 +116,21 @@ class TemperatureMeasure():
             objT = resp["temp"]["objT"]
             ambT = resp["temp"]["ambT"] 
             self.currentTemp = {"objT": objT, "ambT": ambT}
-            dm.storeTemp(self.id, self.prevEpochMin, objT, ambT) 
+            self.dm.storeTemp(self.id, self.prevEpochMin, objT, ambT) 
             self.prevEpochMin = epochMin
-            now = time.ctime(resp["temp"]["timeStamp"])
 
 class App(cbApp):
     def __init__(self, argv):
-        cbApp.__init__(self, argv)
         cbApp.processResp = self.processResp
-        cbApp.configure = self.configure
+        cbApp.cbAppConfigure = self.configure
         self.accel = []
         self.temp = []
+        self.dm = DataManager()
+        cbApp.__init__(self, argv)
 
     def processResp(self, resp):
         req = {}
+        #print ModuleName, "resp = ", resp
         if resp["content"] == "data":
             for a in self.accel:
                 if a.id == resp["id"]: 
@@ -138,13 +141,13 @@ class App(cbApp):
                 if t.id == resp["id"]:
                     t.processTemp(resp)
                     break
-            req = {"id": id,
+            req = {"id": self.id,
                    "req": "req-data"}
         elif resp["content"] == "none":
-            req = {"id": id,
+            req = {"id": self.id,
                    "req": "req-data"}
         else:
-            req = {"id": id,
+            req = {"id": self.id,
                    "req": "req-data"}
             # A problem has occured. Report it to bridge manager
             self.status = "adaptor problem"
@@ -152,12 +155,17 @@ class App(cbApp):
 
     def configure(self, config):
         """ Config is based on what sensors are available """
+        print ModuleName, "Configure app"
         for adaptor in config["adts"]:
-            print ModuleName, "configure, adaptor name = ", name
+            name = adaptor["name"]
+            adtID = adaptor["id"]
+            print ModuleName, "configure app, adaptor name = ", name
             if name == "CB SensorTag Adt":
-                self.accel.append(Accelerometer(id))
-                self.temp.append(TemperatureMeasure(id))
-                dm.initDevice(id)
+                self.accel.append(Accelerometer(adtID))
+                self.accel[-1].dm = self.dm
+                self.temp.append(TemperatureMeasure(adtID))
+                self.temp[-1].dm = self.dm
+                self.dm.initDevice(adtID)
 
 if __name__ == '__main__':
 
