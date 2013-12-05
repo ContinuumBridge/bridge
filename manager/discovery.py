@@ -4,7 +4,7 @@
 """ A very simple discovery program for BTLE devices.
     All it does it look for addresses and append them to a list. """
 
-ModuleName = "Discovery           "
+ModuleName = "Discovery            "
 
 import sys
 import time
