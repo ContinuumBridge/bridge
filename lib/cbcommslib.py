@@ -1,4 +1,10 @@
-#!/usr/bin/python
+#!/usr/bin/env python
+# cbcommslib.py
+# Copyright (C) ContinuumBridge Limited, 2013 - All Rights Reserved
+# Unauthorized copying of this file, via any medium is strictly prohibited
+# Proprietary and confidential
+# Written by Peter Claydon
+#
 ModuleName = "cbLib               " 
 
 import sys

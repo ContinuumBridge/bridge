@@ -1,7 +1,11 @@
 #!/usr/bin/env python
-#manager7.py
+# manager9.py
+# Copyright (C) ContinuumBridge Limited, 2013 - All Rights Reserved
+# Unauthorized copying of this file, via any medium is strictly prohibited
+# Proprietary and confidential
+# Written by Peter Claydon
+#
 ModuleName = "Bridge Manager      "
-id = "manager7"
 
 import sys
 import time
