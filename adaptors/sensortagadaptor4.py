@@ -1,5 +1,10 @@
 #!/usr/bin/env python
-
+# sensortagadaptor4.py
+# Copyright (C) ContinuumBridge Limited, 2013 - All Rights Reserved
+# Unauthorized copying of this file, via any medium is strictly prohibited
+# Proprietary and confidential
+# Written by Peter Claydon
+#
 ModuleName = "SensorTag           "
 
 import pexpect
