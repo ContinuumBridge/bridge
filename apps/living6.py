@@ -129,6 +129,12 @@ class App(cbApp):
         cbApp.__init__(self, argv)
 
     def processResp(self, resp):
+        """
+        Processes the response received from an adaptor & sends another req.
+
+        This method is called in a thread by cbcommslib so it will not cause
+        problems if it takes some time to complete (other than to itself).
+        """
         req = {}
         #print ModuleName, "resp = ", resp
         if resp["content"] == "data":

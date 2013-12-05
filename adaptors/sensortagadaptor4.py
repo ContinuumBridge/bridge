@@ -28,7 +28,7 @@ class Adaptor(cbAdaptor):
         cbAdaptor.__init__(self, argv)
 
     def initSensorTag(self):
-        print ModuleName, "initSensorTag", self.id
+        print ModuleName, "initSensorTag", self.id, " - ", self.friendlyName
         try:
             cmd = 'gatttool -i ' + self.device + ' -b ' + self.addr + \
                   ' --interactive'
@@ -42,11 +42,12 @@ class Adaptor(cbAdaptor):
         self.gatt.expect('\[LE\]>', timeout=5)
         index = self.gatt.expect(['successful', pexpect.TIMEOUT], timeout=5)
         if index == 1:
-            print ModuleName, "Connection to device timed out for", self.id
+            print ModuleName, "Connection to device timed out for", self.id, \
+                " - ", self.friendlyName
             self.gatt.kill(9)
             return "timeout"
         else:
-            print ModuleName, self.id, " connected"
+            print ModuleName, self.id, " - ", self.friendlyName, " connected"
             # Enable accelerometer
             self.gatt.sendline('char-write-cmd 0x31 01')
             self.gatt.expect('\[LE\]>')
@@ -60,21 +61,28 @@ class Adaptor(cbAdaptor):
             return "ok"
 
     def startApp(self):
+        """
+        Continually attempts to connect to the device.
+        Gating with doStop needed because adaptor may be stopped before
+        the device is ever connected.
+        """
         if self.connected == True:
             tagStatus = "Already connected" # Indicates app restarting
-        while self.connected == False:
+        while self.connected == False and not self.doStop:
             tagStatus = self.initSensorTag()    
             if tagStatus != "ok":
                 print ModuleName
-                print ModuleName, "ERROR. SensorTag ", self.id, \
-                    " failed to initialise"
+                print ModuleName, "ERROR. ", self.id, " - ", \
+                    self.friendlyName, " failed to initialise"
                 print ModuleName, "Please press side button"
                 print ModuleName, \
                       "If problem persists SensorTag may be out of range"
-        # Start a thread that continually gets accel and temp values
-        t = Thread(target=self.getValues)
-        t.start()
-        print ModuleName, self.id, " successfully initialised"
+        if not self.doStop:
+            # Start a thread that continually gets accel and temp values
+            t = Thread(target=self.getValues)
+            t.start()
+            print ModuleName, self.id, " - ", self.friendlyName, \
+                "successfully initialised"
  
     def signExtend(self, a):
         if a > 127:
@@ -138,11 +146,13 @@ class Adaptor(cbAdaptor):
             if index == 1:
                 status = ""
                 while status != "ok" and not self.doStop:
-                    print ModuleName, self.id, " gatt timeout"
+                    print ModuleName, self.id, " - ", self.friendlyName, \
+                        " gatt timeout"
                     self.gatt.kill(9)
                     time.sleep(1)
                     status = self.initSensorTag()   
-                    print ModuleName, self.id, " re-init status = ", status
+                    print ModuleName, self.id, " - ", self.friendlyName, \
+                        " re-init status = ", status
             else:
                 type = self.gatt.before.split()
                 if type[3].startswith("0x002d"): 
@@ -159,10 +169,11 @@ class Adaptor(cbAdaptor):
                     pass
         try:
             self.gatt.kill(9)
-            print ModuleName, self.id, " gatt process killed"
+            print ModuleName, self.id, " - ", self.friendlyName, \
+                " gatt process killed"
         except:
             sys.stderr.write(ModuleName + "Error: could not kill pexpect for" \
-                + self.id + "\n")
+                + self.id + " - " + self.friendlyName + "\n")
 
     def reqAccel(self, appID):
         """
@@ -214,7 +225,6 @@ class Adaptor(cbAdaptor):
 
     def configure(self, config):
         """Config is based on what apps are to be connected."""
-        print ModuleName,  self.id, " configure adaptor"
         for app in config["apps"]:
             self.accelReady[app["id"]] = False
         self.startApp()

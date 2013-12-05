@@ -32,6 +32,7 @@ class cbAdaptor:
 
         managerFactory = cbClientFactory()
         managerFactory.protocol = cbManagerClient
+        managerFactory.id = self.id
         managerFactory.protocol.id = self.id
         managerFactory.protocol.type = "adt"
         managerFactory.protocol.setStatus = self.setStatus
@@ -51,33 +52,31 @@ class cbAdaptor:
         self.cbFactory = []
         self.appInstances = []
         self.name = config["name"]
+        self.friendlyName = config["friendlyName"]
         self.device = config["btAdpt"]
         self.addr = config["btAddr"]
         for app in config["apps"]:
             name = app["name"]
             adtSoc = app["adtSoc"]
-            print ModuleName, "adtSoc = ", adtSoc
             id = app["id"]
             self.appInstances.append(id)
             self.cbFactory.append(Factory())
             self.cbFactory[-1].protocol = cbAdaptorProtocol
             self.cbFactory[-1].protocol.processReqThread = self.processReqThread
             reactor.listenUNIX(adtSoc, self.cbFactory[-1])
-        print ModuleName, "Library adaptor config"
         self.cbAdtConfigure(config)
 
     def processManager(self, cmd):
         #print ModuleName, "Received from manager: ", cmd
         if cmd["cmd"] == "stop":
-            print ModuleName, self.id, " stopping"
             self.doStop = True
             msg = {"id": self.id,
                    "status": "stopping"}
-            time.sleep(5)
-            reactor.stop()
-            sys.exit
+            #Adaptor must check doStop more often than every 8 seconds
+            reactor.callLater(8, self.stopReactor)
         elif cmd["cmd"] == "config":
-            self.processConf(cmd["config"]) 
+            #Call in thread in case user code hangs
+            reactor.callInThread(self.processConf, cmd["config"]) 
             msg = {"id": self.id,
                    "status": "ok"}
         elif cmd["cmd"] != "ok":
@@ -87,6 +86,14 @@ class cbAdaptor:
             msg = {"id": self.id,
                    "status": "none"}
         return msg
+
+    def stopReactor(self):
+        try:
+            reactor.stop()
+        except:
+             print ModuleName, self.id, " stop: reactor was not running"
+        print ModuleName, "Bye from ", self.id
+        sys.exit
 
     def processReqThread(self, req):
         """Simplifies calling the adaptor's processReq in a Twisted thread."""
@@ -119,6 +126,7 @@ class cbApp:
         
         managerFactory = cbClientFactory()
         managerFactory.protocol = cbManagerClient
+        managerFactory.id = self.id
         managerFactory.protocol.id = self.id
         managerFactory.protocol.type = "app"
         managerFactory.protocol.setStatus = self.setStatus
@@ -151,26 +159,26 @@ class cbApp:
             friendlyName = adaptor["friendlyName"]
             self.friendlyLookup.update({id: friendlyName})
             self.adtInstances.append(id)
-            print ModuleName, "configure app, adaptor name = ", name
             self.cbFactory.append(cbClientFactory())
             self.cbFactory[-1].protocol = cbAdaptorClient 
+            self.cbFactory[-1].id = self.id 
             self.cbFactory[-1].protocol.id = self.id 
-            self.cbFactory[-1].protocol.processResp = self.processResp 
+            self.cbFactory[-1].protocol.processRespThread = \
+                self.processRespThread
             reactor.connectUNIX(adtSoc, self.cbFactory[-1], timeout=10)
         self.cbAppConfigure(config)
 
     def processManager(self, cmd):
         #print ModuleName, "Received from manager: ", cmd
         if cmd["cmd"] == "stop":
-            print ModuleName, self.id, " stopping"
             self.doStop = True
             msg = {"id": self.id,
                    "status": "stopping"}
-            time.sleep(5)
-            reactor.stop()
-            sys.exit
+            #Adaptor must check doStop more often than every 8 seconds
+            reactor.callLater(8, self.stopReactor)
         elif cmd["cmd"] == "config":
-            self.processConf(cmd["config"]) 
+            #Call in thread in case user code hangs
+            reactor.callInThread(self.processConf, cmd["config"]) 
             msg = {"id": self.id,
                    "status": "ok"}
         elif cmd["cmd"] != "ok":
@@ -180,6 +188,19 @@ class cbApp:
             msg = {"id": self.id,
                    "status": "none"}
         return msg
+
+    def stopReactor(self):
+        try:
+            reactor.stop()
+        except:
+             print ModuleName, self.id, " stop: reactor was not running"
+        print ModuleName, "Bye from ", self.id
+        sys.exit
+
+    def processRespThread(self, resp):
+        """Simplifies calling the app's processResp in a Twisted thread."""
+        req = self.processResp(resp)
+        return req
 
     def reportStatus(self):
         return self.status
@@ -194,13 +215,14 @@ class cbAdaptorClient(LineReceiver):
         self.sendLine(json.dumps(req))
 
     def lineReceived(self, data):
-        resp = json.loads(data)
-        req = self.processResp(resp)
+        self.d = threads.deferToThread(self.processRespThread, json.loads(data))
+        self.d.addCallback(self.sendReq)
+
+    def sendReq(self, req):
         self.sendLine(json.dumps(req))
 
 class cbManagerClient(LineReceiver):
     def connectionMade(self):
-        print ModuleName, "self.id = ", self.id
         msg = {"id": self.id,
                "type": self.type,
                "status": "req-config"} 
@@ -223,13 +245,11 @@ class cbManagerClient(LineReceiver):
 class cbClientFactory(ReconnectingClientFactory):
     """Tries to reconnect to socket if connection lost."""
     def clientConnectionFailed(self, connector, reason):
-        print ModuleName, "Failed to connect:"
-        print ModuleName,  reason.getErrorMessage()
+        print ModuleName, self.id, " failed to connect"
         ReconnectingClientFactory.clientConnectionLost(self, connector, reason)
 
     def clientConnectionLost(self, connector, reason):
-        print ModuleName, "Connection lost:"
-        print ModuleName, reason.getErrorMessage()
+        print ModuleName, self.id, " connection lost"
         ReconnectingClientFactory.clientConnectionLost(self, connector, reason)
 
 class cbAppProtocol(LineReceiver):
