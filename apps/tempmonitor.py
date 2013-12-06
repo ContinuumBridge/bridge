@@ -56,11 +56,18 @@ class TemperatureMeasure():
             self.prevEpochMin = epochMin
 
 class App(cbApp):
+    """
+    The primary app class must subclass cbApp from cbcommslib.
+    All socket communication is dealt with by cbcommslib.
+    """
     def __init__(self, argv):
+        # cbApp.processResp must be overwritten
         cbApp.processResp = self.processResp
+        # cbApp.cbAppConfigure must be overwritten
         cbApp.cbAppConfigure = self.configure
         self.temp = []
         self.dm = DataManager()
+        # cbApp.__init__(self, argv) must be called a the end of this __init__
         cbApp.__init__(self, argv)
 
     def processResp(self, resp):
@@ -69,12 +76,15 @@ class App(cbApp):
 
         This method is called in a thread by cbcommslib so it will not cause
         problems if it takes some time to complete (other than to itself).
+        Once data has been processed, this method must return a request to
+        obtain more data from an adaptor. 
+        The method is call separately for each adaptor that is connected to 
+        the app. You can tell which adaptor the data came from by looking at
+        resp["id"].
         """
         req = {}
-        #print ModuleName, "resp = ", resp
         if resp["content"] == "data":
             for t in self.temp:
-                #print ModuleName, "t.id = ", t.id, " resp id = ", resp["id"]
                 if t.id == resp["id"]:
                     t.processTemp(resp)
                     #Dumb wait for 5 seconds for now
@@ -88,7 +98,8 @@ class App(cbApp):
         else:
             req = {"id": self.id,
                    "req": "req-data"}
-            # A problem has occured. Report it to bridge manager
+            # A problem has occured. Report it to bridge manager.
+            # self.status is reported back at regular intervals.
             self.status = "adaptor problem"
         return req 
 
@@ -100,7 +111,9 @@ class App(cbApp):
             adtID = adaptor["id"]
             print ModuleName, "configure app, adaptor name = ", name
             if name == "CB SensorTag Adt":
+                # Instantiate a TemperatureMeasure class for each adaptor
                 self.temp.append(TemperatureMeasure(adtID))
+                # Instantiate a data manager for each sensor
                 self.temp[-1].dm = self.dm
                 self.dm.initDevice(adtID)
 
