@@ -172,6 +172,12 @@ class cbApp:
             self.cbFactory[-1].protocol.processRespThread = \
                 self.processRespThread
             reactor.connectUNIX(adtSoc, self.cbFactory[-1], timeout=10)
+        concSocket = config["concentrator"]
+        self.concFactory = cbClientFactory()
+        self.concFactory.id = self.id
+        self.concFactory.protocol = cbConcClient
+        self.concFactory.protocol.id = self.id
+        reactor.connectUNIX(concSocket, self.concFactory, timeout=10)
         self.cbAppConfigure(config)
 
     def processManager(self, cmd):
@@ -213,6 +219,19 @@ class cbApp:
 
     def setStatus(self, newStatus):
         self.status = newStatus
+
+class cbConcClient(LineReceiver):
+    def connectionMade(self):
+        req = {"id": self.id,
+               "req": "init"}
+        self.sendLine(json.dumps(req))
+
+    def lineReceived(self, data):
+        msg = json.loads(data)
+        print ModuleName, self.id, " received from conc: ", msg 
+
+    def sendReq(self, req):
+        self.sendLine(json.dumps(req))
 
 class cbAdaptorClient(LineReceiver):
     def connectionMade(self):

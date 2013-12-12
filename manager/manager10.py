@@ -6,7 +6,7 @@
 # Written by Peter Claydon
 #
 ModuleName = "Bridge Manager      "
-id = "manager9"
+id = "manager10"
 
 import sys
 import time
@@ -31,6 +31,7 @@ class ManageBridge:
         self.reqSync = False
         self.stopping = False
         self.appProcs = []
+        self.concConfig = []
         status = self.readConfig()
         print ModuleName, status
       
@@ -43,6 +44,7 @@ class ManageBridge:
             mgrSocs.append(d["device"]["adaptor"]["mgrSoc"])
         for a in self.apps:
             mgrSocs.append(a["app"]["mgrSoc"])
+        mgrSocs.append("mgr-conc")
         return mgrSocs
 
     def startAll(self):
@@ -56,6 +58,20 @@ class ManageBridge:
             except:
                 print ModuleName, "Manager socket already exits: ", s
 
+        # Start concentrator 
+        exe = self.concPath
+        id = "conc"
+        mgrSoc = "mgr-conc"
+        try:
+            p = subprocess.Popen([exe, mgrSoc, id])
+            self.appProcs.append(p)
+            print ModuleName, "Started concentrator"
+        except:
+            print ModuleName, "Concentrator failed to start"
+            print ModuleName, "Params: ", exe, id, mgrSoc
+        # Give time for concentrator to start
+        time.sleep(2)
+
         # Start adaptors
         for d in self.devices:
             exe = d["device"]["adaptor"]["exe"]
@@ -63,15 +79,15 @@ class ManageBridge:
             id = d["device"]["id"]
             mgrSoc = d["device"]["adaptor"]["mgrSoc"]
             try:
-               p = subprocess.Popen([exe, mgrSoc, id])
-               self.appProcs.append(p)
-               print ModuleName, "Started adaptor ", fName, " ID: ", id
-               # Give time for adaptor to start before starting the next one
-               time.sleep(2)
+                p = subprocess.Popen([exe, mgrSoc, id])
+                self.appProcs.append(p)
+                print ModuleName, "Started adaptor ", fName, " ID: ", id
+                # Give time for adaptor to start before starting the next one
+                time.sleep(2)
             except:
-               print ModuleName, "Adaptor ", fName, " failed to start"
-               print ModuleName, "Params: ", exe, id, mgrSoc
-               time.sleep(2)
+                print ModuleName, "Adaptor ", fName, " failed to start"
+                print ModuleName, "Params: ", exe, id, mgrSoc
+                time.sleep(2)
 
         # Give time for all adaptors to start before starting apps
         time.sleep(5)
@@ -80,7 +96,8 @@ class ManageBridge:
                 id = a["app"]["id"]
                 exe = a["app"]["exe"]
                 mgrSoc = a["app"]["mgrSoc"]
-                subprocess.Popen([exe, mgrSoc, id])
+                p = subprocess.Popen([exe, mgrSoc, id])
+                self.appProcs.append(p)
                 print ModuleName, id, " started"
             except:
                 print ModuleName, id, " failed to start"
@@ -119,6 +136,7 @@ class ManageBridge:
         self.bridgeRoot = "/home/pi/bridge/"
         self.appRoot = self.bridgeRoot + "apps/"
         self.adtRoot = self.bridgeRoot + "adaptors/"
+        self.concPath = self.bridgeRoot + "concentrator/concentrator.py"
         try:
             with open('bridge.config', 'r') as configFile:
                 config = json.load(configFile)
@@ -132,7 +150,6 @@ class ManageBridge:
             self.configured = False
 
         if self.configured:
-            #try:
             # Process config to determine routing:
             for d in self.devices:
                 d["device"]["id"] = "dev" + d["device"]["id"]
@@ -147,6 +164,7 @@ class ManageBridge:
                 a["app"]["id"] = "app" + a["app"]["id"]
                 a["app"]["exe"] = self.appRoot + a["app"]["exe"]
                 a["app"]["mgrSoc"] = "mgr-" + a["app"]["id"]
+                a["app"]["concSoc"] = "conc-" + a["app"]["id"]
                 for appDev in a["devices"]:
                     uri = appDev["resource_uri"]
                     for d in self.devices: 
@@ -164,9 +182,6 @@ class ManageBridge:
                             appDev["friendlyName"] = d["device"]["friendlyName"]
                             appDev["adtSoc"] = socket
                             break
-            #except:
-                #print ModuleName, "Error processing configuration"
-                #self.configured = False
         if self.configured:
             print ModuleName, "Config information processed:"
             print ModuleName, "Apps:"
@@ -235,6 +250,13 @@ class ManageBridge:
                     print ModuleName, socket, " removed"
                 except:
                     print ModuleName, socket, " already removed"
+        for soc in self.concConfig:
+                socket = soc["appConcSoc"]
+                try:
+                    os.remove(socket) 
+                    print ModuleName, socket, " removed"
+                except:
+                    print ModuleName, socket, " already removed"
  
     def delManagerSockets(self):
         mgrSocs = self.listMgrSocs()
@@ -268,8 +290,13 @@ class ManageBridge:
             if msg["type"] == "app":
                 for a in self.apps:
                     if a["app"]["id"] == msg["id"]:
+                        for c in self.concConfig:
+                            if c["id"] == msg["id"]:
+                                conc = c["appConcSoc"]
+                                break
                         response = {"cmd": "config",
-                                    "config": {"adts": a["devices"]}}
+                                    "config": {"adts": a["devices"],
+                                               "concentrator": conc}}
                         break
             elif msg["type"] == "adt": 
                 for d in self.devices:
@@ -283,6 +310,15 @@ class ManageBridge:
                                    "btAdpt": "hci0" 
                                   }
                                }
+                        break
+            elif msg["type"] == "conc":
+                self.concConfig = []
+                for a in self.apps:
+                    self.concConfig.append({"id": a["app"]["id"],
+                                       "appConcSoc": a["app"]["concSoc"]})
+                response = {"cmd": "config",
+                            "config": self.concConfig 
+                           }
             else:
                 print ModuleName, "Config req from unknown instance: ", \
                     msg["id"]
