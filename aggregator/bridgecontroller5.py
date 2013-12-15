@@ -5,6 +5,8 @@
 # Proprietary and confidential
 # Written by Peter Claydon
 #
+sim = True
+
 import json
 import sys
 import time
@@ -97,6 +99,10 @@ class BridgeControlProtocol(LineReceiver):
     def buildBridgeData(self, friendly, purpose, currentDev):
         numDevs = len(self.devs)
         devNum = numDevs + 1
+        if sim:
+            exe = 'testSensorTagAdaptor.py'
+        else:
+            exe = 'sensortagadaptor.py'
         dev = {"device": 
                  {"name": currentDev["name"],
                   "friendlyName": friendly,
@@ -109,8 +115,7 @@ class BridgeControlProtocol(LineReceiver):
                      "purpose": purpose,
                      "version": 2,
                      "url": "www.continuumbridge.com/adt/cbSensorTagAdtV2",
-                     #"exe": 'testSensorTagAdaptor.py',
-                     "exe": 'sensortagadaptor4.py',
+                     "exe": exe,
                      "resource_uri": "/api/V1/device/" + str(devNum)
                     },
                   "device": "/api/v1/device/" + str(devNum),
@@ -133,7 +138,7 @@ class BridgeControlProtocol(LineReceiver):
                           "provider": "ContinuumBridge",
                           "version": 2,
                           "url": "www.continuumbridge.com/apps/cbLivingV2",
-                          "exe": "living6.py",
+                          "exe": "living7.py",
                           #"exe": "testLiving.py",
                           "resource_uri": "/api/v1/app/" + str(appNum)
                          },

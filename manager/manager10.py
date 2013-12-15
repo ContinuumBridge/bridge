@@ -7,6 +7,7 @@
 #
 ModuleName = "Bridge Manager      "
 id = "manager10"
+sim = True
 
 import sys
 import time
@@ -104,8 +105,10 @@ class ManageBridge:
 
     def doDiscover(self):
         self.discoveredDevices = {}
-        exe = "/home/pi/bridge/manager/discovery.py"
-        #exe = "/home/petec/bridge/manager/testDiscovery.py"
+        if sim:
+            exe = "/home/petec/bridge/manager/testDiscovery.py"
+        else:
+            exe = "/home/pi/bridge/manager/discovery.py"
         type = "btle"
         output = subprocess.check_output([exe, type])
         discOutput = json.loads(output)
@@ -132,11 +135,13 @@ class ManageBridge:
         d = threads.deferToThread(self.doDiscover)
 
     def readConfig(self):
-        #self.bridgeRoot = "/home/petec/bridge/"
-        self.bridgeRoot = "/home/pi/bridge/"
+        if sim:
+            self.bridgeRoot = "/home/petec/bridge/"
+        else:
+            self.bridgeRoot = "/home/pi/bridge/"
         self.appRoot = self.bridgeRoot + "apps/"
         self.adtRoot = self.bridgeRoot + "adaptors/"
-        self.concPath = self.bridgeRoot + "concentrator/concentrator.py"
+        self.concPath = self.bridgeRoot + "concentrator/concentrator2.py"
         try:
             with open('bridge.config', 'r') as configFile:
                 config = json.load(configFile)
