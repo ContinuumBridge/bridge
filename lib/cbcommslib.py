@@ -13,6 +13,7 @@ import time
 import json
 from pprint import pprint
 from twisted.internet.protocol import Protocol, Factory
+from twisted.internet.protocol import ClientFactory
 from twisted.internet.protocol import ReconnectingClientFactory
 from twisted.protocols.basic import LineReceiver
 from twisted.internet import task
@@ -150,6 +151,9 @@ class cbApp:
                "req": "none"}
         return req 
 
+    def processConcResp(self, resp):
+        print ModuleName, "processConcResp, resp = ", resp
+
     def cbAppConfigure(self, config):
         """The app should overwrite this and do all configuration in it."""
         print ModuleName, self.id, " should subclass cbAppConfigure"
@@ -172,12 +176,13 @@ class cbApp:
             self.cbFactory[-1].protocol.processRespThread = \
                 self.processRespThread
             reactor.connectUNIX(adtSoc, self.cbFactory[-1], timeout=10)
-        concSocket = config["concentrator"]
-        self.concFactory = cbClientFactory()
-        self.concFactory.id = self.id
+        self.concSocket = config["concentrator"]
+        self.concFactory = ClientFactory()
         self.concFactory.protocol = cbConcClient
-        self.concFactory.protocol.id = self.id
-        reactor.connectUNIX(concSocket, self.concFactory, timeout=10)
+        self.concFactory.protocol.processConcResp = self.processConcResp
+        #self.concFactory.protocol.req = {"id": self.id,
+                                         #"req": "init"} 
+        #reactor.connectUNIX(self.concSocket, self.concFactory, timeout=10)
         self.cbAppConfigure(config)
 
     def processManager(self, cmd):
@@ -214,6 +219,10 @@ class cbApp:
         req = self.processResp(resp)
         return req
 
+    def sendConcReq(self, req):
+        self.concFactory.protocol.req = req
+        reactor.connectUNIX(self.concSocket, self.concFactory, timeout=1)
+
     def reportStatus(self):
         return self.status
 
@@ -222,16 +231,10 @@ class cbApp:
 
 class cbConcClient(LineReceiver):
     def connectionMade(self):
-        req = {"id": self.id,
-               "req": "init"}
-        self.sendLine(json.dumps(req))
+        self.sendLine(json.dumps(self.req))
 
     def lineReceived(self, data):
-        msg = json.loads(data)
-        print ModuleName, self.id, " received from conc: ", msg 
-
-    def sendReq(self, req):
-        self.sendLine(json.dumps(req))
+        self.processConcResp(json.loads(data))
 
 class cbAdaptorClient(LineReceiver):
     def connectionMade(self):
