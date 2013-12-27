@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 # sensortagadaptor5.py
-# Copyright (C) ContinuumBridge Limited, 2013 - All Rights Reserved
+# Copyright (C) ContinuumBridge Limited, 2013-2014 - All Rights Reserved
 # Unauthorized copying of this file, via any medium is strictly prohibited
 # Proprietary and confidential
 # Written by Peter Claydon
 #
-ModuleName = "SensorTag 5         "
+ModuleName = "SensorTag           "
 
 import pexpect
 import sys
@@ -107,8 +107,6 @@ class Adaptor(CbAdaptor):
                       "If problem persists SensorTag may be out of range"
         if not self.doStop:
             # Start a thread that continually gets accel and temp values
-            #t = Thread(target=self.getValues)
-            #t.start()
             d = threads.deferToThread(self.getValues)
             print ModuleName, self.id, " - ", self.friendly_name, \
                 "successfully initialised"
