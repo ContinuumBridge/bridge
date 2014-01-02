@@ -21,9 +21,9 @@ from twisted.internet import threads
 from twisted.internet import defer
 from twisted.internet import reactor
 
-class cbAdaptor:
+class CbAdaptor:
     """This should be sub-classed by any app."""
-    ModuleName = "cbAdaptor           " 
+    ModuleName = "CbAdaptor           " 
 
     def __init__(self, argv):
         self.cbFactory = []
@@ -31,14 +31,14 @@ class cbAdaptor:
         self.doStop = False
 
         if len(argv) < 3:
-            print "cbAdaptor improper number of arguments"
+            print "CbAdaptor improper number of arguments"
             exit(1)
         managerSocket = argv[1]
         self.id = argv[2]
         print ModuleName, "Hello from ", self.id
 
-        managerFactory = cbClientFactory()
-        managerFactory.protocol = cbManagerClient
+        managerFactory = CbManagerClientFactory()
+        managerFactory.protocol = CbManagerClient
         managerFactory.id = self.id
         managerFactory.protocol.id = self.id
         managerFactory.protocol.type = "adt"
@@ -56,7 +56,7 @@ class cbAdaptor:
         """Config is based on what apps are available."""
         print ModuleName, self.id, " configure: "
         pprint(config)
-        self.cbFactory = []
+        self.cbFactory = {}
         self.appInstances = []
         self.name = config["name"]
         self.friendlyName = config["friendlyName"]
@@ -65,12 +65,10 @@ class cbAdaptor:
         for app in config["apps"]:
             name = app["name"]
             adtSoc = app["adtSoc"]
-            id = app["id"]
-            self.appInstances.append(id)
-            self.cbFactory.append(Factory())
-            self.cbFactory[-1].protocol = cbAdaptorProtocol
-            self.cbFactory[-1].protocol.processReqThread = self.processReqThread
-            reactor.listenUNIX(adtSoc, self.cbFactory[-1])
+            iName = app["id"]
+            self.appInstances.append(iName)
+            self.cbFactory[iName] = CbServerFactory(self.processReqThread)
+            reactor.listenUNIX(adtSoc, self.cbFactory[iName])
         self.cbAdtConfigure(config)
 
     def processManager(self, cmd):
@@ -104,8 +102,10 @@ class cbAdaptor:
 
     def processReqThread(self, req):
         """Simplifies calling the adaptor's processReq in a Twisted thread."""
-        resp = self.processReq(req)
-        return resp
+        self.processReq(req)
+
+    def cbSendMsg(self, msg, iName):
+        self.cbFactory[iName].sendMsg(msg)
 
     def reportStatus(self):
         return self.status
@@ -113,12 +113,12 @@ class cbAdaptor:
     def setStatus(self, newStatus):
         self.status = newStatus
 
-class cbApp:
+class CbApp:
     """This should be sub-classed by any app."""
     ModuleName = "cbApp               " 
 
     def __init__(self, argv):
-        self.cbFactory = []
+        self.cbFactory = {}
         self.adtInstances = []
         self.status = "ok"
         self.doStop = False
@@ -131,8 +131,8 @@ class cbApp:
         self.id = argv[2]
         print ModuleName, "Hello from ", self.id
         
-        managerFactory = cbClientFactory()
-        managerFactory.protocol = cbManagerClient
+        managerFactory = CbManagerClientFactory()
+        managerFactory.protocol = CbManagerClient
         managerFactory.id = self.id
         managerFactory.protocol.id = self.id
         managerFactory.protocol.type = "app"
@@ -145,14 +145,10 @@ class cbApp:
     def processResp(self, resp):
         """This should be overridden by the actual app."""
         print ModuleName, self.id, " should subclass processResp"
-        req = {}
-        self.status = "ok"
-        req = {"id": self.id,
-               "req": "none"}
-        return req 
 
     def processConcResp(self, resp):
-        print ModuleName, "processConcResp, resp = ", resp
+        """This should be overridden by the actual app."""
+        print ModuleName, self.id, "should subclass processConcResp"
 
     def cbAppConfigure(self, config):
         """The app should overwrite this and do all configuration in it."""
@@ -162,27 +158,27 @@ class cbApp:
         """Config is based on what adaptors are available."""
         print ModuleName, self.id, " configure: "
         pprint(config)
+        # Connect to socket for each adaptor
         for adaptor in config["adts"]:
             name = adaptor["name"]
-            id = adaptor["id"]
+            iName = adaptor["id"]
             adtSoc = adaptor["adtSoc"]
             friendlyName = adaptor["friendlyName"]
-            self.friendlyLookup.update({id: friendlyName})
-            self.adtInstances.append(id)
-            self.cbFactory.append(cbClientFactory())
-            self.cbFactory[-1].protocol = cbAdaptorClient 
-            self.cbFactory[-1].id = self.id 
-            self.cbFactory[-1].protocol.id = self.id 
-            self.cbFactory[-1].protocol.processRespThread = \
-                self.processRespThread
-            reactor.connectUNIX(adtSoc, self.cbFactory[-1], timeout=10)
-        self.concSocket = config["concentrator"]
-        self.concFactory = ClientFactory()
-        self.concFactory.protocol = cbConcClient
-        self.concFactory.protocol.processConcResp = self.processConcResp
-        #self.concFactory.protocol.req = {"id": self.id,
-                                         #"req": "init"} 
-        #reactor.connectUNIX(self.concSocket, self.concFactory, timeout=10)
+            self.friendlyLookup.update({iName: friendlyName})
+            self.adtInstances.append(iName)
+            initMsg = {"id": self.id,
+                       "appClass": self.appClass,
+                       "req": "init"}
+            self.cbFactory[iName] = CbClientFactory(self.processRespThread, \
+                                    initMsg)
+            reactor.connectUNIX(adtSoc, self.cbFactory[iName], timeout=10)
+        # Connect to Concentrator socket
+        concSocket = config["concentrator"]
+        initMsg = {"appID": self.id,
+                   "req": "init"}
+        self.cbFactory["conc"] = CbClientFactory(self.processConcResp, \
+                                 initMsg)
+        reactor.connectUNIX(concSocket, self.cbFactory["conc"], timeout=10)
         self.cbAppConfigure(config)
 
     def processManager(self, cmd):
@@ -216,12 +212,10 @@ class cbApp:
 
     def processRespThread(self, resp):
         """Simplifies calling the app's processResp in a Twisted thread."""
-        req = self.processResp(resp)
-        return req
+        self.processResp(resp)
 
-    def sendConcReq(self, req):
-        self.concFactory.protocol.req = req
-        reactor.connectUNIX(self.concSocket, self.concFactory, timeout=1)
+    def cbSendMsg(self, msg, iName):
+        self.cbFactory[iName].sendMsg(msg)
 
     def reportStatus(self):
         return self.status
@@ -229,27 +223,54 @@ class cbApp:
     def setStatus(self, newStatus):
         self.status = newStatus
 
-class cbConcClient(LineReceiver):
+class CbClientProtocol(LineReceiver):
+    def __init__(self, processMsg, initMsg):
+        self.processMsg = processMsg
+        self.initMsg = initMsg
+
     def connectionMade(self):
-        self.sendLine(json.dumps(self.req))
+        self.sendLine(json.dumps(self.initMsg))
 
     def lineReceived(self, data):
-        self.processConcResp(json.loads(data))
+        self.processMsg(json.loads(data))
 
-class cbAdaptorClient(LineReceiver):
-    def connectionMade(self):
-        req = {"id": self.id,
-               "req": "init"}
-        self.sendLine(json.dumps(req))
+    def sendMsg(self, msg):
+        self.sendLine(json.dumps(msg))
+
+class CbClientFactory(ClientFactory):
+    def __init__(self, processMsg, initMsg):
+        self.processMsg = processMsg
+        self.initMsg = initMsg
+
+    def buildProtocol(self, addr):
+        self.proto = CbClientProtocol(self.processMsg, self.initMsg)
+        return self.proto
+
+    def sendMsg(self, msg):
+        self.proto.sendMsg(msg)
+
+class CbServerProtocol(LineReceiver):
+    def __init__(self, processMsg):
+        self.processMsg = processMsg
 
     def lineReceived(self, data):
-        self.d = threads.deferToThread(self.processRespThread, json.loads(data))
-        self.d.addCallback(self.sendReq)
+        self.processMsg(json.loads(data))
 
-    def sendReq(self, req):
-        self.sendLine(json.dumps(req))
+    def sendMsg(self, msg):
+        self.sendLine(json.dumps(msg))
 
-class cbManagerClient(LineReceiver):
+class CbServerFactory(Factory):
+    def __init__(self, processMsg):
+        self.processMsg = processMsg
+
+    def buildProtocol(self, addr):
+        self.proto = CbServerProtocol(self.processMsg)
+        return self.proto
+
+    def sendMsg(self, msg):
+        self.proto.sendMsg(msg)
+
+class CbManagerClient(LineReceiver):
     def connectionMade(self):
         msg = {"id": self.id,
                "type": self.type,
@@ -270,7 +291,7 @@ class cbManagerClient(LineReceiver):
         self.setStatus("ok")
         reactor.callLater(2, self.monitorProcess)
 
-class cbClientFactory(ReconnectingClientFactory):
+class CbManagerClientFactory(ReconnectingClientFactory):
     """Tries to reconnect to socket if connection lost."""
     def clientConnectionFailed(self, connector, reason):
         print ModuleName, self.id, " failed to connect"
@@ -279,25 +300,4 @@ class cbClientFactory(ReconnectingClientFactory):
     def clientConnectionLost(self, connector, reason):
         print ModuleName, self.id, " connection lost"
         ReconnectingClientFactory.clientConnectionLost(self, connector, reason)
-
-class cbAppProtocol(LineReceiver):
-    def connectionMade(self):
-        msg = {"id": id,
-               "status": "ready"}
-        self.sendLine(json.dumps(msg))
-        reactor.callLater(30, self.monitorApp)
-
-    def lineReceived(self, line):
-        print ModuleName, line
-
-    def monitorApp(self):
-        reactor.callLater(1, self.monitorApp)
-
-class cbAdaptorProtocol(LineReceiver):
-    def lineReceived(self, data):
-        self.d = threads.deferToThread(self.processReqThread, json.loads(data))
-        self.d.addCallback(self.sendResp)
-
-    def sendResp(self, resp):
-        self.sendLine(json.dumps(resp))
 

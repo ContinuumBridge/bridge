@@ -25,26 +25,33 @@ from twisted.web.resource import Resource
 from twisted.web.server import Site
 from twisted.internet.task import deferLater
 from twisted.web.server import NOT_DONE_YET
-from cbcommslib import cbClientFactory
-from cbcommslib import cbManagerClient
-from cbcommslib import cbAdaptorProtocol
+from cbcommslib import CbManagerClientFactory
+from cbcommslib import CbManagerClient
+from cbcommslib import CbServerFactory
 
 class DataStore():
     def __init__(self):
-        self.nameToID = []
+        self.config = {}
         self.appData = {}
 
-    def setNameToID(self, nameToID):
-        self.nameToID = nameToID
+    def setConfig(self, config):
+        self.config = config
 
-    def getNameToID(self):
-        return self.nameToID
+    def getConfig(self):
+        return self.config
 
-    def appendData(self, device, data):
-        self.appData[device].append(data)
+    def appendData(self, device, type, data):
+        self.appData[device].append({type: data})
+        #print ModuleName, "appendData = ", device, data
 
     def addDevice(self, d):
         self.appData[d] = []
+
+    def deviceKnown(self, d):
+        if d in self.appData:
+            return True
+        else:
+            return False
 
     def getData(self, device):
         data = self.appData[device]
@@ -72,12 +79,13 @@ class DevicePage(Resource):
 
     def render_GET(self, request):
         reqParts = str(request).split(" ")
-        self.currentDev = reqParts[1][8:]
+        self.currentDev = reqParts[4][12:]
+        #print ModuleName, "render_GET for ", self.currentDev
         try:
             data = self.dataStore.getData(self.currentDev)
         except:
             request.setHeader('Content-Type', 'application/json')
-            request.setHeader('Status', '404')
+            #request.setHeader('Status', '404')
             response = {"device": self.currentDev,
                         "status": "Error. No data for device"}
             return json.dumps(response)
@@ -99,8 +107,8 @@ class ConfigPage(Resource):
 
     def render_GET(self, request):
         request.setHeader('Content-Type', 'application/json')
-        nameToID = self.dataStore.getNameToID()
-        response = {"nameToID": nameToID}
+        config = self.dataStore.getConfig()
+        response = {"config": config}
         return json.dumps(response)
 
     def render_POST(self, request):
@@ -120,7 +128,6 @@ class RootResource(Resource):
 
 class Concentrator():
     def __init__(self, argv):
-        self.cbFactory = []
         self.status = "ok"
         self.doStop = False
 
@@ -132,8 +139,8 @@ class Concentrator():
         print ModuleName, "Hello from ", self.id
 
         self.dataStore = DataStore()
-        managerFactory = cbClientFactory()
-        managerFactory.protocol = cbManagerClient
+        managerFactory = CbManagerClientFactory()
+        managerFactory.protocol = CbManagerClient
         managerFactory.id = self.id
         managerFactory.protocol.id = self.id
         managerFactory.protocol.type = "conc"
@@ -147,17 +154,15 @@ class Concentrator():
     def processConf(self, config):
         """Config is based on what apps are available."""
         print ModuleName, "processConf: ", config
-        self.cbFactory = []
+        self.cbFactory = {}
         self.appInstances = []
         for app in config:
             appConcSoc = app["appConcSoc"]
-            appID = app["id"]
-            print ModuleName, "app: ", appID, " socket: ", appConcSoc
-            self.appInstances.append(appID)
-            self.cbFactory.append(Factory())
-            self.cbFactory[-1].protocol = cbAdaptorProtocol
-            self.cbFactory[-1].protocol.processReqThread = self.processReqThread
-            reactor.listenUNIX(appConcSoc, self.cbFactory[-1])
+            iName = app["id"]
+            print ModuleName, "app: ", iName, " socket: ", appConcSoc
+            self.appInstances.append(iName)
+            self.cbFactory[iName] = CbServerFactory(self.processReqThread)
+            reactor.listenUNIX(appConcSoc, self.cbFactory[iName])
 
     def processManager(self, cmd):
         #print ModuleName, "Received from manager: ", cmd
@@ -190,8 +195,10 @@ class Concentrator():
 
     def processReqThread(self, req):
         """Simplifies calling the adaptor's processReq in a Twisted thread."""
-        resp = self.processReq(req)
-        return resp
+        self.processReq(req)
+
+    def cbSendMsg(self, msg, iName):
+        self.cbFactory[iName].sendMsg(msg)
 
     def reportStatus(self):
         return self.status
@@ -205,32 +212,29 @@ class Concentrator():
         Called in a thread and so it is OK if it blocks.
         Called separately for every app that can make requests.
         """
-        print ModuleName, "processReq, Req = ", req
+        #print ModuleName, "processReq, Req = ", req
         if req["req"] == "init":
+            print ModuleName, "init from app ", req["appID"]
             if req["appID"] == "app1":
-                self.dataStore.setNameToID(req["nameToID"])
-                print ModuleName, "nameToID = ", self.dataStore.getNameToID()
-                for d in req["devices"]:
-                    print ModuleName, "d = ", d
-                    self.dataStore.addDevice(d)
-            resp = {"name": "concentrator",
-                    "id": self.id,
-                    "status": "ok",
-                    "content": "none"}
+                resp = {"id": "conc",
+                        "resp": "config"}
+                self.cbSendMsg(resp, req["appID"])
+        elif req["req"] == "services":
+            for s in req["services"]:
+                self.dataStore.addDevice(s["id"])
+            self.dataStore.setConfig(req["services"])
         elif req["req"] == "put":
-            print ModuleName, "processReq, req == put"
-            if req["appID"] == "app1":
-                self.dataStore.appendData(req["deviceID"], req["data"])
-            resp = {"name": "concentrator",
-                    "id": self.id,
-                    "status": "ok",
-                    "content": "none"} 
+            if req["appID"] == "app1": 
+                if self.dataStore.deviceKnown(req["deviceID"]):
+                    self.dataStore.appendData(req["deviceID"], req["type"], \
+                        req["data"])
+                else:
+                    # Unknown device, request config update
+                    resp = {"id": "conc",
+                            "resp": "config"}
+                    self.cbSendMsg(resp, req["appID"])
         else:
-            resp = {"name": "concentrator",
-                    "id": self.id,
-                    "status": "bad-req",
-                    "content": "none"}
-        return resp
+            pass
 
 if __name__ == '__main__':
     concentrator = Concentrator(sys.argv)
