@@ -22,7 +22,7 @@ def getCmd():
 
 thread.start_new_thread(getCmd, ())
 
-ipAddress = "192.168.0.19"
+ipAddress = "192.168.0.13"
 port = "8880"
 baseUrl = "http://" + ipAddress + ":" + port +"/"
 configUrl = baseUrl + "config"
