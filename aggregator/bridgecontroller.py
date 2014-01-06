@@ -102,7 +102,7 @@ class BridgeControlProtocol(LineReceiver):
         if sim:
             exe = 'testSensorTagAdaptor.py'
         else:
-            exe = 'sensortagadaptor5.py'
+            exe = 'sensortagadaptor.py'
         dev = {"device": 
                  {"name": currentDev["name"],
                   "friendlyName": friendly,
@@ -139,7 +139,6 @@ class BridgeControlProtocol(LineReceiver):
                           "version": 2,
                           "url": "www.continuumbridge.com/apps/cbLivingV2",
                           "exe": "uwe_app.py",
-                          #"exe": "testLiving.py",
                           "resource_uri": "/api/v1/app/" + str(appNum)
                          },
                    "bridge": "",
