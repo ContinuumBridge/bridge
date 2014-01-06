@@ -33,6 +33,7 @@ class DataStore():
     def __init__(self):
         self.config = {}
         self.appData = {}
+        self.enabled = False
 
     def setConfig(self, config):
         self.config = config
@@ -40,8 +41,13 @@ class DataStore():
     def getConfig(self):
         return self.config
 
-    def appendData(self, device, type, data):
-        self.appData[device].append({type: data})
+    def appendData(self, device, type, timeStamp, data):
+        if self.enabled:
+            self.appData[device].append({
+                                         "type": type,
+                                         "timeStamp": timeStamp,
+                                         "data": data
+                                       })
         #print ModuleName, "appendData = ", device, data
 
     def addDevice(self, d):
@@ -58,6 +64,10 @@ class DataStore():
         self.appData[device] = [] 
         return data
 
+    def enableOutput(self, enable):
+        self.enabled = enable
+        print ModuleName, "Output enabled = ", self.enabled
+
 class DevicePage(Resource):
     isLeaf = True
     def __init__(self, dataStore):
@@ -67,7 +77,7 @@ class DevicePage(Resource):
     def _delayedRender(self, request):
         data = self.dataStore.getData(self.currentDev)
         if data == []:
-            d = deferLater(reactor, 0.33, lambda: request)
+            d = deferLater(reactor, 0.2, lambda: request)
             d.addCallback(self._delayedRender)
             return NOT_DONE_YET
         else:
@@ -90,7 +100,7 @@ class DevicePage(Resource):
                         "status": "Error. No data for device"}
             return json.dumps(response)
         if data == []:
-            d = deferLater(reactor, 5, lambda: request)
+            d = deferLater(reactor, 0.2, lambda: request)
             d.addCallback(self._delayedRender)
             return NOT_DONE_YET
         else:
@@ -114,8 +124,12 @@ class ConfigPage(Resource):
     def render_POST(self, request):
         request.setHeader('Content-Type', 'application/json')
         req = json.loads(request.content.getvalue())
-        print ModuleName, "POST. req = ", req
-        response = {"resp": "ok"}
+        #print ModuleName, "POST. req = ", req
+        try:
+            self.dataStore.enableOutput(req["enable"])
+            response = {"resp": "ok"}
+        except:
+            response = {"resp": "bad command"}
         return json.dumps(response)
 
 class RootResource(Resource):
@@ -153,13 +167,13 @@ class Concentrator():
 
     def processConf(self, config):
         """Config is based on what apps are available."""
-        print ModuleName, "processConf: ", config
+        #print ModuleName, "processConf: ", config
         self.cbFactory = {}
         self.appInstances = []
         for app in config:
             appConcSoc = app["appConcSoc"]
             iName = app["id"]
-            print ModuleName, "app: ", iName, " socket: ", appConcSoc
+            #print ModuleName, "app: ", iName, " socket: ", appConcSoc
             self.appInstances.append(iName)
             self.cbFactory[iName] = CbServerFactory(self.processReqThread)
             reactor.listenUNIX(appConcSoc, self.cbFactory[iName])
@@ -222,12 +236,12 @@ class Concentrator():
         elif req["req"] == "services":
             for s in req["services"]:
                 self.dataStore.addDevice(s["id"])
-            self.dataStore.setConfig(req["services"])
+            self.dataStore.setConfig(req)
         elif req["req"] == "put":
             if req["appID"] == "app1": 
                 if self.dataStore.deviceKnown(req["deviceID"]):
                     self.dataStore.appendData(req["deviceID"], req["type"], \
-                        req["data"])
+                        req["timeStamp"], req["data"])
                 else:
                     # Unknown device, request config update
                     resp = {"id": "conc",

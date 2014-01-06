@@ -5,7 +5,7 @@
 # Proprietary and confidential
 # Written by Peter Claydon
 #
-sim = True
+sim = False
 
 import json
 import sys
@@ -102,7 +102,7 @@ class BridgeControlProtocol(LineReceiver):
         if sim:
             exe = 'testSensorTagAdaptor.py'
         else:
-            exe = 'sensortagadaptor.py'
+            exe = 'sensortagadaptor5.py'
         dev = {"device": 
                  {"name": currentDev["name"],
                   "friendlyName": friendly,
@@ -138,7 +138,7 @@ class BridgeControlProtocol(LineReceiver):
                           "provider": "ContinuumBridge",
                           "version": 2,
                           "url": "www.continuumbridge.com/apps/cbLivingV2",
-                          "exe": "living7.py",
+                          "exe": "uwe_app.py",
                           #"exe": "testLiving.py",
                           "resource_uri": "/api/v1/app/" + str(appNum)
                          },
@@ -148,23 +148,23 @@ class BridgeControlProtocol(LineReceiver):
                    "resource_uri": "/api/v1/app_install/" + str(appNum)
                   }
             self.apps.append(app)
-            appNum = appNum + 1
-            app = {"app":{"id": str(appNum),
-                          "name": "Temp Monitor",
-                          "provider": "ContinuumBridge",
-                          "version": 2,
-                          "url": "www.continuumbridge.com/apps/cbtempmonitor",
-                          "exe": "tempmonitor.py",
-                          #"exe": "testLiving.py",
-                          "resource_uri": "/api/v1/app/" + str(appNum)
-                         },
-                   "bridge": "",
-                   "devices": self.appDevs,
-                   "id": str(appNum),
-                   "resource_uri": "/api/v1/app_install/" + str(appNum)
-                  }
-            self.apps.append(app)
-    
+#            appNum = appNum + 1
+#            app = {"app":{"id": str(appNum),
+#                          "name": "Temp Monitor",
+#                          "provider": "ContinuumBridge",
+#                          "version": 2,
+#                          "url": "www.continuumbridge.com/apps/cbtempmonitor",
+#                          "exe": "tempmonitor.py",
+#                          #"exe": "testLiving.py",
+#                          "resource_uri": "/api/v1/app/" + str(appNum)
+#                         },
+#                   "bridge": "",
+#                   "devices": self.appDevs,
+#                   "id": str(appNum),
+#                   "resource_uri": "/api/v1/app_install/" + str(appNum)
+#                  }
+#            self.apps.append(app)
+#    
         self.config = {"cmd": "config",
                        "bridge": {"id": 42,
                                   "friendlyName": "Friendly Bridge",

@@ -180,9 +180,9 @@ class Adaptor(CbAdaptor):
                     self.sendAccel(accel)
                 elif type[3].startswith("0x005f"): 
                     # Button press decriptor
-                    print ModuleName, "button press = ", raw[1] 
-                    buttons = {"leftButton": raw & 2,
-                               "rightButton": raw & 1}
+                    #print ModuleName, "button press = ", raw[1]
+                    buttons = {"leftButton": (int(raw[1]) & 2) >> 1,
+                               "rightButton": int(raw[1]) & 1}
                     self.sendButtons(buttons)
                 elif type[3].startswith("0x0025"):
                     # Temperature descri[tor
@@ -248,7 +248,6 @@ class Adaptor(CbAdaptor):
         Called in a thread and so it is OK if it blocks.
         Called separately for every app that can make requests.
         """
-        print ModuleName, "processReq req = ", req
         tagStatus = "ok"
         if req["req"] == "init":
             resp = {"name": self.name,
@@ -270,7 +269,6 @@ class Adaptor(CbAdaptor):
                                   "frequency": "0",
                                   "purpose": "user_defined"}],
                     "content": "services"}
-            print ModuleName, "Sending resp to", req["id"], "resp = ", resp
             self.cbSendMsg(resp, req["id"])
         elif req["req"] == "services":
             for s in req["services"]:
