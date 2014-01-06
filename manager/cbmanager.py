@@ -1,12 +1,12 @@
 #!/usr/bin/env python
-# manager9.py
-# Copyright (C) ContinuumBridge Limited, 2013 - All Rights Reserved
+# cbanager.py
+# Copyright (C) ContinuumBridge Limited, 2013-14 - All Rights Reserved
 # Unauthorized copying of this file, via any medium is strictly prohibited
 # Proprietary and confidential
 # Written by Peter Claydon
 #
 ModuleName = "Bridge Manager      "
-id = "manager10"
+id = "manager"
 sim = False
 
 import sys
@@ -27,6 +27,8 @@ class ManageBridge:
     def __init__(self):
         """ apps and adts data structures are stored in a local file.
         """
+        self.bridgeRoot = os.getenv('CB_BRIDGE_ROOT', "/home/bridge/bridge")
+        print ModuleName, "CB_BRIDGE_ROOT = ", self.bridgeRoot
         self.discovered = False
         self.configured = False
         self.reqSync = False
@@ -105,10 +107,7 @@ class ManageBridge:
 
     def doDiscover(self):
         self.discoveredDevices = {}
-        if sim:
-            exe = "/home/petec/bridge/manager/testDiscovery.py"
-        else:
-            exe = "/home/bridge/bridge/manager/discovery.py"
+        exe = self.bridgeRoot + "/manager/discovery.py"
         type = "btle"
         output = subprocess.check_output([exe, type])
         discOutput = json.loads(output)
@@ -135,13 +134,9 @@ class ManageBridge:
         d = threads.deferToThread(self.doDiscover)
 
     def readConfig(self):
-        if sim:
-            self.bridgeRoot = "/home/petec/bridge/"
-        else:
-            self.bridgeRoot = "/home/bridge/bridge/"
-        self.appRoot = self.bridgeRoot + "apps/"
-        self.adtRoot = self.bridgeRoot + "adaptors/"
-        self.concPath = self.bridgeRoot + "concentrator/concentrator2.py"
+        appRoot = self.bridgeRoot + "/apps/"
+        adtRoot = self.bridgeRoot + "/adaptors/"
+        self.concPath = self.bridgeRoot + "/concentrator/concentrator.py"
         try:
             with open('bridge.config', 'r') as configFile:
                 config = json.load(configFile)
@@ -160,14 +155,14 @@ class ManageBridge:
                 d["device"]["id"] = "dev" + d["device"]["id"]
                 socket = "mgr-" + d["device"]["id"]
                 d["device"]["adaptor"]["mgrSoc"] = socket
-                d["device"]["adaptor"]["exe"] = self.adtRoot + \
+                d["device"]["adaptor"]["exe"] = adtRoot + \
                     d["device"]["adaptor"]["exe"]
                 # Add a apps list to each device adaptor
                 d["device"]["adaptor"]["apps"] = []
             # Add socket descriptors to apps and devices
             for a in self.apps:
                 a["app"]["id"] = "app" + a["app"]["id"]
-                a["app"]["exe"] = self.appRoot + a["app"]["exe"]
+                a["app"]["exe"] = appRoot + a["app"]["exe"]
                 a["app"]["mgrSoc"] = "mgr-" + a["app"]["id"]
                 a["app"]["concSoc"] = "conc-" + a["app"]["id"]
                 for appDev in a["devices"]:
