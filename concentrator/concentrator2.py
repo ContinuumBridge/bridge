@@ -88,8 +88,10 @@ class DevicePage(Resource):
             request.finish()
 
     def render_GET(self, request):
+        #print ModuleName, "render_GET: ", request
         reqParts = str(request).split(" ")
-        self.currentDev = reqParts[4][12:]
+        #self.currentDev = reqParts[4][12:]
+        self.currentDev = reqParts[1][8:]
         #print ModuleName, "render_GET for ", self.currentDev
         try:
             data = self.dataStore.getData(self.currentDev)
