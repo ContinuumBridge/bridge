@@ -156,8 +156,8 @@ class CbApp:
 
     def processConf(self, config):
         """Config is based on what adaptors are available."""
-        #print ModuleName, self.id, " configure: "
-        #pprint(config)
+        print ModuleName, self.id, " configure: "
+        pprint(config)
         # Connect to socket for each adaptor
         for adaptor in config["adts"]:
             name = adaptor["name"]

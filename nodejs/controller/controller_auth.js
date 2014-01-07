@@ -33,7 +33,7 @@ var controllerAuth = function(controllerURL, email, password) {
     rest.post(controllerAuthURL, controllerAuthOptions).on('complete', function(data, response) {
 
         // If the response was good, return the session data
-        if (response.hasOwnProperty('statusCode')) { 
+        if (response && response.hasOwnProperty('statusCode')) { 
             if (response.statusCode == 200) {
                 cookies = cookie_reader.parse(String(response.headers['set-cookie']));
                 deferredSessionData.resolve(cookies['sessionid']);

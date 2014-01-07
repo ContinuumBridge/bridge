@@ -102,41 +102,31 @@ class BridgeControlProtocol(LineReceiver):
         if sim:
             exe = 'testSensorTagAdaptor.py'
         else:
-            exe = 'sensortagadaptor.py'
-        dev =  \
-              {"adaptor_install": [
-                {
-                 "name": currentDev["name"],
-                 "friendlyName": friendly,
-                 "id": "dev" + str(devNum),
-                 "btAddr": currentDev["addr"],
-                 "adaptor": 
-                   {
-                    "name": "CB SensorTag Adt",
-                    "provider": "ContinuumBridge",
-                    "purpose": purpose,
-                    "method": currentDev["method"],
-                    "version": 2,
-                    "url": "www.continuumbridge.com/adt/cbSensorTagAdtV2",
-                    "exe": exe,
-                    "resource_uri": "/api/V1/device/" + str(devNum)
+            exe = 'sensortagadaptor5.py'
+        dev = {"device": 
+                 {"name": currentDev["name"],
+                  "friendlyName": friendly,
+                  "id": "dev" + str(devNum),
+                  "method": currentDev["method"],
+                  "btAddr": currentDev["addr"],
+                  "adaptor": 
+                    {"name": "CB SensorTag Adt",
+                     "provider": "ContinuumBridge",
+                     "purpose": purpose,
+                     "version": 2,
+                     "url": "www.continuumbridge.com/adt/cbSensorTagAdtV2",
+                     "exe": exe,
+                     "resource_uri": "/api/V1/device/" + str(devNum)
                     },
-                 "device": "/api/v1/device/" + str(devNum),
-                 "id": str(devNum),
-                 "resource_uri": "/api/v1/adaptor_install/" + str(devNum)
+                  "device": "/api/v1/device/" + str(devNum),
+                  "id": str(devNum),
+                  "resource_uri": "/api/v1/adaptor_install/" + str(devNum)
                  }
-                ],
-               "bridge": "random bridge test text",
-               "device": "random device test text",
-               "id": str(devNum),
-               "mac_addr": currentDev["addr"],
-               "resource_url": "/api/V1/device/" + str(devNum)
               }
         self.devs.append(dev)
 
         appDev = {
-                  "device_install": "/api/v1/adaptor_install/" + str(devNum),
-                  "resource_uri": "/api/v1/app_device_permission/1/"
+                      "resource_uri": "/api/V1/device/" + str(devNum)
                  } 
         self.appDevs.append(appDev)
  
@@ -149,10 +139,11 @@ class BridgeControlProtocol(LineReceiver):
                           "version": 2,
                           "url": "www.continuumbridge.com/apps/cbLivingV2",
                           "exe": "uwe_app.py",
+                          #"exe": "testLiving.py",
                           "resource_uri": "/api/v1/app/" + str(appNum)
                          },
                    "bridge": "",
-                   "device_permissions": self.appDevs,
+                   "devices": self.appDevs,
                    "id": str(appNum),
                    "resource_uri": "/api/v1/app_install/" + str(appNum)
                   }
@@ -177,7 +168,7 @@ class BridgeControlProtocol(LineReceiver):
         self.config = {"cmd": "config",
                        "bridge": {"id": 42,
                                   "friendlyName": "Friendly Bridge",
-                                  "bridgeManager": "cbmanager.py",
+                                  "bridgeManager": "manager8.py",
                                   "backupManager": "manager7.py",
                                   "email": "28b45a59a875478ebcbdf327c18dbfb1@continuumbridge.com",
                                   "resource_uri": "/api/v1/current_bridge/42/",
@@ -191,30 +182,20 @@ class BridgeControlProtocol(LineReceiver):
         #print "Message received: ", rawMsg
         self.watchTime = time.time()
         msg = json.loads(rawMsg)
-        if msg["msg"] == "req":
-            if msg["req"] == "get":
-                print "Sync requested"
-                self.sendLine(json.dumps(self.config))
-            elif msg["req"] == "discovered":
-                print "Discovered devices:"
-                pprint(msg)
-                self.processDiscovered(msg)
-                self.checkCmd()
-            elif msg["req"] == "reqSync":
-                print "Sync requested"
-                self.sendLine(json.dumps(self.config))
-        elif msg["msg"] == "status":
-            if msg["data"] == "ready":
-                print "Bridge ready"
-                self.checkCmd()
-            elif msg["data"] == "reqSync":
-                print "Sync requested"
-                self.sendLine(json.dumps(self.config))
-            elif msg["data"] != "ok":
-                print "Unknown message received from bridge" 
-        else:
+        if msg["status"] == "ready":
+            print "Bridge ready"
+            self.checkCmd()
+        elif msg["status"] == "discovered":
+            print "Discovered devices:"
+            pprint(msg)
+            self.processDiscovered(msg)
+            self.checkCmd()
+        elif msg["status"] == "reqSync":
+            print "Sync requested"
+            self.sendLine(json.dumps(self.config))
+        elif msg["status"] != "ok":
             print "Unknown message received from bridge" 
-      
+ 
 if __name__ == '__main__':
  
     if len(sys.argv) < 2:

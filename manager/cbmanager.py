@@ -44,7 +44,7 @@ class ManageBridge:
     def listMgrSocs(self):
         mgrSocs =[] 
         for d in self.devices:
-            mgrSocs.append(d["device"]["adaptor"]["mgrSoc"])
+            mgrSocs.append(d["adaptor_install"][0]["mgrSoc"])
         for a in self.apps:
             mgrSocs.append(a["app"]["mgrSoc"])
         mgrSocs.append("mgr-conc")
@@ -77,10 +77,10 @@ class ManageBridge:
 
         # Start adaptors
         for d in self.devices:
-            exe = d["device"]["adaptor"]["exe"]
-            fName = d["device"]["friendlyName"]
-            id = d["device"]["id"]
-            mgrSoc = d["device"]["adaptor"]["mgrSoc"]
+            exe = d["adaptor_install"][0]["adaptor"]["exe"]
+            fName = d["adaptor_install"][0]["friendlyName"]
+            id = d["adaptor_install"][0]["id"]
+            mgrSoc = d["adaptor_install"][0]["mgrSoc"]
             try:
                 p = subprocess.Popen([exe, mgrSoc, id])
                 self.appProcs.append(p)
@@ -152,34 +152,35 @@ class ManageBridge:
         if self.configured:
             # Process config to determine routing:
             for d in self.devices:
-                d["device"]["id"] = "dev" + d["device"]["id"]
-                socket = "mgr-" + d["device"]["id"]
-                d["device"]["adaptor"]["mgrSoc"] = socket
-                d["device"]["adaptor"]["exe"] = adtRoot + \
-                    d["device"]["adaptor"]["exe"]
+                d["adaptor_install"][0]["id"] = "dev" + d["adaptor_install"][0]["id"]
+                socket = "mgr-" + d["adaptor_install"][0]["id"]
+                d["adaptor_install"][0]["mgrSoc"] = socket
+                d["adaptor_install"][0]["adaptor"]["exe"] = adtRoot + \
+                    d["adaptor_install"][0]["adaptor"]["exe"]
                 # Add a apps list to each device adaptor
-                d["device"]["adaptor"]["apps"] = []
+                d["adaptor_install"][0]["apps"] = []
             # Add socket descriptors to apps and devices
             for a in self.apps:
                 a["app"]["id"] = "app" + a["app"]["id"]
                 a["app"]["exe"] = appRoot + a["app"]["exe"]
                 a["app"]["mgrSoc"] = "mgr-" + a["app"]["id"]
                 a["app"]["concSoc"] = "conc-" + a["app"]["id"]
-                for appDev in a["devices"]:
-                    uri = appDev["resource_uri"]
+                for appDev in a["device_permissions"]:
+                    uri = appDev["device_install"]
                     for d in self.devices: 
-                        if d["device"]["adaptor"]["resource_uri"] == uri:
+                        if d["adaptor_install"][0]["resource_uri"] == uri:
                             socket = "skt-" \
-                                + d["device"]["id"] + "-" + a["app"]["id"]
-                            d["device"]["adaptor"]["apps"].append(
+                                + d["adaptor_install"][0]["id"] + "-" + a["app"]["id"]
+                            d["adaptor_install"][0]["apps"].append(
                                                     {"adtSoc": socket,
                                                      "name": a["app"]["name"],
                                                      "id": a["app"]["id"]
                                                     }) 
                             appDev["adtSoc"] = socket
-                            appDev["id"] = d["device"]["id"]
-                            appDev["name"] = d["device"]["adaptor"]["name"]
-                            appDev["friendlyName"] = d["device"]["friendlyName"]
+                            appDev["id"] = d["adaptor_install"][0]["id"]
+                            appDev["name"] = d["adaptor_install"][0]["adaptor"]["name"]
+                            appDev["friendlyName"] = \
+                                d["adaptor_install"][0]["friendlyName"]
                             appDev["adtSoc"] = socket
                             break
         if self.configured:
@@ -201,27 +202,28 @@ class ManageBridge:
 
     def processControlMsg(self, msg):
         print ModuleName, "Controller msg = ", msg
-        if msg["cmd"] == "start":
-            if self.configured:
-                print ModuleName, "starting adaptors and apps"
-                self.startAll()
-            else:
-                print ModuleName, "Can't start adaptors & apps"
-                print ModuleName, "Please run discovery"
-        elif msg["cmd"] == "discover":
-            self.discover()
-        elif msg["cmd"] == "stopapps":
-            self.stopApps()
-        elif msg["cmd"] == "stopall" or msg["cmd"] == "stop":
-            if not self.stopping:
-                print ModuleName, "Processing stop. Stopping apps"
+        if msg["msg"] == "cmd":
+            if msg["data"] == "start":
+                if self.configured:
+                    print ModuleName, "starting adaptors and apps"
+                    self.startAll()
+                else:
+                    print ModuleName, "Can't start adaptors & apps"
+                    print ModuleName, "Please run discovery"
+            elif msg["data"] == "discover":
+                self.discover()
+            elif msg["data"] == "stopapps":
                 self.stopApps()
-                reactor.callLater(10, self.stopManager)
-            else:
-                self.stopManager()
-        elif msg["cmd"] == "update":
-            self.reqSync = True
-        elif msg["cmd"] == "config":
+            elif msg["data"] == "stopall" or msg["data"] == "stop":
+                if not self.stopping:
+                    print ModuleName, "Processing stop. Stopping apps"
+                    self.stopApps()
+                    reactor.callLater(10, self.stopManager)
+                else:
+                    self.stopManager()
+            elif msg["data"] == "update":
+                self.reqSync = True
+        elif msg["msg"] == "resp":
             self.updateConfig(msg)
 
     def stopManager(self):
@@ -243,7 +245,7 @@ class ManageBridge:
             except:
                 print ModuleName, "No process to kill"
         for a in self.apps:
-            for appDev in a["devices"]:
+            for appDev in a["device_permissions"]:
                 socket = appDev["adtSoc"]
                 try:
                     os.remove(socket) 
@@ -275,10 +277,13 @@ class ManageBridge:
             msg = self.discoveredDevices
             self.discovered = False
         elif self.reqSync:
-            msg = {"status": "reqSync"}
+            msg = {"msg": "req",
+                   "req": "get",
+                   "uri": "/api/v1/current_bridge/bridge"}
             self.reqSync = False
         else:
-            msg = {"status": "ok"}
+            msg = {"msg": "status",
+                   "status": "ok"}
         return msg
 
     def processClient(self, msg):
@@ -295,21 +300,22 @@ class ManageBridge:
                                 conc = c["appConcSoc"]
                                 break
                         response = {"cmd": "config",
-                                    "config": {"adts": a["devices"],
+                                    "config": {"adts": a["device_permissions"],
                                                "concentrator": conc}}
                         break
             elif msg["type"] == "adt": 
                 for d in self.devices:
-                    if d["device"]["id"] == msg["id"]:
+                    if d["adaptor_install"][0]["id"] == msg["id"]:
                         response = {
                         "cmd": "config",
-                        "config": {"apps": d["device"]["adaptor"]["apps"], 
-                                   "name": d["device"]["name"],
-                                   "friendlyName": d["device"]["friendlyName"],
-                                   "btAddr": d["device"]["btAddr"],
-                                   "btAdpt": "hci0" 
-                                  }
-                               }
+                        "config": 
+                            {"apps": d["adaptor_install"][0]["apps"], 
+                             "name": d["adaptor_install"][0]["name"],
+                             "friendlyName": d["adaptor_install"][0]["friendlyName"],
+                             "btAddr": d["adaptor_install"][0]["btAddr"],
+                             "btAdpt": "hci0" 
+                            }
+                        }
                         break
             elif msg["type"] == "conc":
                 self.concConfig = []
@@ -329,8 +335,11 @@ class ManageBridge:
 
 class ConcProtocol(LineReceiver):
     def connectionMade(self):
-        msg = {"id": id,
-               "status": "ready"}
+        msg = {"msg": "req",
+               "req": "get",
+               "uri": "/api/v1/current_bridge/bridge"}
+        #msg = {"id": id,
+               #"status": "ready"}
         self.sendLine(json.dumps(msg))
         reactor.callLater(2, self.monitorBridge)
 

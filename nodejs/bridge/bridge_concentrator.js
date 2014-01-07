@@ -31,7 +31,8 @@ function BridgeConcentrator(port) {
 
         socket.on('data', function(data) {
 
-            bridgeConcentrator.fromBridge.push(data);
+            console.log('Raw data', data);
+            fromBridge.push(data);
         }); 
 
         // Add a 'close' event handler for the bridgeTCPClient socket
