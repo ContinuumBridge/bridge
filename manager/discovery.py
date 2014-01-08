@@ -59,9 +59,9 @@ if __name__ == '__main__':
 
     d = {}
     d["status"] = "discovered"
-    d["devices"] = []
+    d["data"] = []
     for a in range (len(discoveredAddresses)):
-        d["devices"].append({"method": "btle",
-                             "name": "SensorTag", 
-                             "addr": discoveredAddresses[a]})
+        d["data"].append({"method": "btle",
+                          "name": "SensorTag", 
+                          "addr": discoveredAddresses[a]})
     print json.dumps(d)

@@ -46,12 +46,14 @@ class BridgeControlProtocol(LineReceiver):
             elif cmd == "":
                 cmd = raw_input("Command > ")
             elif cmd == "discover":
-                msg  = {"cmd": cmd}
+                msg  = {"msg": "cmd",
+                        "data": "discover"}
                 self.sendLine(json.dumps(msg))
                 processed = True
             elif cmd == "start" or cmd == "stop" or cmd == "stopapps" \
                          or cmd == "stopall":
-                msg  = {"cmd": cmd}
+                msg  = {"msg": "cmd",
+                        "data": cmd}
                 self.sendLine(json.dumps(msg))
                 cmd = raw_input("Command > ")
             else:
@@ -73,12 +75,13 @@ class BridgeControlProtocol(LineReceiver):
         if self.stopProg:
             self.doStop()
 
-    def processDiscovered(self, msg):
-        numDevs = len(msg["devices"])
+    def processDiscovered(self, dat):
+        print "processDiscovered: ", dat
+        numDevs = len(dat)
         if numDevs != 0:
             if numDevs > 1: 
                 print("More than 1 device found. Processing only one")
-            currentDev = msg["devices"][0]
+            currentDev = dat[0]
             #print ("Device - SensorTag: " + msg[str(0)][1])
             print "Device - SensorTag: ", currentDev
             friendly = raw_input("Type friendly name  > ")
@@ -174,21 +177,22 @@ class BridgeControlProtocol(LineReceiver):
 #                  }
 #            self.apps.append(app)
 #    
-        self.config = {"cmd": "config",
-                       "bridge": {"id": 42,
-                                  "friendlyName": "Friendly Bridge",
-                                  "bridgeManager": "cbmanager.py",
-                                  "backupManager": "manager7.py",
-                                  "email": "28b45a59a875478ebcbdf327c18dbfb1@continuumbridge.com",
-                                  "resource_uri": "/api/v1/current_bridge/42/",
-                                  "devices": self.devs,
-                                  "apps": self.apps
-                                 }
+        self.config = {"msg": "resp",
+                       "uri": "/api/vi/current_bridge/bridge",
+                       "data": {"id": 42,
+                                "friendlyName": "Friendly Bridge",
+                                "bridgeManager": "cbmanager.py",
+                                "backupManager": "manager7.py",
+                                "email": "28b45a59a875478ebcbdf327c18dbfb1@continuumbridge.com",
+                                "resource_uri": "/api/v1/current_bridge/42/",
+                                "devices": self.devs,
+                                "apps": self.apps
+                               }
                       }
         self.sendLine(json.dumps(self.config))
     
     def lineReceived(self, rawMsg):
-        #print "Message received: ", rawMsg
+        print "Message received: ", rawMsg
         self.watchTime = time.time()
         msg = json.loads(rawMsg)
         if msg["msg"] == "req":
@@ -198,7 +202,7 @@ class BridgeControlProtocol(LineReceiver):
             elif msg["req"] == "discovered":
                 print "Discovered devices:"
                 pprint(msg)
-                self.processDiscovered(msg)
+                self.processDiscovered(msg["data"])
                 self.checkCmd()
             elif msg["req"] == "reqSync":
                 print "Sync requested"

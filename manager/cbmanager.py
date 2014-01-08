@@ -7,7 +7,6 @@
 #
 ModuleName = "Bridge Manager      "
 id = "manager"
-sim = False
 
 import sys
 import time
@@ -111,21 +110,22 @@ class ManageBridge:
         type = "btle"
         output = subprocess.check_output([exe, type])
         discOutput = json.loads(output)
-        self.discoveredDevices["status"] = discOutput["status"]
-        self.discoveredDevices["devices"] = []
+        self.discoveredDevices["msg"] = "req"
+        self.discoveredDevices["req"] = "discovered"
+        self.discoveredDevices["data"] = []
         if self.configured:
-            for d in discOutput["devices"]:
+            for d in discOutput["data"]:
                 addrFound = False
                 if d["method"] == "btle":
                     for oldDev in self.devices:
-                       if oldDev["device"]["method"] == "btle": 
-                           if d["addr"] == oldDev["device"]["btAddr"]:
+                       if oldDev["data"]["method"] == "btle": 
+                           if d["addr"] == oldDev["data"]["btAddr"]:
                                addrFound = True
                 if addrFound == False:
-                    self.discoveredDevices["devices"].append(d)  
+                    self.discoveredDevices["data"].append(d)  
         else:
-            for d in discOutput["devices"]:
-                self.discoveredDevices["devices"].append(d)  
+            for d in discOutput["data"]:
+                self.discoveredDevices["data"].append(d)  
         print ModuleName, "Discovered devices:"
         print ModuleName, self.discoveredDevices
         self.discovered = True
@@ -140,10 +140,10 @@ class ManageBridge:
         try:
             with open('bridge.config', 'r') as configFile:
                 config = json.load(configFile)
-                self.bridgeID = config["bridge"]["id"]
-                self.friendlyName = config["bridge"]["friendlyName"]
-                self.apps = config["bridge"]["apps"]
-                self.devices = config["bridge"]["devices"]
+                self.bridgeID = config["data"]["id"]
+                self.friendlyName = config["data"]["friendlyName"]
+                self.apps = config["data"]["apps"]
+                self.devices = config["data"]["devices"]
                 self.configured = True
         except:
             print ModuleName, "Warning. No config file exists"
@@ -283,7 +283,7 @@ class ManageBridge:
             self.reqSync = False
         else:
             msg = {"msg": "status",
-                   "status": "ok"}
+                   "data": "ok"}
         return msg
 
     def processClient(self, msg):
@@ -335,11 +335,8 @@ class ManageBridge:
 
 class ConcProtocol(LineReceiver):
     def connectionMade(self):
-        msg = {"msg": "req",
-               "req": "get",
-               "uri": "/api/v1/current_bridge/bridge"}
-        #msg = {"id": id,
-               #"status": "ready"}
+        msg = {"msg": "status",
+               "data": "ready"}
         self.sendLine(json.dumps(msg))
         reactor.callLater(2, self.monitorBridge)
 
