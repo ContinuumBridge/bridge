@@ -39,6 +39,8 @@ controllerAuth(CONTROLLER_API, BRIDGE_EMAIL, BRIDGE_PASSWORD).then(function(sess
         console.log('bridgeConcentrator.fromBridge is present');
     }
 
+    /* TODO {"msg":"aggregator_status", "data":"ok"} */
+
     bridgeConcentrator.fromBridge.onValue(function(message) {
         
         // Take messages from the bridge and relay them to the controller
