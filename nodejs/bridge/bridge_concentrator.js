@@ -31,7 +31,7 @@ function BridgeConcentrator(port) {
 
         socket.on('data', function(data) {
 
-            console.log('Raw data', data);
+            //console.log('Raw data', data);
             fromBridge.push(data);
         }); 
 

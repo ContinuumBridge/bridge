@@ -11,8 +11,8 @@ var controllerAuth = function(controllerURL, email, password) {
     var deferredSessionData = Q.defer();
 
     var authDetailsObj = {
-        "email": "3b84fb342d3644b2a6a0f342311fc8e2@continuumbridge.com",
-        "password": "BEjEu+vAXP4k8Y1qySPdCrN8VrQ5OxewtLfDs58VnIA5VufYahF/QndOSH4cqN7u"
+        "email": email,
+        "password": password
     }
     var authDetails = JSON.stringify(authDetailsObj);
 
