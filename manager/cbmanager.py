@@ -20,6 +20,8 @@ from twisted.internet import task
 from twisted.protocols.basic import LineReceiver
 from twisted.internet.protocol import ReconnectingClientFactory
 from pprint import pprint
+from cbcommslib import CbServerProtocol
+from cbcommslib import CbServerFactory
 
 class ManageBridge:
 
@@ -28,39 +30,61 @@ class ManageBridge:
         """
         self.bridgeRoot = os.getenv('CB_BRIDGE_ROOT', "/home/bridge/bridge")
         print ModuleName, "CB_BRIDGE_ROOT = ", self.bridgeRoot
+        self.noCloud = os.getenv('CB_NO_CLOUD', "False")
+        print ModuleName, "CB_NO_CLOUD = ", self.noCloud
         self.discovered = False
         self.configured = False
         self.reqSync = False
         self.stopping = False
         self.appProcs = []
         self.concConfig = []
+        self.mgrSocFactory = {} 
         status = self.readConfig()
         print ModuleName, status
-      
+
+        # Manager socket factory for connecting to conc, apps  adaptors
+        self.initBridge()
+        reactor.run()
+
     def initBridge(self):
-        print ModuleName, "Hello from the Bridge Manager"
+        if self.noCloud != "True":
+            print ModuleName, "Bridge Manager Starting JS Concentrator"
+            exe = "nodejs"
+            path = self.bridgeRoot + "/nodejs/index.js"
+            try:
+                p = subprocess.Popen([exe, path])
+                print ModuleName, "Started node.js"
+            except:
+                print ModuleName, "node.js failed to start. exe = ", exe
+            # Give time for node interface to start
+        else:
+            print ModuleName, "Running without Cloud Server"
+        time.sleep(2)
+
+        self.startConcentrator()
+        if self.configured:
+            self.startAll()
 
     def listMgrSocs(self):
-        mgrSocs =[] 
+        mgrSocs = {}
         for d in self.devices:
-            mgrSocs.append(d["adaptor_install"][0]["mgrSoc"])
+            mgrSocs[d["adaptor_install"][0]["id"]] = d["adaptor_install"][0]["mgrSoc"]
         for a in self.apps:
-            mgrSocs.append(a["app"]["mgrSoc"])
-        mgrSocs.append("mgr-conc")
+            mgrSocs[a["app"]["id"]] = a["app"]["mgrSoc"]
+        #mgrSocs.append("mgr-conc")
         return mgrSocs
 
-    def startAll(self):
-        self.stopping = False
-        # Open sockets for communicating with all apps and adaptors
-        mgrSocs = self.listMgrSocs()
-        for s in mgrSocs:
-            try:
-                reactor.listenUNIX(s, mgrSocFactory, backlog=4)
-                print ModuleName, "Opened manager socket ", s
-            except:
-                print ModuleName, "Manager socket already exits: ", s
+    def startConcentrator(self):
+        # Open a socket for communicating with the concentrator
+        s = "mgr-conc"
+        try:
+            self.mgrSocFactory["conc"] = CbServerFactory(self.processClient)
+            reactor.listenUNIX(s, self.mgrSocFactory["conc"], backlog=4)
+            print ModuleName, "Opened manager socket ", s
+        except:
+            print ModuleName, "Manager socket already exits: ", s
 
-        # Start concentrator 
+        # Now start the concentrator in a subprocess
         exe = self.concPath
         id = "conc"
         mgrSoc = "mgr-conc"
@@ -72,8 +96,21 @@ class ManageBridge:
             print ModuleName, "Concentrator failed to start"
             print ModuleName, "Params: ", exe, id, mgrSoc
         # Give time for concentrator to start
-        time.sleep(2)
+        #time.sleep(2)
 
+    def startAll(self):
+        self.stopping = False
+        # Open sockets for communicating with all apps and adaptors
+        mgrSocs = self.listMgrSocs()
+        for s in mgrSocs:
+            try:
+                self.mgrSocFactory[s] = CbServerFactory(self.processClient)
+                reactor.listenUNIX(mgrSoc[s], self.mgrSocFactory, backlog=4)
+                print ModuleName, "Opened manager socket ", s
+            except:
+                print ModuleName, "Manager socket already exits: ", s
+
+        # Start concentrator 
         # Start adaptors
         for d in self.devices:
             exe = d["adaptor_install"][0]["adaptor"]["exe"]
@@ -118,8 +155,8 @@ class ManageBridge:
                 addrFound = False
                 if d["method"] == "btle":
                     for oldDev in self.devices:
-                       if oldDev["data"]["method"] == "btle": 
-                           if d["addr"] == oldDev["data"]["btAddr"]:
+                       if oldDev["adaptor_install"][0]["adaptor"]["method"] == "btle": 
+                           if d["addr"] == oldDev["mac_addr"]:
                                addrFound = True
                 if addrFound == False:
                     self.discoveredDevices["data"].append(d)  
@@ -191,6 +228,7 @@ class ManageBridge:
             print ModuleName, "Devices:"
             pprint(self.devices)
             print ""
+        return "Configured"
     
     def updateConfig(self, msg):
         print ModuleName, "Config received from controller:"
@@ -287,7 +325,7 @@ class ManageBridge:
         return msg
 
     def processClient(self, msg):
-        #print ModuleName, "Recevied msg from client", msg
+        print ModuleName, "Received msg from client", msg
         response = {"cmd": "error"}
         if self.stopping:
             response = {"cmd": "stop"}
@@ -333,69 +371,5 @@ class ManageBridge:
             response = {"cmd": "ok"}
         return response
 
-class ConcProtocol(LineReceiver):
-    def connectionMade(self):
-        msg = {"msg": "status",
-               "data": "ready"}
-        self.sendLine(json.dumps(msg))
-        reactor.callLater(2, self.monitorBridge)
-
-    def lineReceived(self, line):
-        print ModuleName, line
-        managerMsg = json.loads(line)
-        msg = json.loads(line)
-        m.processControlMsg(msg)
-
-    def monitorBridge(self):
-        if m.checkBridge():
-            msg = m.getManagerMsg()
-            self.sendLine(json.dumps(msg))
-        reactor.callLater(2, self.monitorBridge)
-
-class ConcFactory(ReconnectingClientFactory):
-    """ Tries to reconnect to socket if connection lost """
-    def clientConnectionFailed(self, connector, reason):
-        print ModuleName, "Failed to connect to concentrator"
-        print ModuleName,  reason.getErrorMessage()
-        ReconnectingClientFactory.clientConnectionLost(self, connector, reason)
-
-    def clientConnectionLost(self, connector, reason):
-        print ModuleName, "Connection to concentrator lost"
-        print ModuleName, reason.getErrorMessage()
-        ReconnectingClientFactory.clientConnectionLost(self, connector, reason)
-
-class ManagerSockets(LineReceiver):
-
-    def lineReceived(self, data):
-        if data != "":
-            response = m.processClient(json.loads(data))
-        else:
-            response = {"cmd": "blank message"}
-        self.sendLine(json.dumps(response))
-
-    def connectionMade(self):
-        print ModuleName, "Connection made to ", self.transport.getPeer()
-
-    def connectionLost(self, reason):
-        print ModuleName, "Disconnected"
-
 if __name__ == '__main__':
-
-    if len(sys.argv) < 2:
-        print "Usage: manager <concentrator socket address>"
-        exit(1)
-    concSocket = sys.argv[1]
-    print ModuleName, "Concentrator = ", concSocket
-
     m = ManageBridge()
-    m.initBridge()
-
-    concFactory = ConcFactory()
-    concFactory.protocol = ConcProtocol
-    reactor.connectTCP("localhost", int(concSocket), concFactory, timeout=10)
-
-    # Sockets factory for communicating with each adaptor and app
-    mgrSocFactory=Factory()
-    mgrSocFactory.protocol = ManagerSockets
-
-    reactor.run()

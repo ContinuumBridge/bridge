@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # concentrator.py
-# Copyright (C) ContinuumBridge Limited, 2013 - All Rights Reserved
+# Copyright (C) ContinuumBridge Limited, 2013-2014 - All Rights Reserved
 # Unauthorized copying of this file, via any medium is strictly prohibited
 # Proprietary and confidential
 # Written by Peter Claydon
@@ -25,9 +25,8 @@ from twisted.web.resource import Resource
 from twisted.web.server import Site
 from twisted.internet.task import deferLater
 from twisted.web.server import NOT_DONE_YET
-from cbcommslib import CbManagerClientFactory
-from cbcommslib import CbManagerClient
-from cbcommslib import CbServerFactory
+from cbcommslib import CbClientProtocol
+from cbcommslib import CbClientFactory
 
 class DataStore():
     def __init__(self):
@@ -155,16 +154,18 @@ class Concentrator():
         print ModuleName, "Hello from ", self.id
 
         self.dataStore = DataStore()
-        managerFactory = CbManagerClientFactory()
-        managerFactory.protocol = CbManagerClient
-        managerFactory.id = self.id
-        managerFactory.protocol.id = self.id
-        managerFactory.protocol.type = "conc"
-        managerFactory.protocol.setStatus = self.setStatus
-        managerFactory.protocol.reportStatus = self.reportStatus
-        managerFactory.protocol.processManager = self.processManager
+
+        # Connection to manager
+        initMsg = {"id": self.id,
+                   "type": "conc",
+                   "status": "req-config"} 
+        managerFactory = CbClientFactory(self.processManager, initMsg)
         reactor.connectUNIX(managerSocket, managerFactory, timeout=10)
-        reactor.listenTCP(8880, Site(RootResource(self.dataStore)))
+
+        # Connection to websockets process
+        #concFactory = ConcFactory()
+        #concFactory.protocol = ConcProtocol
+        #reactor.connectTCP("localhost", int(concSocket), concFactory, timeout=10)
         reactor.run()
 
     def processConf(self, config):
@@ -173,12 +174,17 @@ class Concentrator():
         self.cbFactory = {}
         self.appInstances = []
         for app in config:
-            appConcSoc = app["appConcSoc"]
             iName = app["id"]
             #print ModuleName, "app: ", iName, " socket: ", appConcSoc
-            self.appInstances.append(iName)
-            self.cbFactory[iName] = CbServerFactory(self.processReqThread)
-            reactor.listenUNIX(appConcSoc, self.cbFactory[iName])
+            if iName not in self.appInstances:
+                # Allows for reconfig on the fly
+                appConcSoc = app["appConcSoc"]
+                self.appInstances.append(iName)
+                self.cbFactory[iName] = CbServerFactory(self.processReqThread)
+                reactor.listenUNIX(appConcSoc, self.cbFactory[iName])
+
+    def processManagerMsg(self, msg):
+        pass
 
     def processManager(self, cmd):
         #print ModuleName, "Received from manager: ", cmd
@@ -191,6 +197,10 @@ class Concentrator():
         elif cmd["cmd"] == "config":
             #Call in thread in case user code hangs
             reactor.callInThread(self.processConf, cmd["config"])
+            msg = {"id": self.id,
+                   "status": "ok"}
+        elif cmd["cmd"] == "msg":
+            reactor.callInThread(self.processManagerMsg, cmd["msg"])
             msg = {"id": self.id,
                    "status": "ok"}
         elif cmd["cmd"] != "ok":
@@ -215,12 +225,6 @@ class Concentrator():
 
     def cbSendMsg(self, msg, iName):
         self.cbFactory[iName].sendMsg(msg)
-
-    def reportStatus(self):
-        return self.status
-
-    def setStatus(self, newStatus):
-        self.status = newStatus
 
     def processReq(self, req):
         """
@@ -251,6 +255,37 @@ class Concentrator():
                     self.cbSendMsg(resp, req["appID"])
         else:
             pass
+class ConcProtocol(LineReceiver):
+    def connectionMade(self):
+        msg = {"msg": "status",
+               "data": "ready"}
+        self.sendLine(json.dumps(msg))
+        reactor.callLater(2, self.monitorBridge)
+
+    def lineReceived(self, line):
+        print ModuleName, line
+        managerMsg = json.loads(line)
+        msg = json.loads(line)
+        m.processControlMsg(msg)
+
+    def monitorBridge(self):
+        if m.checkBridge():
+            msg = m.getManagerMsg()
+            self.sendLine(json.dumps(msg))
+        reactor.callLater(2, self.monitorBridge)
+
+class ConcFactory(ReconnectingClientFactory):
+    """ Tries to reconnect to socket if connection lost """
+    def clientConnectionFailed(self, connector, reason):
+        print ModuleName, "Failed to connect to concentrator"
+        print ModuleName,  reason.getErrorMessage()
+        ReconnectingClientFactory.clientConnectionLost(self, connector, reason)
+
+    def clientConnectionLost(self, connector, reason):
+        print ModuleName, "Connection to concentrator lost"
+        print ModuleName, reason.getErrorMessage()
+        ReconnectingClientFactory.clientConnectionLost(self, connector, reason)
+
 
 if __name__ == '__main__':
     concentrator = Concentrator(sys.argv)

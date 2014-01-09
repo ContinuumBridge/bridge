@@ -19,7 +19,8 @@ class Adaptor(CbAdaptor):
         #CbAdaptor methods processReq & cbAdtConfig MUST be subclassed
         CbAdaptor.processReq = self.processReq
         CbAdaptor.cbAdtConfigure = self.configure
-        self.connected = False
+        self.connected = False  # Indicates we are connected to SensorTag
+        self.configured = False # Indicates that adt has been configured
         self.status = "ok"
         self.tempApps = []
         self.irTempApps = []
@@ -248,6 +249,7 @@ class Adaptor(CbAdaptor):
         Called in a thread and so it is OK if it blocks.
         Called separately for every app that can make requests.
         """
+        #print ModuleName, "processReq, req = ", req
         tagStatus = "ok"
         if req["req"] == "init":
             resp = {"name": self.name,
@@ -271,23 +273,54 @@ class Adaptor(CbAdaptor):
                     "content": "services"}
             self.cbSendMsg(resp, req["id"])
         elif req["req"] == "services":
-            for s in req["services"]:
-                if s == "temperature":
+            # Apps may turn on or off services from time to time
+            # So it is necessary to be able to remove as well as append
+            # Can't just destory the lists as they may be being used elsewhere
+            if req["id"] not in self.tempApps:
+                if "temperature" in req["services"]:
                     self.tempApps.append(req["id"])  
-                elif s == "ir_temperature":
+            else:
+                if "temperature" not in req["services"]:
+                    self.tempApps.remove(req["id"])  
+
+            if req["id"] not in self.irTempApps:
+                if "ir_temperature" in req["services"]:
                     self.irTempApps.append(req["id"])  
-                elif s == "acceleration":
-                    self.accelApps.append(req["id"])
-                elif s == "rel_humidity":
-                    self.humidApps.append(req["id"])
-                elif s == "buttons":
-                    self.buttonApps.append(req["id"])
+            else:
+                if "ir_temperature" not in req["services"]:
+                    self.irTempApps.remove(req["id"])  
+
+            if req["id"] not in self.accelApps:
+                if "acceleration" in req["services"]:
+                    self.irTempApps.append(req["id"])  
+            else:
+                if "acceleration" not in req["services"]:
+                    self.accelApps.remove(req["id"])  
+
+            if req["id"] not in self.humidApps:
+                if "rel_humidity" in req["services"]:
+                    self.humidApps.append(req["id"])  
+            else:
+                if "rel_humidity" not in req["services"]:
+                    self.humidApps.remove(req["id"])  
+
+            if req["id"] not in self.buttonApps:
+                if "buttons" in req["services"]:
+                    self.buttonApps.append(req["id"])  
+            else:
+                if "buttons" not in req["services"]:
+                    self.buttonApps.remove(req["id"])  
         else:
             pass
 
     def configure(self, config):
-        """Config is based on what apps are to be connected."""
-        self.startApp()
+        """Config is based on what apps are to be connected.
+            May be called again if there is a new configuration, which
+            could be because a new app has been added.
+        """
+        if not self.configured:
+            self.startApp()
+            self.configured = True
 
 if __name__ == '__main__':
     adaptor = Adaptor(sys.argv)
