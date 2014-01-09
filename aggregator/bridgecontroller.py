@@ -192,7 +192,7 @@ class BridgeControlProtocol(LineReceiver):
         self.sendLine(json.dumps(self.config))
     
     def lineReceived(self, rawMsg):
-        print "Message received: ", rawMsg
+        #print "Message received: ", rawMsg
         self.watchTime = time.time()
         msg = json.loads(rawMsg)
         if msg["msg"] == "req":

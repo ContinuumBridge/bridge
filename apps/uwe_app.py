@@ -128,6 +128,7 @@ class App(CbApp):
         self.buttons = []
         self.devices = []
         self.devServices =[] 
+        self.idToName ={} 
         self.dm = DataManager(self.cbSendMsg)
         CbApp.__init__(self, argv)
 
@@ -191,20 +192,22 @@ class App(CbApp):
             pass
         else:
             # A problem has occured. Report it to bridge manager
-            self.status = "adaptor problem"
+            #self.status = "adaptor problem"
+            pass
 
     def configure(self, config):
         """ Config is based on what sensors are available """
-        print ModuleName, "Configure app"
+        print ModuleName, "Configure app", self.id
         self.dm.appID = self.id
-        self.idToName ={} 
         for adaptor in config["adts"]:
-            name = adaptor["name"]
-            friendlyName = adaptor["friendlyName"]
             adtID = adaptor["id"]
-            print ModuleName, "configure app, adaptor name = ", name
-            self.idToName[adtID] = friendlyName
-            self.devices.append(adtID)
+            if adtID not in self.devices:
+                # Because configure may be re-called if devices are added
+                name = adaptor["name"]
+                friendlyName = adaptor["friendlyName"]
+                print ModuleName, "configure app, adaptor name = ", name
+                self.idToName[adtID] = friendlyName
+                self.devices.append(adtID)
 
 if __name__ == '__main__':
 
