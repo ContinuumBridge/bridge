@@ -39,7 +39,7 @@ controllerAuth(CONTROLLER_API, BRIDGE_EMAIL, BRIDGE_PASSWORD).then(function(sess
         // Take messages from the bridge and relay them to the controller
         console.log('Bridge >', jsonMessage);
 
-        message = JSON.parse(jsonMessage);
+        var message = JSON.parse(jsonMessage);
 
         console.log('Bridge >', message.msg);
 
@@ -47,14 +47,19 @@ controllerAuth(CONTROLLER_API, BRIDGE_EMAIL, BRIDGE_PASSWORD).then(function(sess
             if (message.uri == '/api/v1/current_bridge/bridge') {
                 
                 //console.log('Bridge Config >', message);
-                var resp = {};
-                resp.msg = 'cmd';
-                resp.uri = '/api/v1/current_bridge/bridge';
-                resp.data = 'Test data';
-                bridgeConcentrator.toBridge.push(JSON.stringify(resp));
+                fs = require('fs')
+                fs.readFile('./test_config.json', 'utf8', function (err, test_config) {
+                    if (err) {
+                        return console.log(err);
+                    }
+                    resp = {};
+                    resp.msg = "resp";
+                    resp.body = JSON.parse(test_config);
+                    bridgeConcentrator.toBridge.push(JSON.stringify(resp));
+                });
             }
         }
-        controllerSocket.toController.push(message);
+        controllerSocket.toController.push(jsonMessage);
     });
 
     /*

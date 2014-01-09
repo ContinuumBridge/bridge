@@ -34,8 +34,8 @@ class ManageBridge:
         self.stopping = False
         self.appProcs = []
         self.concConfig = []
-        status = self.readConfig()
-        print ModuleName, status
+        #status = self.readConfig()
+        #print ModuleName, status
       
     def initBridge(self):
         print ModuleName, "Hello from the Bridge Manager"
@@ -77,7 +77,7 @@ class ManageBridge:
         # Start adaptors
         for d in self.devices:
             exe = d["adaptor_install"][0]["adaptor"]["exe"]
-            fName = d["adaptor_install"][0]["friendlyName"]
+            fName = d["friendly_name"]
             id = d["adaptor_install"][0]["id"]
             mgrSoc = d["adaptor_install"][0]["mgrSoc"]
             try:
@@ -137,23 +137,24 @@ class ManageBridge:
         appRoot = self.bridgeRoot + "/apps/"
         adtRoot = self.bridgeRoot + "/adaptors/"
         self.concPath = self.bridgeRoot + "/concentrator/concentrator.py"
-        try:
-            with open('bridge.config', 'r') as configFile:
-                config = json.load(configFile)
-                self.bridgeID = config["data"]["id"]
-                self.friendlyName = config["data"]["friendlyName"]
-                self.apps = config["data"]["apps"]
-                self.devices = config["data"]["devices"]
-                self.configured = True
-        except:
-            print ModuleName, "Warning. No config file exists"
-            self.configured = False
+        #try:
+        with open('bridge.config', 'r') as configFile:
+            config = json.load(configFile)
+            print ModuleName, "readConfig"
+            pprint(config)
+            self.bridgeID = config["body"]["id"]
+            self.apps = config["body"]["apps"]
+            self.devices = config["body"]["devices"]
+            self.configured = True
+        #except:
+            #print ModuleName, "Warning. No config file exists"
+            #self.configured = False
 
         if self.configured:
             # Process config to determine routing:
             for d in self.devices:
-                d["adaptor_install"][0]["id"] = "dev" + d["adaptor_install"][0]["id"]
-                socket = "mgr-" + d["adaptor_install"][0]["id"]
+                d["adaptor_install"][0]["id"] = "dev" + str(d["adaptor_install"][0]["id"])
+                socket = "mgr-" + str(d["adaptor_install"][0]["id"])
                 d["adaptor_install"][0]["mgrSoc"] = socket
                 d["adaptor_install"][0]["adaptor"]["exe"] = adtRoot + \
                     d["adaptor_install"][0]["adaptor"]["exe"]
@@ -161,10 +162,10 @@ class ManageBridge:
                 d["adaptor_install"][0]["apps"] = []
             # Add socket descriptors to apps and devices
             for a in self.apps:
-                a["app"]["id"] = "app" + a["app"]["id"]
+                a["app"]["id"] = "app" + str(a["app"]["id"])
                 a["app"]["exe"] = appRoot + a["app"]["exe"]
-                a["app"]["mgrSoc"] = "mgr-" + a["app"]["id"]
-                a["app"]["concSoc"] = "conc-" + a["app"]["id"]
+                a["app"]["mgrSoc"] = "mgr-" + str(a["app"]["id"])
+                a["app"]["concSoc"] = "conc-" + str(a["app"]["id"])
                 for appDev in a["device_permissions"]:
                     uri = appDev["device_install"]
                     for d in self.devices: 
@@ -179,8 +180,8 @@ class ManageBridge:
                             appDev["adtSoc"] = socket
                             appDev["id"] = d["adaptor_install"][0]["id"]
                             appDev["name"] = d["adaptor_install"][0]["adaptor"]["name"]
-                            appDev["friendlyName"] = \
-                                d["adaptor_install"][0]["friendlyName"]
+                            appDev["friendly_name"] = \
+                                d["adaptor_install"][0]["friendly_name"]
                             appDev["adtSoc"] = socket
                             break
         if self.configured:
@@ -203,25 +204,25 @@ class ManageBridge:
     def processControlMsg(self, msg):
         print ModuleName, "Controller msg = ", msg
         if msg["msg"] == "cmd":
-            if msg["data"] == "start":
+            if msg["body"] == "start":
                 if self.configured:
                     print ModuleName, "starting adaptors and apps"
                     self.startAll()
                 else:
                     print ModuleName, "Can't start adaptors & apps"
                     print ModuleName, "Please run discovery"
-            elif msg["data"] == "discover":
+            elif msg["body"] == "discover":
                 self.discover()
-            elif msg["data"] == "stopapps":
+            elif msg["body"] == "stopapps":
                 self.stopApps()
-            elif msg["data"] == "stopall" or msg["data"] == "stop":
+            elif msg["body"] == "stopall" or msg["body"] == "stop":
                 if not self.stopping:
                     print ModuleName, "Processing stop. Stopping apps"
                     self.stopApps()
                     reactor.callLater(10, self.stopManager)
                 else:
                     self.stopManager()
-            elif msg["data"] == "update":
+            elif msg["body"] == "update_config":
                 self.reqSync = True
         elif msg["msg"] == "resp":
             self.updateConfig(msg)
@@ -311,7 +312,7 @@ class ManageBridge:
                         "config": 
                             {"apps": d["adaptor_install"][0]["apps"], 
                              "name": d["adaptor_install"][0]["name"],
-                             "friendlyName": d["adaptor_install"][0]["friendlyName"],
+                             "friendlyName": d["adaptor_install"][0]["friendly_name"],
                              "btAddr": d["adaptor_install"][0]["btAddr"],
                              "btAdpt": "hci0" 
                             }
