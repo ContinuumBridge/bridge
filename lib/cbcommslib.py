@@ -26,7 +26,6 @@ class CbAdaptor:
     ModuleName = "CbAdaptor           " 
 
     def __init__(self, argv):
-        self.cbFactory = []
         self.status = "ok"
         self.doStop = False
         self.configured = False

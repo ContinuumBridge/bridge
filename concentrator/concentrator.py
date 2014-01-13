@@ -27,6 +27,8 @@ from twisted.internet.task import deferLater
 from twisted.web.server import NOT_DONE_YET
 from cbcommslib import CbClientProtocol
 from cbcommslib import CbClientFactory
+from cbcommslib import CbServerProtocol
+from cbcommslib import CbServerFactory
 
 class DataStore():
     def __init__(self):
@@ -159,13 +161,14 @@ class Concentrator():
         initMsg = {"id": self.id,
                    "type": "conc",
                    "status": "req-config"} 
-        managerFactory = CbClientFactory(self.processManager, initMsg)
-        reactor.connectUNIX(managerSocket, managerFactory, timeout=10)
+        self.managerFactory = CbClientFactory(self.processManager, initMsg)
+        reactor.connectUNIX(managerSocket, self.managerFactory, timeout=10)
 
         # Connection to websockets process
-        #concFactory = ConcFactory()
-        #concFactory.protocol = ConcProtocol
-        #reactor.connectTCP("localhost", int(concSocket), concFactory, timeout=10)
+        initMsg = {"msg": "status",
+                   "body": "ready"}
+        self.concFactory = CbClientFactory(self.processServerMsg, initMsg)
+        reactor.connectTCP("localhost", 5000, self.concFactory, timeout=10)
         reactor.run()
 
     def processConf(self, config):
@@ -183,24 +186,27 @@ class Concentrator():
                 self.cbFactory[iName] = CbServerFactory(self.processReqThread)
                 reactor.listenUNIX(appConcSoc, self.cbFactory[iName])
 
+    def processServerMsg(self, msg):
+        msg["status"] = "control_msg"
+        self.cbSendManagerMsg(msg)
+
     def processManagerMsg(self, msg):
-        pass
+        self.concFactory.sendMsg(msg)
 
     def processManager(self, cmd):
         #print ModuleName, "Received from manager: ", cmd
-        if cmd["cmd"] == "stop":
+        if cmd["cmd"] == "msg":
+            self.processManagerMsg(cmd["msg"])
+            msg = {"id": self.id,
+                   "status": "ok"}
+        elif cmd["cmd"] == "stop":
             self.doStop = True
             msg = {"id": self.id,
                    "status": "stopping"}
             #Adaptor must check doStop more often than every 8 seconds
             reactor.callLater(8, self.stopReactor)
         elif cmd["cmd"] == "config":
-            #Call in thread in case user code hangs
             reactor.callInThread(self.processConf, cmd["config"])
-            msg = {"id": self.id,
-                   "status": "ok"}
-        elif cmd["cmd"] == "msg":
-            reactor.callInThread(self.processManagerMsg, cmd["msg"])
             msg = {"id": self.id,
                    "status": "ok"}
         elif cmd["cmd"] != "ok":
@@ -209,7 +215,7 @@ class Concentrator():
         else:
             msg = {"id": self.id,
                    "status": "none"}
-        return msg
+        self.cbSendManagerMsg(msg)
 
     def stopReactor(self):
         try:
@@ -225,6 +231,9 @@ class Concentrator():
 
     def cbSendMsg(self, msg, iName):
         self.cbFactory[iName].sendMsg(msg)
+
+    def cbSendManagerMsg(self, msg):
+        self.managerFactory.sendMsg(msg)
 
     def processReq(self, req):
         """
@@ -255,37 +264,6 @@ class Concentrator():
                     self.cbSendMsg(resp, req["appID"])
         else:
             pass
-class ConcProtocol(LineReceiver):
-    def connectionMade(self):
-        msg = {"msg": "status",
-               "data": "ready"}
-        self.sendLine(json.dumps(msg))
-        reactor.callLater(2, self.monitorBridge)
-
-    def lineReceived(self, line):
-        print ModuleName, line
-        managerMsg = json.loads(line)
-        msg = json.loads(line)
-        m.processControlMsg(msg)
-
-    def monitorBridge(self):
-        if m.checkBridge():
-            msg = m.getManagerMsg()
-            self.sendLine(json.dumps(msg))
-        reactor.callLater(2, self.monitorBridge)
-
-class ConcFactory(ReconnectingClientFactory):
-    """ Tries to reconnect to socket if connection lost """
-    def clientConnectionFailed(self, connector, reason):
-        print ModuleName, "Failed to connect to concentrator"
-        print ModuleName,  reason.getErrorMessage()
-        ReconnectingClientFactory.clientConnectionLost(self, connector, reason)
-
-    def clientConnectionLost(self, connector, reason):
-        print ModuleName, "Connection to concentrator lost"
-        print ModuleName, reason.getErrorMessage()
-        ReconnectingClientFactory.clientConnectionLost(self, connector, reason)
-
 
 if __name__ == '__main__':
     concentrator = Concentrator(sys.argv)
