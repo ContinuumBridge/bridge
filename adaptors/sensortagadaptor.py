@@ -32,6 +32,11 @@ class Adaptor(CbAdaptor):
 
     def initSensorTag(self):
         print ModuleName, "initSensorTag", self.id, " - ", self.friendly_name
+        # Ensure that the Bluetooth interface is up
+        try:
+            os.system("sudo hciconfig hci0 up")
+        except:
+            print ModuleName, "Unable to bring up hci0 interface"
         try:
             cmd = 'gatttool -i ' + self.device + ' -b ' + self.addr + \
                   ' --interactive'
