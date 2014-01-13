@@ -60,6 +60,8 @@ class BridgeControlProtocol(LineReceiver):
                         "body": "update_config"}
                 print "Sending command to bridge: ", msg
                 reactor.callFromThread(self.sendLine, json.dumps(msg))
+            elif cmd == "":
+                pass
             else:
                 print "Unrecognised input: ", cmd
         if self.stopProg:
@@ -113,7 +115,6 @@ class BridgeControlProtocol(LineReceiver):
               {"adaptor_install": [
                 {
                  "name": currentDev["name"],
-                 "friendlyName": friendly,
                  "id": devNum,
                  "adaptor": 
                    {
@@ -134,6 +135,7 @@ class BridgeControlProtocol(LineReceiver):
                "bridge": "random bridge test text",
                "device": "random device test text",
                "id": devNum,
+               "friendly_name": friendly,
                "mac_addr": currentDev["mac_addr"],
                "resource_url": "/api/V1/device/" + str(devNum)
               }
@@ -179,10 +181,9 @@ class BridgeControlProtocol(LineReceiver):
 #                  }
 #            self.apps.append(app)
 #    
-        self.config = {"msg": "resp",
+        self.config = {"msg": "response",
                        "uri": "/api/vi/current_bridge/bridge",
-                       "data": {"id": 42,
-                                "friendlyName": "Friendly Bridge",
+                       "body": {"id": 42,
                                 "bridgeManager": "cbmanager.py",
                                 "backupManager": "manager7.py",
                                 "email": "28b45a59a875478ebcbdf327c18dbfb1@continuumbridge.com",
@@ -220,8 +221,8 @@ class BridgeControlProtocol(LineReceiver):
             if msg["body"] == "ready":
                 print "Bridge ready"
                 self.checkCmd()
-            elif msg["body"] != "ok":
-                print "Unknown message received from bridge" 
+            else:
+                print msg["body"]
         else:
             print "Unknown message received from bridge" 
       
