@@ -22,7 +22,7 @@ def getCmd():
 
 thread.start_new_thread(getCmd, ())
 
-ipAddress = "192.168.0.13"
+ipAddress = "192.168.0.12"
 port = "8880"
 baseUrl = "http://" + ipAddress + ":" + port +"/"
 configUrl = baseUrl + "config"
@@ -90,7 +90,7 @@ while not doStop:
                 print dat
 
 # Disable output of values
-config = {"enable": "False"}
+config = {"enable": False}
 configData = json.dumps(config)
 URL = configUrl
 h = httplib2.Http()

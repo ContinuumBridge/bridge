@@ -32,10 +32,15 @@ class ManageBridge:
         print ModuleName, "CB_BRIDGE_ROOT = ", self.bridgeRoot
         self.noCloud = os.getenv('CB_NO_CLOUD', "False")
         print ModuleName, "CB_NO_CLOUD = ", self.noCloud
+        self.controllerAddr = os.getenv('CB_CONTROLLER_ADDR', '54.194.28.63')
+        print ModuleName, "CB_CONTROLLER_ADDR = ", self.controllerAddr
+        self.email = "cde5fb1645e74314a3e6841a4df0828d@continuumbridge.com"
+        self.password = "zqN17m94GftDvNiWNGls+6tyxryCJFWxzWC5hs/fTmF7YXn4i8eogVa/HzwK5fK2"
         self.discovered = False
         self.configured = False
         self.reqSync = False
         self.stopping = False
+        self.concNoApps = False
         self.appProcs = []
         self.concConfig = []
         self.cbFactory = {} 
@@ -49,13 +54,14 @@ class ManageBridge:
             exe = "nodejs"
             path = self.bridgeRoot + "/nodejs/index.js"
             try:
-                p = subprocess.Popen([exe, path])
+                self.nodejsProc = subprocess.Popen([exe, path, self.controllerAddr, \
+                                                    self.email, self.password])
                 print ModuleName, "Started node.js"
             except:
                 print ModuleName, "node.js failed to start. exe = ", exe
-            # Give time for node interface to start
         else:
             print ModuleName, "Running without Cloud Server"
+        # Give time for node interface to start
         time.sleep(2)
 
         if self.configured:
@@ -113,11 +119,10 @@ class ManageBridge:
             except:
                 print ModuleName, "Manager socket already exits: ", s, mgrSocs[s]
 
-        # Start concentrator 
         # Start adaptors
         for d in self.devices:
             exe = d["adaptor_install"][0]["adaptor"]["exe"]
-            fName = d["adaptor_install"][0]["friendly_name"]
+            fName = d["friendly_name"]
             id = d["adaptor_install"][0]["id"]
             mgrSoc = d["adaptor_install"][0]["mgrSoc"]
             try:
@@ -143,9 +148,6 @@ class ManageBridge:
                 print ModuleName, id, " started"
             except:
                 print ModuleName, id, " failed to start"
-        msg = {"msg": "status",
-               "body": "started"}
-        #self.cbSendMsg(msg, "conc")
  
     def doDiscover(self):
         self.discoveredDevices = {}
@@ -184,17 +186,20 @@ class ManageBridge:
         appRoot = self.bridgeRoot + "/apps/"
         adtRoot = self.bridgeRoot + "/adaptors/"
         self.concPath = self.bridgeRoot + "/concentrator/concentrator.py"
+        configRead = False
         try:
             with open('bridge.config', 'r') as configFile:
                 config = json.load(configFile)
+                configRead = True
                 print ModuleName, "readConfig"
                 pprint(config)
-                self.apps = config["data"]["apps"]
-                self.devices = config["data"]["devices"]
-                self.configured = True
         except:
             print ModuleName, "Warning. No config file exists"
             self.configured = False
+        if configRead:
+            self.apps = config["body"]["apps"]
+            self.devices = config["body"]["devices"]
+            self.configured = True
 
         if self.configured:
             # Process config to determine routing:
@@ -227,7 +232,7 @@ class ManageBridge:
                             appDev["id"] = d["adaptor_install"][0]["id"]
                             appDev["name"] = d["adaptor_install"][0]["adaptor"]["name"]
                             appDev["friendly_name"] = \
-                                d["adaptor_install"][0]["friendly_name"]
+                                d["friendly_name"]
                             appDev["adtSoc"] = socket
                             break
         if self.configured:
@@ -277,8 +282,14 @@ class ManageBridge:
                                "uri": "/api/v1/current_bridge/bridge"}
                       }
                 self.cbSendConcMsg(req)
-        elif msg["msg"] == "resp":
+        elif msg["msg"] == "response":
             self.updateConfig(msg)
+            # Need to give concentrator new config if initial one was without apps
+            if self.concNoApps:
+                req = {"status": "req-config",
+                       "type": "conc"}
+                self.processClient(req)
+                self.concNoApps = False
 
     def stopAll(self):
         """ Kills concentrator & nodejs processes, removes sockets & kills itself """
@@ -293,6 +304,10 @@ class ManageBridge:
             self.concProc.kill()
         except:
             print ModuleName, "No concentrator process to kill"
+        try:
+            self.nodejsProc.kill()
+        except:
+            print ModuleName, "No node.js process to kill"
         for soc in self.concConfig:
             socket = soc["appConcSoc"]
             try:
@@ -336,17 +351,6 @@ class ManageBridge:
               }
         self.cbSendConcMsg(msg)
  
-    def delManagerSockets(self):
-        mgrSocs = self.listMgrSocs()
-        for s in mgrSocs:
-            try:
-                os.remove(mgrSocs[s])
-                print ModuleName, "Removed manager socket ", mgrSocs[s]
-            except:
-                print ModuleName, "Unable to remove manager socket: ", mgrSocs[s]
-        # Clear dictionary so that we can recreate sockets
-        self.cbFactory.clear()
-
     def cbSendMsg(self, msg, iName):
         self.cbFactory[iName].sendMsg(msg)
 
@@ -378,8 +382,8 @@ class ManageBridge:
                         "cmd": "config",
                         "config": 
                             {"apps": d["adaptor_install"][0]["apps"], 
-                             "name": d["adaptor_install"][0]["name"],
-                             "friendly_name": d["adaptor_install"][0]["friendly_name"],
+                             "name": d["adaptor_install"][0]["adaptor"]["name"],
+                             "friendly_name": d["friendly_name"],
                              "btAddr": d["mac_addr"],
                              "btAdpt": "hci0" 
                             }
@@ -395,7 +399,13 @@ class ManageBridge:
                     response = {"cmd": "config",
                                 "config": self.concConfig 
                                }
-                    self.cbSendConcMsg(response)
+                else:
+                    self.concNoApps = True
+                    response = {"cmd": "config",
+                                "config": "no_apps"
+                               }
+                print ModuleName, "Sending config to conc:", response
+                self.cbSendConcMsg(response)
             else:
                 print ModuleName, "Config req from unknown instance: ", \
                     msg["id"]

@@ -49,7 +49,7 @@ class DataStore():
                                          "timeStamp": timeStamp,
                                          "data": data
                                        })
-        #print ModuleName, "appendData = ", device, data
+            #print ModuleName, "appendData = ", device, data
 
     def addDevice(self, d):
         self.appData[d] = []
@@ -67,7 +67,6 @@ class DataStore():
 
     def enableOutput(self, enable):
         self.enabled = enable
-        print ModuleName, "Output enabled = ", self.enabled
 
 class DevicePage(Resource):
     isLeaf = True
@@ -89,10 +88,13 @@ class DevicePage(Resource):
             request.finish()
 
     def render_GET(self, request):
-        #print ModuleName, "render_GET: ", request
         reqParts = str(request).split(" ")
-        #self.currentDev = reqParts[4][12:]
-        self.currentDev = reqParts[1][8:]
+        #print ModuleName, "reqParts: ", reqParts
+        # Botch until reason for differences is found
+        if reqParts[0] == "<Request":
+            self.currentDev = reqParts[4][12:]
+        else:
+            self.currentDev = reqParts[1][8:]
         #print ModuleName, "render_GET for ", self.currentDev
         try:
             data = self.dataStore.getData(self.currentDev)
@@ -169,22 +171,25 @@ class Concentrator():
                    "body": "ready"}
         self.concFactory = CbClientFactory(self.processServerMsg, initMsg)
         reactor.connectTCP("localhost", 5000, self.concFactory, timeout=10)
+        # Intermediate for UWE use
+        reactor.listenTCP(8880, Site(RootResource(self.dataStore)))
         reactor.run()
 
     def processConf(self, config):
         """Config is based on what apps are available."""
-        #print ModuleName, "processConf: ", config
-        self.cbFactory = {}
-        self.appInstances = []
-        for app in config:
-            iName = app["id"]
-            #print ModuleName, "app: ", iName, " socket: ", appConcSoc
-            if iName not in self.appInstances:
-                # Allows for reconfig on the fly
-                appConcSoc = app["appConcSoc"]
-                self.appInstances.append(iName)
-                self.cbFactory[iName] = CbServerFactory(self.processReqThread)
-                reactor.listenUNIX(appConcSoc, self.cbFactory[iName])
+        print ModuleName, "processConf: ", config
+        if config != "no_apps":
+            self.cbFactory = {}
+            self.appInstances = []
+            for app in config:
+                iName = app["id"]
+                #print ModuleName, "app: ", iName, " socket: ", appConcSoc
+                if iName not in self.appInstances:
+                    # Allows for reconfig on the fly
+                    appConcSoc = app["appConcSoc"]
+                    self.appInstances.append(iName)
+                    self.cbFactory[iName] = CbServerFactory(self.processReqThread)
+                    reactor.listenUNIX(appConcSoc, self.cbFactory[iName])
 
     def processServerMsg(self, msg):
         msg["status"] = "control_msg"
