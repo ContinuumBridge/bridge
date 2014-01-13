@@ -113,7 +113,7 @@ class BridgeControlProtocol(LineReceiver):
               {"adaptor_install": [
                 {
                  "name": currentDev["name"],
-                 "friendlyName": friendly,
+                 "friendly_name": friendly,
                  "id": devNum,
                  "adaptor": 
                    {
@@ -182,7 +182,6 @@ class BridgeControlProtocol(LineReceiver):
         self.config = {"msg": "resp",
                        "uri": "/api/vi/current_bridge/bridge",
                        "data": {"id": 42,
-                                "friendlyName": "Friendly Bridge",
                                 "bridgeManager": "cbmanager.py",
                                 "backupManager": "manager7.py",
                                 "email": "28b45a59a875478ebcbdf327c18dbfb1@continuumbridge.com",
