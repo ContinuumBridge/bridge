@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # cbcommslib.py
-# Copyright (C) ContinuumBridge Limited, 2013 - All Rights Reserved
+# Copyright (C) ContinuumBridge Limited, 2013-2014 - All Rights Reserved
 # Unauthorized copying of this file, via any medium is strictly prohibited
 # Proprietary and confidential
 # Written by Peter Claydon
@@ -26,9 +26,11 @@ class CbAdaptor:
     ModuleName = "CbAdaptor           " 
 
     def __init__(self, argv):
-        self.cbFactory = []
         self.status = "ok"
         self.doStop = False
+        self.configured = False
+        self.cbFactory = {}
+        self.appInstances = []
 
         if len(argv) < 3:
             print "CbAdaptor improper number of arguments"
@@ -37,14 +39,10 @@ class CbAdaptor:
         self.id = argv[2]
         print ModuleName, "Hello from ", self.id
 
-        managerFactory = CbManagerClientFactory()
-        managerFactory.protocol = CbManagerClient
-        managerFactory.id = self.id
-        managerFactory.protocol.id = self.id
-        managerFactory.protocol.type = "adt"
-        managerFactory.protocol.setStatus = self.setStatus
-        managerFactory.protocol.reportStatus = self.reportStatus
-        managerFactory.protocol.processManager = self.processManager
+        initMsg = {"id": self.id,
+                   "type": "adt",
+                   "status": "req-config"} 
+        managerFactory = CbClientFactory(self.processManager, initMsg)
         reactor.connectUNIX(managerSocket, managerFactory, timeout=10)
         reactor.run()
 
@@ -56,20 +54,22 @@ class CbAdaptor:
         """Config is based on what apps are available."""
         #print ModuleName, self.id, " configure: "
         #pprint(config)
-        self.cbFactory = {}
-        self.appInstances = []
         self.name = config["name"]
-        self.friendlyName = config["friendlyName"]
+        self.friendly_name = config["friendly_name"]
         self.device = config["btAdpt"]
         self.addr = config["btAddr"]
         for app in config["apps"]:
-            name = app["name"]
-            adtSoc = app["adtSoc"]
             iName = app["id"]
-            self.appInstances.append(iName)
-            self.cbFactory[iName] = CbServerFactory(self.processReqThread)
-            reactor.listenUNIX(adtSoc, self.cbFactory[iName])
-        self.cbAdtConfigure(config)
+            if iName not in self.appInstances:
+                # processConfig may be called again with updated config
+                name = app["name"]
+                adtSoc = app["adtSoc"]
+                self.appInstances.append(iName)
+                self.cbFactory[iName] = CbServerFactory(self.processReqThread)
+                reactor.listenUNIX(adtSoc, self.cbFactory[iName])
+        if not self.configured:
+            self.cbAdtConfigure(config)
+            self.configured = True
 
     def processManager(self, cmd):
         #print ModuleName, "Received from manager: ", cmd
@@ -123,6 +123,7 @@ class CbApp:
         self.status = "ok"
         self.doStop = False
         self.friendlyLookup = {}
+        self.configured = False
 
         if len(argv) < 3:
             print "cbApp improper number of arguments"
@@ -130,15 +131,11 @@ class CbApp:
         managerSocket = argv[1]
         self.id = argv[2]
         print ModuleName, "Hello from ", self.id
-        
-        managerFactory = CbManagerClientFactory()
-        managerFactory.protocol = CbManagerClient
-        managerFactory.id = self.id
-        managerFactory.protocol.id = self.id
-        managerFactory.protocol.type = "app"
-        managerFactory.protocol.setStatus = self.setStatus
-        managerFactory.protocol.reportStatus = self.reportStatus
-        managerFactory.protocol.processManager = self.processManager
+
+        initMsg = {"id": self.id,
+                   "type": "app",
+                   "status": "req-config"} 
+        managerFactory = CbClientFactory(self.processManager, initMsg)
         reactor.connectUNIX(managerSocket, managerFactory, timeout=10)
         reactor.run()
 
@@ -160,26 +157,32 @@ class CbApp:
         pprint(config)
         # Connect to socket for each adaptor
         for adaptor in config["adts"]:
-            name = adaptor["name"]
             iName = adaptor["id"]
-            adtSoc = adaptor["adtSoc"]
-            friendlyName = adaptor["friendlyName"]
-            self.friendlyLookup.update({iName: friendlyName})
-            self.adtInstances.append(iName)
-            initMsg = {"id": self.id,
-                       "appClass": self.appClass,
-                       "req": "init"}
-            self.cbFactory[iName] = CbClientFactory(self.processRespThread, \
-                                    initMsg)
-            reactor.connectUNIX(adtSoc, self.cbFactory[iName], timeout=10)
+            if iName not in self.adtInstances:
+                # Allows for adding extra adaptors on the fly
+                name = adaptor["name"]
+                adtSoc = adaptor["adtSoc"]
+                friendly_name = adaptor["friendly_name"]
+                self.friendlyLookup.update({iName: friendly_name})
+                self.adtInstances.append(iName)
+                initMsg = {"id": self.id,
+                           "appClass": self.appClass,
+                           "req": "init"}
+                self.cbFactory[iName] = CbClientFactory(self.processRespThread, \
+                                        initMsg)
+                reactor.connectUNIX(adtSoc, self.cbFactory[iName], timeout=10)
         # Connect to Concentrator socket
-        concSocket = config["concentrator"]
-        initMsg = {"appID": self.id,
-                   "req": "init"}
-        self.cbFactory["conc"] = CbClientFactory(self.processConcResp, \
-                                 initMsg)
-        reactor.connectUNIX(concSocket, self.cbFactory["conc"], timeout=10)
-        self.cbAppConfigure(config)
+        if not self.configured:
+            # Connect to the concentrator
+            concSocket = config["concentrator"]
+            initMsg = {"appID": self.id,
+                       "req": "init"}
+            self.cbFactory["conc"] = CbClientFactory(self.processConcResp, \
+                                     initMsg)
+            reactor.connectUNIX(concSocket, self.cbFactory["conc"], timeout=10)
+            # Now call the app's configure method & set self.configured = True
+            self.cbAppConfigure(config)
+            self.configured = True
 
     def processManager(self, cmd):
         #print ModuleName, "Received from manager: ", cmd
@@ -216,12 +219,6 @@ class CbApp:
 
     def cbSendMsg(self, msg, iName):
         self.cbFactory[iName].sendMsg(msg)
-
-    def reportStatus(self):
-        return self.status
-
-    def setStatus(self, newStatus):
-        self.status = newStatus
 
 class CbClientProtocol(LineReceiver):
     def __init__(self, processMsg, initMsg):
@@ -269,35 +266,3 @@ class CbServerFactory(Factory):
 
     def sendMsg(self, msg):
         self.proto.sendMsg(msg)
-
-class CbManagerClient(LineReceiver):
-    def connectionMade(self):
-        msg = {"id": self.id,
-               "type": self.type,
-               "status": "req-config"} 
-        self.sendLine(json.dumps(msg))
-        reactor.callLater(5, self.monitorProcess)
-
-    def lineReceived(self, line):
-        managerMsg = json.loads(line)
-        msg = self.processManager(managerMsg)
-        if msg["status"] != "none":
-            self.sendLine(json.dumps(msg))
-
-    def monitorProcess(self):
-        msg = {"id": self.id,
-               "status": self.reportStatus()}
-        self.sendLine(json.dumps(msg))
-        self.setStatus("ok")
-        reactor.callLater(2, self.monitorProcess)
-
-class CbManagerClientFactory(ReconnectingClientFactory):
-    """Tries to reconnect to socket if connection lost."""
-    def clientConnectionFailed(self, connector, reason):
-        print ModuleName, self.id, " failed to connect"
-        ReconnectingClientFactory.clientConnectionLost(self, connector, reason)
-
-    def clientConnectionLost(self, connector, reason):
-        print ModuleName, self.id, " connection lost"
-        ReconnectingClientFactory.clientConnectionLost(self, connector, reason)
-

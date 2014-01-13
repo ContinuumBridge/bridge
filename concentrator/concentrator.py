@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # concentrator.py
-# Copyright (C) ContinuumBridge Limited, 2013 - All Rights Reserved
+# Copyright (C) ContinuumBridge Limited, 2013-2014 - All Rights Reserved
 # Unauthorized copying of this file, via any medium is strictly prohibited
 # Proprietary and confidential
 # Written by Peter Claydon
@@ -25,8 +25,9 @@ from twisted.web.resource import Resource
 from twisted.web.server import Site
 from twisted.internet.task import deferLater
 from twisted.web.server import NOT_DONE_YET
-from cbcommslib import CbManagerClientFactory
-from cbcommslib import CbManagerClient
+from cbcommslib import CbClientProtocol
+from cbcommslib import CbClientFactory
+from cbcommslib import CbServerProtocol
 from cbcommslib import CbServerFactory
 
 class DataStore():
@@ -155,16 +156,19 @@ class Concentrator():
         print ModuleName, "Hello from ", self.id
 
         self.dataStore = DataStore()
-        managerFactory = CbManagerClientFactory()
-        managerFactory.protocol = CbManagerClient
-        managerFactory.id = self.id
-        managerFactory.protocol.id = self.id
-        managerFactory.protocol.type = "conc"
-        managerFactory.protocol.setStatus = self.setStatus
-        managerFactory.protocol.reportStatus = self.reportStatus
-        managerFactory.protocol.processManager = self.processManager
-        reactor.connectUNIX(managerSocket, managerFactory, timeout=10)
-        reactor.listenTCP(8880, Site(RootResource(self.dataStore)))
+
+        # Connection to manager
+        initMsg = {"id": self.id,
+                   "type": "conc",
+                   "status": "req-config"} 
+        self.managerFactory = CbClientFactory(self.processManager, initMsg)
+        reactor.connectUNIX(managerSocket, self.managerFactory, timeout=10)
+
+        # Connection to websockets process
+        initMsg = {"msg": "status",
+                   "body": "ready"}
+        self.concFactory = CbClientFactory(self.processServerMsg, initMsg)
+        reactor.connectTCP("localhost", 5000, self.concFactory, timeout=10)
         reactor.run()
 
     def processConf(self, config):
@@ -173,23 +177,35 @@ class Concentrator():
         self.cbFactory = {}
         self.appInstances = []
         for app in config:
-            appConcSoc = app["appConcSoc"]
             iName = app["id"]
             #print ModuleName, "app: ", iName, " socket: ", appConcSoc
-            self.appInstances.append(iName)
-            self.cbFactory[iName] = CbServerFactory(self.processReqThread)
-            reactor.listenUNIX(appConcSoc, self.cbFactory[iName])
+            if iName not in self.appInstances:
+                # Allows for reconfig on the fly
+                appConcSoc = app["appConcSoc"]
+                self.appInstances.append(iName)
+                self.cbFactory[iName] = CbServerFactory(self.processReqThread)
+                reactor.listenUNIX(appConcSoc, self.cbFactory[iName])
+
+    def processServerMsg(self, msg):
+        msg["status"] = "control_msg"
+        self.cbSendManagerMsg(msg)
+
+    def processManagerMsg(self, msg):
+        self.concFactory.sendMsg(msg)
 
     def processManager(self, cmd):
         #print ModuleName, "Received from manager: ", cmd
-        if cmd["cmd"] == "stop":
+        if cmd["cmd"] == "msg":
+            self.processManagerMsg(cmd["msg"])
+            msg = {"id": self.id,
+                   "status": "ok"}
+        elif cmd["cmd"] == "stop":
             self.doStop = True
             msg = {"id": self.id,
                    "status": "stopping"}
             #Adaptor must check doStop more often than every 8 seconds
             reactor.callLater(8, self.stopReactor)
         elif cmd["cmd"] == "config":
-            #Call in thread in case user code hangs
             reactor.callInThread(self.processConf, cmd["config"])
             msg = {"id": self.id,
                    "status": "ok"}
@@ -199,7 +215,7 @@ class Concentrator():
         else:
             msg = {"id": self.id,
                    "status": "none"}
-        return msg
+        self.cbSendManagerMsg(msg)
 
     def stopReactor(self):
         try:
@@ -216,11 +232,8 @@ class Concentrator():
     def cbSendMsg(self, msg, iName):
         self.cbFactory[iName].sendMsg(msg)
 
-    def reportStatus(self):
-        return self.status
-
-    def setStatus(self, newStatus):
-        self.status = newStatus
+    def cbSendManagerMsg(self, msg):
+        self.managerFactory.sendMsg(msg)
 
     def processReq(self, req):
         """

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # manager9.py
-# Copyright (C) ContinuumBridge Limited, 2013 - All Rights Reserved
+# Copyright (C) ContinuumBridge Limited, 2013-2014 - All Rights Reserved
 # Unauthorized copying of this file, via any medium is strictly prohibited
 # Proprietary and confidential
 # Written by Peter Claydon
@@ -36,29 +36,32 @@ class BridgeControlProtocol(LineReceiver):
         print "Bridge closed connection"
 
     def checkCmdThread(self):
-        cmd = raw_input("Command > ")
-        #print "Command was: ", cmd
         processed = False
         while not processed:
+            cmd = raw_input("Command > ")
+            #print "Command was: ", cmd
             if cmd == "exit":
                 self.stopProg = True
-                break
-            elif cmd == "":
-                cmd = raw_input("Command > ")
+                processed = True
             elif cmd == "discover":
                 msg  = {"msg": "cmd",
-                        "data": "discover"}
-                self.sendLine(json.dumps(msg))
+                        "body": "discover"}
+                print "Sending command to bridge: ", msg
+                reactor.callFromThread(self.sendLine, json.dumps(msg))
                 processed = True
             elif cmd == "start" or cmd == "stop" or cmd == "stopapps" \
                          or cmd == "stopall":
                 msg  = {"msg": "cmd",
-                        "data": cmd}
-                self.sendLine(json.dumps(msg))
-                cmd = raw_input("Command > ")
+                        "body": cmd}
+                print "Sending command to bridge: ", msg
+                reactor.callFromThread(self.sendLine, json.dumps(msg))
+            elif cmd == "update_config" or cmd == "update":
+                msg  = {"msg": "cmd",
+                        "body": "update_config"}
+                print "Sending command to bridge: ", msg
+                reactor.callFromThread(self.sendLine, json.dumps(msg))
             else:
                 print "Unrecognised input: ", cmd
-                cmd = raw_input("Command > ")
         if self.stopProg:
             reactor.callFromThread(self.doStop)
 
@@ -71,12 +74,12 @@ class BridgeControlProtocol(LineReceiver):
         sys.exit
             
     def checkCmd(self):
-        d = threads.deferToThread(self.checkCmdThread)
+        reactor.callInThread(self.checkCmdThread)
         if self.stopProg:
             self.doStop()
 
     def processDiscovered(self, dat):
-        print "processDiscovered: ", dat
+        #print "processDiscovered: ", dat
         numDevs = len(dat)
         if numDevs != 0:
             if numDevs > 1: 
@@ -96,8 +99,8 @@ class BridgeControlProtocol(LineReceiver):
                     gotPurpose = True
             self.buildBridgeData(friendly, purpose, currentDev) 
         else:
-            print("No devices found. Try again.")
-            self.checkCmd()
+            print("No devices found. Please try again.")
+        self.checkCmd()
 
     def buildBridgeData(self, friendly, purpose, currentDev):
         numDevs = len(self.devs)
@@ -111,28 +114,27 @@ class BridgeControlProtocol(LineReceiver):
                 {
                  "name": currentDev["name"],
                  "friendlyName": friendly,
-                 "id": "dev" + str(devNum),
-                 "btAddr": currentDev["addr"],
+                 "id": devNum,
                  "adaptor": 
                    {
                     "name": "CB SensorTag Adt",
                     "provider": "ContinuumBridge",
                     "purpose": purpose,
-                    "method": currentDev["method"],
+                    "protocol": currentDev["protocol"],
                     "version": 2,
                     "url": "www.continuumbridge.com/adt/cbSensorTagAdtV2",
                     "exe": exe,
                     "resource_uri": "/api/V1/device/" + str(devNum)
                     },
                  "device": "/api/v1/device/" + str(devNum),
-                 "id": str(devNum),
+                 "id": devNum,
                  "resource_uri": "/api/v1/adaptor_install/" + str(devNum)
                  }
                 ],
                "bridge": "random bridge test text",
                "device": "random device test text",
-               "id": str(devNum),
-               "mac_addr": currentDev["addr"],
+               "id": devNum,
+               "mac_addr": currentDev["mac_addr"],
                "resource_url": "/api/V1/device/" + str(devNum)
               }
         self.devs.append(dev)
@@ -146,7 +148,7 @@ class BridgeControlProtocol(LineReceiver):
         numApps = len(self.apps)
         if numApps == 0:
             appNum = numApps + 1
-            app = {"app":{"id": str(appNum),
+            app = {"app":{"id": appNum,
                           "name": "living",
                           "provider": "ContinuumBridge",
                           "version": 2,
@@ -156,7 +158,7 @@ class BridgeControlProtocol(LineReceiver):
                          },
                    "bridge": "",
                    "device_permissions": self.appDevs,
-                   "id": str(appNum),
+                   "id": appNum,
                    "resource_uri": "/api/v1/app_install/" + str(appNum)
                   }
             self.apps.append(app)
@@ -189,32 +191,36 @@ class BridgeControlProtocol(LineReceiver):
                                 "apps": self.apps
                                }
                       }
+        #:w
         self.sendLine(json.dumps(self.config))
     
     def lineReceived(self, rawMsg):
-        print "Message received: ", rawMsg
         self.watchTime = time.time()
         msg = json.loads(rawMsg)
+        print "Message received: ", 
+        pprint(msg)
         if msg["msg"] == "req":
             if msg["req"] == "get":
-                print "Sync requested"
-                self.sendLine(json.dumps(self.config))
-            elif msg["req"] == "discovered":
-                print "Discovered devices:"
-                pprint(msg)
-                self.processDiscovered(msg["data"])
-                self.checkCmd()
-            elif msg["req"] == "reqSync":
-                print "Sync requested"
-                self.sendLine(json.dumps(self.config))
+                if msg["uri"] == "/api/v1/current_bridge/bridge":
+                    print "Config requested"
+                    self.sendLine(json.dumps(self.config))
+                else:
+                    print "Unrecognised GET"
+            elif msg["req"] == "post":
+                if msg["uri"] == "/api/v1/device_discovery":
+                    print "Discovered devices:"
+                    pprint(msg)
+                    self.processDiscovered(msg["body"])
+                    #self.checkCmd()
+                else:
+                    print "Unrecognised POST"
+            else:
+                print "Unrecognised req from bridge"
         elif msg["msg"] == "status":
-            if msg["data"] == "ready":
+            if msg["body"] == "ready":
                 print "Bridge ready"
                 self.checkCmd()
-            elif msg["data"] == "reqSync":
-                print "Sync requested"
-                self.sendLine(json.dumps(self.config))
-            elif msg["data"] != "ok":
+            elif msg["body"] != "ok":
                 print "Unknown message received from bridge" 
         else:
             print "Unknown message received from bridge" 

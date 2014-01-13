@@ -20,6 +20,8 @@ from twisted.internet import task
 from twisted.protocols.basic import LineReceiver
 from twisted.internet.protocol import ReconnectingClientFactory
 from pprint import pprint
+from cbcommslib import CbServerProtocol
+from cbcommslib import CbServerFactory
 
 class ManageBridge:
 
@@ -28,56 +30,94 @@ class ManageBridge:
         """
         self.bridgeRoot = os.getenv('CB_BRIDGE_ROOT', "/home/bridge/bridge")
         print ModuleName, "CB_BRIDGE_ROOT = ", self.bridgeRoot
+        self.noCloud = os.getenv('CB_NO_CLOUD', "False")
+        print ModuleName, "CB_NO_CLOUD = ", self.noCloud
         self.discovered = False
         self.configured = False
         self.reqSync = False
         self.stopping = False
         self.appProcs = []
         self.concConfig = []
-        #status = self.readConfig()
-        #print ModuleName, status
-      
+        self.cbFactory = {} 
+        status = self.readConfig()
+        print ModuleName, status
+        self.initBridge()
+
     def initBridge(self):
-        print ModuleName, "Hello from the Bridge Manager"
+        if self.noCloud != "True":
+            print ModuleName, "Bridge Manager Starting JS Concentrator"
+            exe = "nodejs"
+            path = self.bridgeRoot + "/nodejs/index.js"
+            try:
+                p = subprocess.Popen([exe, path])
+                print ModuleName, "Started node.js"
+            except:
+                print ModuleName, "node.js failed to start. exe = ", exe
+            # Give time for node interface to start
+        else:
+            print ModuleName, "Running without Cloud Server"
+        time.sleep(2)
+
+        if self.configured:
+            reactor.callLater(1, self.startAll)
+        self.startConcentrator()
+        reactor.run()
 
     def listMgrSocs(self):
-        mgrSocs =[] 
+        mgrSocs = {}
         for d in self.devices:
-            mgrSocs.append(d["adaptor_install"][0]["mgrSoc"])
+            mgrSocs[d["adaptor_install"][0]["id"]] = d["adaptor_install"][0]["mgrSoc"]
         for a in self.apps:
-            mgrSocs.append(a["app"]["mgrSoc"])
-        mgrSocs.append("mgr-conc")
+            mgrSocs[a["app"]["id"]] = a["app"]["mgrSoc"]
         return mgrSocs
 
-    def startAll(self):
-        self.stopping = False
-        # Open sockets for communicating with all apps and adaptors
-        mgrSocs = self.listMgrSocs()
-        for s in mgrSocs:
-            try:
-                reactor.listenUNIX(s, mgrSocFactory, backlog=4)
-                print ModuleName, "Opened manager socket ", s
-            except:
-                print ModuleName, "Manager socket already exits: ", s
+    def startConcentrator(self):
+        # Open a socket for communicating with the concentrator
+        s = "mgr-conc"
+        try:
+            self.cbConcFactory = CbServerFactory(self.processClient)
+            reactor.listenUNIX(s, self.cbConcFactory, backlog=4)
+            print ModuleName, "Opened manager socket ", s
+        except:
+            print ModuleName, "Socket already exits: ", s
 
-        # Start concentrator 
+        # Now start the concentrator in a subprocess
         exe = self.concPath
         id = "conc"
         mgrSoc = "mgr-conc"
         try:
-            p = subprocess.Popen([exe, mgrSoc, id])
-            self.appProcs.append(p)
+            self.concProc = subprocess.Popen([exe, mgrSoc, id])
             print ModuleName, "Started concentrator"
         except:
             print ModuleName, "Concentrator failed to start"
             print ModuleName, "Params: ", exe, id, mgrSoc
-        # Give time for concentrator to start
-        time.sleep(2)
 
+    def startAll(self):
+        self.stopping = False
+        # Manager sockets may already exist. If so, delete them
+        mgrSocs = self.listMgrSocs()
+        for s in mgrSocs:
+            try:
+                os.remove(mgrSocs[s])
+            except:
+                pass
+        # Clear dictionary so that we can recreate sockets
+        self.cbFactory.clear()
+
+        # Open sockets for communicating with all apps and adaptors
+        for s in mgrSocs:
+            try:
+                self.cbFactory[s] = CbServerFactory(self.processClient)
+                reactor.listenUNIX(mgrSocs[s], self.cbFactory[s], backlog=4)
+                print ModuleName, "Opened manager socket ", s,  mgrSocs[s]
+            except:
+                print ModuleName, "Manager socket already exits: ", s, mgrSocs[s]
+
+        # Start concentrator 
         # Start adaptors
         for d in self.devices:
             exe = d["adaptor_install"][0]["adaptor"]["exe"]
-            fName = d["friendly_name"]
+            fName = d["adaptor_install"][0]["friendly_name"]
             id = d["adaptor_install"][0]["id"]
             mgrSoc = d["adaptor_install"][0]["mgrSoc"]
             try:
@@ -103,7 +143,10 @@ class ManageBridge:
                 print ModuleName, id, " started"
             except:
                 print ModuleName, id, " failed to start"
-
+        msg = {"msg": "status",
+               "body": "started"}
+        #self.cbSendMsg(msg, "conc")
+ 
     def doDiscover(self):
         self.discoveredDevices = {}
         exe = self.bridgeRoot + "/manager/discovery.py"
@@ -111,23 +154,27 @@ class ManageBridge:
         output = subprocess.check_output([exe, type])
         discOutput = json.loads(output)
         self.discoveredDevices["msg"] = "req"
-        self.discoveredDevices["req"] = "discovered"
-        self.discoveredDevices["data"] = []
+        self.discoveredDevices["req"] = "post"
+        self.discoveredDevices["uri"] = "/api/v1/device_discovery"
+        self.discoveredDevices["body"] = []
         if self.configured:
-            for d in discOutput["data"]:
+            for d in discOutput["body"]:
                 addrFound = False
-                if d["method"] == "btle":
+                if d["protocol"] == "btle":
                     for oldDev in self.devices:
-                       if oldDev["data"]["method"] == "btle": 
-                           if d["addr"] == oldDev["data"]["btAddr"]:
+                       if oldDev["adaptor_install"][0]["adaptor"]["protocol"] == "btle": 
+                           if d["mac_addr"] == oldDev["mac_addr"]:
                                addrFound = True
                 if addrFound == False:
-                    self.discoveredDevices["data"].append(d)  
+                    self.discoveredDevices["body"].append(d)  
         else:
-            for d in discOutput["data"]:
-                self.discoveredDevices["data"].append(d)  
+            for d in discOutput["body"]:
+                self.discoveredDevices["body"].append(d)  
         print ModuleName, "Discovered devices:"
         print ModuleName, self.discoveredDevices
+        msg = {"cmd": "msg",
+               "msg": self.discoveredDevices}
+        self.cbSendConcMsg(msg)
         self.discovered = True
 
     def discover(self):
@@ -137,18 +184,17 @@ class ManageBridge:
         appRoot = self.bridgeRoot + "/apps/"
         adtRoot = self.bridgeRoot + "/adaptors/"
         self.concPath = self.bridgeRoot + "/concentrator/concentrator.py"
-        #try:
-        with open('bridge.config', 'r') as configFile:
-            config = json.load(configFile)
-            print ModuleName, "readConfig"
-            pprint(config)
-            self.bridgeID = config["body"]["id"]
-            self.apps = config["body"]["apps"]
-            self.devices = config["body"]["devices"]
-            self.configured = True
-        #except:
-            #print ModuleName, "Warning. No config file exists"
-            #self.configured = False
+        try:
+            with open('bridge.config', 'r') as configFile:
+                config = json.load(configFile)
+                print ModuleName, "readConfig"
+                pprint(config)
+                self.apps = config["data"]["apps"]
+                self.devices = config["data"]["devices"]
+                self.configured = True
+        except:
+            print ModuleName, "Warning. No config file exists"
+            self.configured = False
 
         if self.configured:
             # Process config to determine routing:
@@ -192,6 +238,7 @@ class ManageBridge:
             print ModuleName, "Devices:"
             pprint(self.devices)
             print ""
+        return "Configured"
     
     def updateConfig(self, msg):
         print ModuleName, "Config received from controller:"
@@ -214,32 +261,61 @@ class ManageBridge:
             elif msg["body"] == "discover":
                 self.discover()
             elif msg["body"] == "stopapps":
-                self.stopApps()
+                if not self.stopping:
+                    self.stopApps()
             elif msg["body"] == "stopall" or msg["body"] == "stop":
                 if not self.stopping:
                     print ModuleName, "Processing stop. Stopping apps"
                     self.stopApps()
-                    reactor.callLater(10, self.stopManager)
+                    reactor.callLater(10, self.stopAll)
                 else:
-                    self.stopManager()
+                    self.stopAll()
             elif msg["body"] == "update_config":
-                self.reqSync = True
+                req = {"cmd": "msg",
+                       "msg": {"msg": "req",
+                               "req": "get",
+                               "uri": "/api/v1/current_bridge/bridge"}
+                      }
+                self.cbSendConcMsg(req)
         elif msg["msg"] == "resp":
             self.updateConfig(msg)
 
+    def stopAll(self):
+        """ Kills concentrator & nodejs processes, removes sockets & kills itself """
+        print ModuleName, "Stopping concentrator"
+        msg = {"cmd": "stop"}
+        self.cbSendConcMsg(msg)
+        # Give concentrator a change to stop before killing it and its sockets
+        reactor.callLater(1, self.stopManager)
+
     def stopManager(self):
-        print ModuleName, "Stopping manager"
+        try:
+            self.concProc.kill()
+        except:
+            print ModuleName, "No concentrator process to kill"
+        for soc in self.concConfig:
+            socket = soc["appConcSoc"]
+            try:
+                os.remove(socket) 
+                print ModuleName, socket, " removed"
+            except:
+                print ModuleName, socket, " already removed"
+        print ModuleName, "Stopping reactor"
         reactor.stop()
-        #time.sleep(1)
-        #self.delManagerSockets()
         sys.exit
 
     def stopApps(self):
+        """ Asks apps & adaptors to clean up nicely and die. """
         print ModuleName, "Stopping apps and adaptors"
         self.stopping = True
-        reactor.callLater(9, self.killAppProcs)
+        mgrSocs = self.listMgrSocs()
+        for a in mgrSocs:
+            msg = {"cmd": "stop"}
+            self.cbSendMsg(msg, a)
+        reactor.callLater(8, self.killAppProcs)
 
     def killAppProcs(self):
+        """ In case apps & adaptors have not shut down, kill their processes. """
         for p in self.appProcs:
             try:
                 p.kill()
@@ -253,45 +329,35 @@ class ManageBridge:
                     print ModuleName, socket, " removed"
                 except:
                     print ModuleName, socket, " already removed"
-        for soc in self.concConfig:
-                socket = soc["appConcSoc"]
-                try:
-                    os.remove(socket) 
-                    print ModuleName, socket, " removed"
-                except:
-                    print ModuleName, socket, " already removed"
+        msg = {"cmd": "msg",
+               "msg": {"msg": "status",
+                       "body": "apps_stopped"
+                      }
+              }
+        self.cbSendConcMsg(msg)
  
     def delManagerSockets(self):
         mgrSocs = self.listMgrSocs()
         for s in mgrSocs:
             try:
-                os.remove(s)
-                print ModuleName, "Removed manager socket ", s
+                os.remove(mgrSocs[s])
+                print ModuleName, "Removed manager socket ", mgrSocs[s]
             except:
-                print ModuleName, "Unable to remove manager socket: ", s
+                print ModuleName, "Unable to remove manager socket: ", mgrSocs[s]
+        # Clear dictionary so that we can recreate sockets
+        self.cbFactory.clear()
 
-    def checkBridge(self):
-        return True
+    def cbSendMsg(self, msg, iName):
+        self.cbFactory[iName].sendMsg(msg)
 
-    def getManagerMsg(self):
-        if self.discovered:
-            msg = self.discoveredDevices
-            self.discovered = False
-        elif self.reqSync:
-            msg = {"msg": "req",
-                   "req": "get",
-                   "uri": "/api/v1/current_bridge/bridge"}
-            self.reqSync = False
-        else:
-            msg = {"msg": "status",
-                   "data": "ok"}
-        return msg
+    def cbSendConcMsg(self, msg):
+        self.cbConcFactory.sendMsg(msg)
 
     def processClient(self, msg):
-        #print ModuleName, "Recevied msg from client", msg
-        response = {"cmd": "error"}
-        if self.stopping:
-            response = {"cmd": "stop"}
+        print ModuleName, "Received msg from client", msg
+        if msg["status"] == "control_msg":
+            del msg["status"]
+            self.processControlMsg(msg)
         elif msg["status"] == "req-config":
             if msg["type"] == "app":
                 for a in self.apps:
@@ -299,10 +365,11 @@ class ManageBridge:
                         for c in self.concConfig:
                             if c["id"] == msg["id"]:
                                 conc = c["appConcSoc"]
+                                response = {"cmd": "config",
+                                            "config": {"adts": a["device_permissions"],
+                                                       "concentrator": conc}}
+                                self.cbSendMsg(response, msg["id"])
                                 break
-                        response = {"cmd": "config",
-                                    "config": {"adts": a["device_permissions"],
-                                               "concentrator": conc}}
                         break
             elif msg["type"] == "adt": 
                 for d in self.devices:
@@ -312,91 +379,28 @@ class ManageBridge:
                         "config": 
                             {"apps": d["adaptor_install"][0]["apps"], 
                              "name": d["adaptor_install"][0]["name"],
-                             "friendlyName": d["adaptor_install"][0]["friendly_name"],
-                             "btAddr": d["adaptor_install"][0]["btAddr"],
+                             "friendly_name": d["adaptor_install"][0]["friendly_name"],
+                             "btAddr": d["mac_addr"],
                              "btAdpt": "hci0" 
                             }
                         }
+                        self.cbSendMsg(response, msg["id"])
                         break
             elif msg["type"] == "conc":
                 self.concConfig = []
-                for a in self.apps:
-                    self.concConfig.append({"id": a["app"]["id"],
-                                       "appConcSoc": a["app"]["concSoc"]})
-                response = {"cmd": "config",
-                            "config": self.concConfig 
-                           }
+                if self.configured:
+                    for a in self.apps:
+                        self.concConfig.append({"id": a["app"]["id"],
+                                           "appConcSoc": a["app"]["concSoc"]})
+                    response = {"cmd": "config",
+                                "config": self.concConfig 
+                               }
+                    self.cbSendConcMsg(response)
             else:
                 print ModuleName, "Config req from unknown instance: ", \
                     msg["id"]
                 response = {"cmd": "error"}
-        else:
-            response = {"cmd": "ok"}
-        return response
-
-class ConcProtocol(LineReceiver):
-    def connectionMade(self):
-        msg = {"msg": "status",
-               "data": "ready"}
-        self.sendLine(json.dumps(msg))
-        reactor.callLater(2, self.monitorBridge)
-
-    def lineReceived(self, line):
-        print ModuleName, line
-        managerMsg = json.loads(line)
-        msg = json.loads(line)
-        m.processControlMsg(msg)
-
-    def monitorBridge(self):
-        if m.checkBridge():
-            msg = m.getManagerMsg()
-            self.sendLine(json.dumps(msg))
-        reactor.callLater(2, self.monitorBridge)
-
-class ConcFactory(ReconnectingClientFactory):
-    """ Tries to reconnect to socket if connection lost """
-    def clientConnectionFailed(self, connector, reason):
-        print ModuleName, "Failed to connect to concentrator"
-        print ModuleName,  reason.getErrorMessage()
-        ReconnectingClientFactory.clientConnectionLost(self, connector, reason)
-
-    def clientConnectionLost(self, connector, reason):
-        print ModuleName, "Connection to concentrator lost"
-        print ModuleName, reason.getErrorMessage()
-        ReconnectingClientFactory.clientConnectionLost(self, connector, reason)
-
-class ManagerSockets(LineReceiver):
-
-    def lineReceived(self, data):
-        if data != "":
-            response = m.processClient(json.loads(data))
-        else:
-            response = {"cmd": "blank message"}
-        self.sendLine(json.dumps(response))
-
-    def connectionMade(self):
-        print ModuleName, "Connection made to ", self.transport.getPeer()
-
-    def connectionLost(self, reason):
-        print ModuleName, "Disconnected"
+                self.cbSendMsg(response, msg["id"])
 
 if __name__ == '__main__':
-
-    if len(sys.argv) < 2:
-        print "Usage: manager <concentrator socket address>"
-        exit(1)
-    concSocket = sys.argv[1]
-    print ModuleName, "Concentrator = ", concSocket
-
     m = ManageBridge()
-    m.initBridge()
-
-    concFactory = ConcFactory()
-    concFactory.protocol = ConcProtocol
-    reactor.connectTCP("localhost", int(concSocket), concFactory, timeout=10)
-
-    # Sockets factory for communicating with each adaptor and app
-    mgrSocFactory=Factory()
-    mgrSocFactory.protocol = ManagerSockets
-
-    reactor.run()

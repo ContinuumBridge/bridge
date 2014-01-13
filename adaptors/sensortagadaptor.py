@@ -19,7 +19,8 @@ class Adaptor(CbAdaptor):
         #CbAdaptor methods processReq & cbAdtConfig MUST be subclassed
         CbAdaptor.processReq = self.processReq
         CbAdaptor.cbAdtConfigure = self.configure
-        self.connected = False
+        self.connected = False  # Indicates we are connected to SensorTag
+        self.configured = False # Indicates that adt has been configured
         self.status = "ok"
         self.tempApps = []
         self.irTempApps = []
@@ -30,7 +31,7 @@ class Adaptor(CbAdaptor):
         CbAdaptor.__init__(self, argv)
 
     def initSensorTag(self):
-        print ModuleName, "initSensorTag", self.id, " - ", self.friendlyName
+        print ModuleName, "initSensorTag", self.id, " - ", self.friendly_name
         try:
             cmd = 'gatttool -i ' + self.device + ' -b ' + self.addr + \
                   ' --interactive'
@@ -45,11 +46,11 @@ class Adaptor(CbAdaptor):
         index = self.gatt.expect(['successful', pexpect.TIMEOUT], timeout=5)
         if index == 1:
             print ModuleName, "Connection to device timed out for", self.id, \
-                " - ", self.friendlyName
+                " - ", self.friendly_name
             self.gatt.kill(9)
             return "timeout"
         else:
-            print ModuleName, self.id, " - ", self.friendlyName, " connected"
+            print ModuleName, self.id, " - ", self.friendly_name, " connected"
             # Enable accelerometer
             self.gatt.sendline('char-write-cmd 0x31 01')
             self.gatt.expect('\[LE\]>')
@@ -92,7 +93,7 @@ class Adaptor(CbAdaptor):
             if tagStatus != "ok":
                 print ModuleName
                 print ModuleName, "ERROR. ", self.id, " - ", \
-                    self.friendlyName, " failed to initialise"
+                    self.friendly_name, " failed to initialise"
                 print ModuleName, "Please press side button"
                 print ModuleName, \
                       "If problem persists SensorTag may be out of range"
@@ -100,7 +101,7 @@ class Adaptor(CbAdaptor):
             # Start a thread that continually gets accel and temp values
             t = Thread(target=self.getValues)
             t.start()
-            print ModuleName, self.id, " - ", self.friendlyName, \
+            print ModuleName, self.id, " - ", self.friendly_name, \
                 "successfully initialised"
  
     def s16tofloat(self, s16):
@@ -158,12 +159,12 @@ class Adaptor(CbAdaptor):
                 # A timeout error. Attempt to restart the SensorTag
                 status = ""
                 while status != "ok" and not self.doStop:
-                    print ModuleName, self.id, " - ", self.friendlyName, \
+                    print ModuleName, self.id, " - ", self.friendly_name, \
                         " gatt timeout"
                     self.gatt.kill(9)
                     time.sleep(1)
                     status = self.initSensorTag()   
-                    print ModuleName, self.id, " - ", self.friendlyName, \
+                    print ModuleName, self.id, " - ", self.friendly_name, \
                         " re-init status = ", status
             else:
                 type = self.gatt.before.split()
@@ -196,11 +197,11 @@ class Adaptor(CbAdaptor):
                     pass
         try:
             self.gatt.kill(9)
-            print ModuleName, self.id, " - ", self.friendlyName, \
+            print ModuleName, self.id, " - ", self.friendly_name, \
                 " gatt process killed"
         except:
             sys.stderr.write(ModuleName + "Error: could not kill pexpect for" \
-                + self.id + " - " + self.friendlyName + "\n")
+                + self.id + " - " + self.friendly_name + "\n")
 
     def sendAccel(self, accel):
         msg = {"id": self.id,
@@ -248,6 +249,7 @@ class Adaptor(CbAdaptor):
         Called in a thread and so it is OK if it blocks.
         Called separately for every app that can make requests.
         """
+        #print ModuleName, "processReq, req = ", req
         tagStatus = "ok"
         if req["req"] == "init":
             resp = {"name": self.name,
@@ -271,23 +273,54 @@ class Adaptor(CbAdaptor):
                     "content": "services"}
             self.cbSendMsg(resp, req["id"])
         elif req["req"] == "services":
-            for s in req["services"]:
-                if s == "temperature":
+            # Apps may turn on or off services from time to time
+            # So it is necessary to be able to remove as well as append
+            # Can't just destory the lists as they may be being used elsewhere
+            if req["id"] not in self.tempApps:
+                if "temperature" in req["services"]:
                     self.tempApps.append(req["id"])  
-                elif s == "ir_temperature":
+            else:
+                if "temperature" not in req["services"]:
+                    self.tempApps.remove(req["id"])  
+
+            if req["id"] not in self.irTempApps:
+                if "ir_temperature" in req["services"]:
                     self.irTempApps.append(req["id"])  
-                elif s == "acceleration":
-                    self.accelApps.append(req["id"])
-                elif s == "rel_humidity":
-                    self.humidApps.append(req["id"])
-                elif s == "buttons":
-                    self.buttonApps.append(req["id"])
+            else:
+                if "ir_temperature" not in req["services"]:
+                    self.irTempApps.remove(req["id"])  
+
+            if req["id"] not in self.accelApps:
+                if "acceleration" in req["services"]:
+                    self.irTempApps.append(req["id"])  
+            else:
+                if "acceleration" not in req["services"]:
+                    self.accelApps.remove(req["id"])  
+
+            if req["id"] not in self.humidApps:
+                if "rel_humidity" in req["services"]:
+                    self.humidApps.append(req["id"])  
+            else:
+                if "rel_humidity" not in req["services"]:
+                    self.humidApps.remove(req["id"])  
+
+            if req["id"] not in self.buttonApps:
+                if "buttons" in req["services"]:
+                    self.buttonApps.append(req["id"])  
+            else:
+                if "buttons" not in req["services"]:
+                    self.buttonApps.remove(req["id"])  
         else:
             pass
 
     def configure(self, config):
-        """Config is based on what apps are to be connected."""
-        self.startApp()
+        """Config is based on what apps are to be connected.
+            May be called again if there is a new configuration, which
+            could be because a new app has been added.
+        """
+        if not self.configured:
+            self.startApp()
+            self.configured = True
 
 if __name__ == '__main__':
     adaptor = Adaptor(sys.argv)
