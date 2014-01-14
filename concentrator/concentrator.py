@@ -89,13 +89,11 @@ class DevicePage(Resource):
 
     def render_GET(self, request):
         reqParts = str(request).split(" ")
-        #print ModuleName, "reqParts: ", reqParts
         # Botch until reason for differences is found
         if reqParts[0] == "<Request":
             self.currentDev = reqParts[4][12:]
         else:
             self.currentDev = reqParts[1][8:]
-        #print ModuleName, "render_GET for ", self.currentDev
         try:
             data = self.dataStore.getData(self.currentDev)
         except:

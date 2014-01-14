@@ -12,7 +12,9 @@ import sys
 import time
 import os
 from cbcommslib import CbAdaptor
-from threading import Thread
+#from threading import Thread
+from twisted.internet import threads
+from twisted.internet import reactor
 
 class Adaptor(CbAdaptor):
     def __init__(self, argv):
@@ -83,6 +85,7 @@ class Adaptor(CbAdaptor):
             self.gatt.expect('\[LE\]>')
             # We're connected!
             self.connected = True
+            print ModuleName, self.id, " - ", self.friendly_name, " configured"
             return "ok"
 
     def startApp(self):
@@ -104,8 +107,9 @@ class Adaptor(CbAdaptor):
                       "If problem persists SensorTag may be out of range"
         if not self.doStop:
             # Start a thread that continually gets accel and temp values
-            t = Thread(target=self.getValues)
-            t.start()
+            #t = Thread(target=self.getValues)
+            #t.start()
+            d = threads.deferToThread(self.getValues)
             print ModuleName, self.id, " - ", self.friendly_name, \
                 "successfully initialised"
  
@@ -214,7 +218,7 @@ class Adaptor(CbAdaptor):
                "data": accel,
                "timeStamp": time.time()}
         for a in self.accelApps:
-            self.cbSendMsg(msg, a)
+            reactor.callFromThread(self.cbSendMsg, msg, a)
 
     def sendHumidity(self, relHumidity):
         msg = {"id": self.id,
@@ -222,7 +226,7 @@ class Adaptor(CbAdaptor):
                "timeStamp": time.time(),
                "data": relHumidity}
         for a in self.humidApps:
-            self.cbSendMsg(msg, a)
+            reactor.callFromThread(self.cbSendMsg, msg, a)
 
     def sendTemp(self, ambT):
         msg = {"id": self.id,
@@ -230,7 +234,7 @@ class Adaptor(CbAdaptor):
                "content": "temperature",
                "data": ambT}
         for a in self.tempApps:
-            self.cbSendMsg(msg, a)
+            reactor.callFromThread(self.cbSendMsg, msg, a)
 
     def sendIrTemp(self, objT):
         msg = {"id": self.id,
@@ -238,7 +242,7 @@ class Adaptor(CbAdaptor):
                "content": "ir_temperature",
                "data": objT}
         for a in self.irTempApps:
-            self.cbSendMsg(msg, a)
+            reactor.callFromThread(self.cbSendMsg, msg, a)
 
     def sendButtons(self, buttons):
         msg = {"id": self.id,
@@ -246,7 +250,7 @@ class Adaptor(CbAdaptor):
                "content": "buttons",
                "data": buttons}
         for a in self.buttonApps:
-            self.cbSendMsg(msg, a)
+            reactor.callFromThread(self.cbSendMsg, msg, a)
 
     def processReq(self, req):
         """

@@ -23,6 +23,10 @@ import json
 if __name__ == '__main__':
     discoveredAddresses = []
     try:
+        os.system("sudo hciconfig hci0 up")
+    except:
+        print ModuleName, "Unable to bring up hci0 interface"
+    try:
         cmd = "sudo hcitool lescan"
         p = pexpect.spawn(cmd)
     except:
