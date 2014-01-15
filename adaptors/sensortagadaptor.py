@@ -299,7 +299,7 @@ class Adaptor(CbAdaptor):
 
             if req["id"] not in self.accelApps:
                 if "acceleration" in req["services"]:
-                    self.irTempApps.append(req["id"])  
+                    self.accelApps.append(req["id"])  
             else:
                 if "acceleration" not in req["services"]:
                     self.accelApps.remove(req["id"])  
