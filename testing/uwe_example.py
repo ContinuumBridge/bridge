@@ -10,20 +10,25 @@ from datetime import datetime
 import json
 import time
 from pprint import pprint
+import sys
 import thread
+
+if len(sys.argv) < 2:
+    print "Usage: manager <bridge ip address>:<bridge socket>"
+    exit(1)
+ipAddress = sys.argv[1]
+port = "8880"
 
 doStop = False
 
 def getCmd():
     global doStop
-    cmd = raw_input("Type any key to stop")
+    cmd = raw_input("Press return to stop")
     doStop = True
     return True
 
 thread.start_new_thread(getCmd, ())
 
-ipAddress = "192.168.0.23"
-port = "8880"
 baseUrl = "http://" + ipAddress + ":" + port +"/"
 configUrl = baseUrl + "config"
 deviceUrl = baseUrl + "device"
@@ -55,6 +60,7 @@ idToName = config["config"]["idToName"]
 print "idToName: ", idToName
 print ""
 
+# Parse servies to find what devices are present & add these to our list
 devices = []
 for d in config["config"]["services"]:
     devices.append(d["id"])
@@ -69,14 +75,14 @@ while not doStop:
                                   headers={'Content-Type': 'application/json'})
         #pprint(resp)
         bridgeData = json.loads(content)
-        #pprint(json.loads(content))
+        #pprint(bridgeData)
         for d in bridgeData["data"]:
             if d["type"] == "temp":
                 localTime = time.localtime(d["timeStamp"])
                 now = time.strftime("%H:%M:%S", localTime)
                 dat = now +\
                     "   " + idToName[bridgeData["device"]] + \
-                    " temp = " + \
+                    " temp  =  " + \
                     str("%4.1f" %d["data"]) 
                 print dat
             elif d["type"] == "buttons":
@@ -88,6 +94,17 @@ while not doStop:
                     str(d["data"]["leftButton"]) + \
                     " right " + str(d["data"]["rightButton"])
                 print dat
+            elif d["type"] == "accel":
+                localTime = time.localtime(d["timeStamp"])
+                now = time.strftime("%H:%M:%S", localTime)
+                dat = now +\
+                    "   " + idToName[bridgeData["device"]] + \
+                    " accel = " + str("%2.2f" %d["data"][0]) + \
+                    "  " + str("%2.2f" %d["data"][1]) + \
+                    "  " + str("%2.2f" %d["data"][2])
+
+                print dat
+
 
 # Disable output of values
 config = {"enable": False}
