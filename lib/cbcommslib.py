@@ -58,6 +58,7 @@ class CbAdaptor:
         self.friendly_name = config["friendly_name"]
         self.device = config["btAdpt"]
         self.addr = config["btAddr"]
+        self.sim = config["sim"]
         for app in config["apps"]:
             iName = app["id"]
             if iName not in self.appInstances:

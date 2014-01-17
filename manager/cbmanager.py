@@ -32,6 +32,8 @@ class ManageBridge:
         print ModuleName, "CB_BRIDGE_ROOT = ", self.bridgeRoot
         self.noCloud = os.getenv('CB_NO_CLOUD', "False")
         print ModuleName, "CB_NO_CLOUD = ", self.noCloud
+        self.sim = os.getenv('CB_SIM', "False")
+        print ModuleName, "CB_SIM = ", self.sim
         self.controllerAddr = os.getenv('CB_CONTROLLER_ADDR', '54.194.28.63')
         print ModuleName, "CB_CONTROLLER_ADDR = ", self.controllerAddr
         self.email = "cde5fb1645e74314a3e6841a4df0828d@continuumbridge.com"
@@ -152,8 +154,8 @@ class ManageBridge:
     def doDiscover(self):
         self.discoveredDevices = {}
         exe = self.bridgeRoot + "/manager/discovery.py"
-        type = "btle"
-        output = subprocess.check_output([exe, type])
+        protocol = "btle"
+        output = subprocess.check_output([exe, protocol, self.sim])
         discOutput = json.loads(output)
         self.discoveredDevices["msg"] = "req"
         self.discoveredDevices["req"] = "post"
@@ -370,6 +372,7 @@ class ManageBridge:
                             if c["id"] == msg["id"]:
                                 conc = c["appConcSoc"]
                                 response = {"cmd": "config",
+                                            "sim": self.sim,
                                             "config": {"adts": a["device_permissions"],
                                                        "concentrator": conc}}
                                 self.cbSendMsg(response, msg["id"])
@@ -385,7 +388,8 @@ class ManageBridge:
                              "name": d["adaptor_install"][0]["adaptor"]["name"],
                              "friendly_name": d["friendly_name"],
                              "btAddr": d["mac_addr"],
-                             "btAdpt": "hci0" 
+                             "btAdpt": "hci0", 
+                             "sim": self.sim
                             }
                         }
                         self.cbSendMsg(response, msg["id"])
