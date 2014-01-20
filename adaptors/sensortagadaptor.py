@@ -28,6 +28,7 @@ class Adaptor(CbAdaptor):
         self.irTempApps = []
         self.accelApps = []
         self.humidApps = []
+        self.gyroApps = []
         self.buttonApps = []
         #CbAdaprot.__init__ MUST be called
         CbAdaptor.__init__(self, argv)
@@ -80,6 +81,15 @@ class Adaptor(CbAdaptor):
             self.gatt.sendline('char-write-cmd 0x39 0100')
             self.gatt.expect('\[LE\]>')
  
+            # Enable gyro with notification
+            # Write 0 to turn off gyroscope, 1 to enable X axis only, 2 to
+            # enable Y axis only, 3 = X and Y, 4 = Z only, 5 = X and Z, 6 =
+            # Y and Z, 7 = X, Y and Z
+            self.gatt.sendline('char-write-cmd 0x5B 07')
+            self.gatt.expect('\[LE\]>')
+            self.gatt.sendline('char-write-cmd 0x58 0100')
+            self.gatt.expect('\[LE\]>')
+
             # Enable button-press notification
             self.gatt.sendline('char-write-cmd 0x60 0100')
             self.gatt.expect('\[LE\]>')
@@ -125,9 +135,9 @@ class Adaptor(CbAdaptor):
 
     def calcTemperature(self, raw):
         # Calculate temperatures
-        objT = self.s16tofloat(raw[2] + \
-                            raw[1]) * 0.00000015625
-        ambT = self.s16tofloat(raw[4] + raw[3]) / 128.0
+        objT = self.s16tofloat(raw[1] + \
+                            raw[0]) * 0.00000015625
+        ambT = self.s16tofloat(raw[3] + raw[2]) / 128.0
         Tdie2 = ambT + 273.15
         S0 = 6.4E-14
         a1 = 1.75E-3
@@ -147,11 +157,17 @@ class Adaptor(CbAdaptor):
         return objT, ambT
 
     def calcHumidity(self, raw):
-        t1 = self.s16tofloat(raw[2] + raw[1])
+        t1 = self.s16tofloat(raw[1] + raw[0])
         temp = -46.85 + 175.72/65536 * t1
-        rawH = int((raw[4] + raw[3]), 16) & 0xFFFC # Clear bits [1:0] - status
+        rawH = int((raw[3] + raw[2]), 16) & 0xFFFC # Clear bits [1:0] - status
         # Calculate relative humidity [%RH] 
         v = -6.0 + 125.0/65536 * float(rawH) # RH= -6 + 125 * SRH/2^16
+        return v
+
+    def calcGyro(self, raw):
+        # Xalculate rotation, unit deg/s, range -250, +250
+        r = self.s16tofloat(raw[1] + raw[0])
+        v = (r * 1.0) / (65536/500)
         return v
 
     def getValues(self):
@@ -161,7 +177,8 @@ class Adaptor(CbAdaptor):
         sets the accelReady flag for each attached app to True.  
         """
         while not self.doStop:
-            index = self.gatt.expect(['value:.*', pexpect.TIMEOUT], timeout=10)
+            #index = self.gatt.expect(['value:.*', pexpect.TIMEOUT], timeout=10)
+            index = self.gatt.expect(['handle.*', pexpect.TIMEOUT], timeout=10)
             if index == 1:
                 # A timeout error. Attempt to restart the SensorTag
                 status = ""
@@ -174,34 +191,52 @@ class Adaptor(CbAdaptor):
                     print ModuleName, self.id, " - ", self.friendly_name, \
                         " re-init status = ", status
             else:
-                type = self.gatt.before.split()
                 raw = self.gatt.after.split()
-                #print ModuleName, "type from SensorTag = ", type[3] 
                 #print ModuleName, "raw from SensorTag = ", raw
-                if type[3].startswith("0x002d"): 
-                    # Accelerometer descriptor
-                    #print ModuleName, "raw accel = ", raw 
-                    accel = {}
-                    accel["x"] = self.s8tofloat(raw[1])/63
-                    accel["y"] = self.s8tofloat(raw[2])/63
-                    accel["z"] = self.s8tofloat(raw[3])/63
-                    self.sendAccel(accel)
-                elif type[3].startswith("0x005f"): 
-                    # Button press decriptor
-                    #print ModuleName, "button press = ", raw[1]
-                    buttons = {"leftButton": (int(raw[1]) & 2) >> 1,
-                               "rightButton": int(raw[1]) & 1}
-                    self.sendButtons(buttons)
-                elif type[3].startswith("0x0025"):
-                    # Temperature descri[tor
-                    objT, ambT = self.calcTemperature(raw)
-                    self.sendTemp(ambT)
-                    self.sendIrTemp(objT)
-                elif type[3].startswith("0x0038"):
-                    relHumidity = self.calcHumidity(raw)
-                    self.sendHumidity(relHumidity)
-                else:
-                    pass
+                handles = True
+                startI = 2
+                while handles:
+                    type = raw[startI]
+                    if type.startswith("0x002d"): 
+                        # Accelerometer descriptor
+                        #print ModuleName, "raw accel = ", raw 
+                        accel = {}
+                        accel["x"] = self.s8tofloat(raw[startI+2])/63
+                        accel["y"] = self.s8tofloat(raw[startI+3])/63
+                        accel["z"] = self.s8tofloat(raw[startI+4])/63
+                        self.sendAccel(accel)
+                    elif type.startswith("0x005f"): 
+                        # Button press decriptor
+                        #print ModuleName, "button press = ", raw[1]
+                        buttons = {"leftButton": (int(raw[startI+2]) & 2) >> 1,
+                                   "rightButton": int(raw[startI+2]) & 1}
+                        self.sendButtons(buttons)
+                    elif type.startswith("0x0025"):
+                        # Temperature descriptor
+                        objT, ambT = self.calcTemperature(raw[startI+2:startI+6])
+                        self.sendTemp(ambT)
+                        self.sendIrTemp(objT)
+                    elif type.startswith("0x0038"):
+                        relHumidity = self.calcHumidity(raw[startI+2:startI+6])
+                        self.sendHumidity(relHumidity)
+                    elif type.startswith("0x0057"):
+                        gyro = {}
+                        gyro["x"] = self.calcGyro(raw[startI+2:startI+4])
+                        gyro["y"] = self.calcGyro(raw[startI+4:startI+6])
+                        gyro["z"] = self.calcGyro(raw[startI+6:startI+8])
+                        #print ModuleName, "gyro = ", gyro
+                        self.sendGyro(gyro)
+                    else:
+                       pass
+                    # There may be more than one handle in raw. Remove the
+                    # first occurence & if there is another process it
+                    raw.remove("handle")
+                    if "handle" in raw:
+                        handle = raw.index("handle")
+                        #print ModuleName, "handle = ", handle
+                        startI = handle + 2
+                    else:
+                        handles = False
         try:
             self.gatt.kill(9)
             print ModuleName, self.id, " - ", self.friendly_name, \
@@ -250,6 +285,14 @@ class Adaptor(CbAdaptor):
         for a in self.buttonApps:
             reactor.callFromThread(self.cbSendMsg, msg, a)
 
+    def sendGyro(self, gyro):
+        msg = {"id": self.id,
+               "content": "gyro",
+               "data": gyro,
+               "timeStamp": time.time()}
+        for a in self.gyroApps:
+            reactor.callFromThread(self.cbSendMsg, msg, a)
+
     def processReq(self, req):
         """
         Processes requests from apps.
@@ -270,6 +313,10 @@ class Adaptor(CbAdaptor):
                                   "purpose": "ir temperature"},
                                  {"parameter": "acceleration",
                                   "frequency": "3.0",
+                                  "purpose": "access door"},
+                                 {"parameter": "gyro",
+                                  "frequency": "1.0",
+                                  "range": "-250:+250 degrees",
                                   "purpose": "access door"},
                                  {"parameter": "rel_humidity",
                                   "frequency": "1.0",
@@ -310,6 +357,13 @@ class Adaptor(CbAdaptor):
             else:
                 if "rel_humidity" not in req["services"]:
                     self.humidApps.remove(req["id"])  
+
+            if req["id"] not in self.gyroApps:
+                if "gyro" in req["services"]:
+                    self.gyroApps.append(req["id"])  
+            else:
+                if "gyro" not in req["services"]:
+                    self.gyroApps.remove(req["id"])  
 
             if req["id"] not in self.buttonApps:
                 if "buttons" in req["services"]:

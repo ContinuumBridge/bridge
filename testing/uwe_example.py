@@ -102,9 +102,16 @@ while not doStop:
                     " accel = " + str("%2.2f" %d["data"][0]) + \
                     "  " + str("%2.2f" %d["data"][1]) + \
                     "  " + str("%2.2f" %d["data"][2])
-
                 print dat
-
+            elif d["type"] == "gyro":
+                localTime = time.localtime(d["timeStamp"])
+                now = time.strftime("%H:%M:%S", localTime)
+                dat = now +\
+                    "   " + idToName[bridgeData["device"]] + \
+                    " gyro = " + str("%5.2f" %d["data"][0]) + \
+                    "  " + str("%5.2f" %d["data"][1]) + \
+                    "  " + str("%5.2f" %d["data"][2])
+                print dat
 
 # Disable output of values
 config = {"enable": False}

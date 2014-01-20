@@ -74,6 +74,18 @@ class DataManager:
               }
         self.cbSendMsg(req, "conc")
 
+    def storeGyro(self, deviceID, timeStamp, gyro):
+        req = {
+               "req": "put",
+               "appID": self.appID,
+               "deviceID": deviceID,
+               "type": "gyro",
+               "timeStamp": timeStamp,
+               "data": gyro
+              }
+        #print ModuleName, "Gyro req = ", req
+        self.cbSendMsg(req, "conc")
+
 class Accelerometer:
     def __init__(self, id):
         self.id = id
@@ -115,6 +127,16 @@ class Buttons():
         buttons = resp["data"]
         self.dm.storeButtons(self.id, timeStamp, buttons)
 
+class Gyro():
+    def __init__(self, id):
+        self.id = id
+
+    def processGyro(self, resp):
+        gyro = [resp["data"]["x"], resp["data"]["y"], \
+                resp["data"]["z"]]
+        timeStamp = resp["timeStamp"] 
+        self.dm.storeGyro(self.id, timeStamp, gyro)
+
 class App(CbApp):
     def __init__(self, argv):
         # The following 3 declarations must be made
@@ -124,17 +146,19 @@ class App(CbApp):
         CbApp.processConcResp = self.processConcResp
         #
         self.accel = []
+        self.gyro = []
         self.temp = []
         self.buttons = []
         self.devices = []
-        self.devServices =[] 
-        self.idToName ={} 
+        self.devServices = [] 
+        self.idToName = {} 
         self.dm = DataManager(self.cbSendMsg)
         CbApp.__init__(self, argv)
 
     def processConcResp(self, resp):
         print ModuleName, "resp from conc = ", resp
         if resp["resp"] == "config":
+            time.sleep(5) # Ensures config received from adaptors
             msg = {"appID": self.id,
                    "req": "services",
                    "idToName": self.idToName,
@@ -162,6 +186,11 @@ class App(CbApp):
                 if t.id == resp["id"]:
                     t.processTemp(resp)
                     break
+        elif resp["content"] == "gyro":
+            for g in self.gyro:
+                if g.id == resp["id"]:
+                    g.processGyro(resp)
+                    break
         elif resp["content"] == "buttons":
             for b in self.buttons:
                 if b.id == resp["id"]:
@@ -179,6 +208,10 @@ class App(CbApp):
                     self.accel.append(Accelerometer(resp["id"]))
                     self.accel[-1].dm = self.dm
                     serviceReq.append("acceleration")
+                elif p["parameter"] == "gyro":
+                    self.gyro.append(Gyro(resp["id"]))
+                    self.gyro[-1].dm = self.dm
+                    serviceReq.append("gyro")
                 elif p["parameter"] == "buttons":
                     self.buttons.append(Buttons(resp["id"]))
                     self.buttons[-1].dm = self.dm

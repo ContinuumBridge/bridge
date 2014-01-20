@@ -49,7 +49,7 @@ class DataStore():
                                          "timeStamp": timeStamp,
                                          "data": data
                                        })
-            #print ModuleName, "appendData = ", device, data
+            #print ModuleName, "appendData = ", device, type, data
 
     def addDevice(self, d):
         self.appData[d] = []
