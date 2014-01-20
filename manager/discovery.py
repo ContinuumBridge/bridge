@@ -27,7 +27,7 @@ if __name__ == '__main__':
     protocol = sys.argv[1]
     sim = sys.argv[2]
     discoveredAddresses = []
-    if not sim:
+    if sim == "0":
         try:
             os.system("sudo hciconfig hci0 up")
         except:

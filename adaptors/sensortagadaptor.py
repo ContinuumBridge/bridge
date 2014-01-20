@@ -16,13 +16,49 @@ from cbcommslib import CbAdaptor
 from twisted.internet import threads
 from twisted.internet import reactor
 
+class SimValues():
+    """ Provides values in sim mode (without a real SensorTag connected). """
+    def __init__(self):
+        self.tick = 0
+
+    def getSimValues(self):
+        # Acceleration every 330 ms, everything else every 990 ms
+        if self.tick == 0:
+            # Acceleration
+            raw =  ['handle', '=', '0x002d', 'value:', 'ff', 'c2', '01', 'xxx[LE]>']
+        elif self.tick == 1:
+            time.sleep(0.20)
+            # Temperature
+            raw =  ['handle', '=', '0x0025', 'value:', 'fc', 'ff', 'ec', '09', 'xxx[LE]>']
+        elif self.tick == 2:
+            time.sleep(0.13)
+            # Acceleration
+            raw = ['handle', '=', '0x002d', 'value:', 'ff', 'c2', '01', 'xxx[LE]>']
+        elif self.tick == 3:
+            time.sleep(0.20)
+            # Rel humidity
+            raw = ['handle', '=', '0x0038', 'value:', 'c0', '61', 'ae', '7e', 'xxx[LE>']
+        elif self.tick == 4:
+            time.sleep(0.13)
+            # Acceleration
+            raw = ['handle', '=', '0x002d', 'value:', 'ff', 'c2', '01', 'xxx[LE]>']
+        elif self.tick == 5:
+            time.sleep(0.20)
+            # Gyro
+            raw = ['handle', '=', '0x0057', 'value:', '28', '00', 'cc', 'ff', 'c3', 'ff', 'xxx[LE]>']
+        elif self.tick == 6:
+            time.sleep(0.14)
+            # Acceleration
+            raw = ['handle', '=', '0x002d', 'value:', 'ff', 'c2', '01', 'xxx[LE]>']
+        self.tick = (self.tick + 1)%7
+        return raw
+
 class Adaptor(CbAdaptor):
     def __init__(self, argv):
         #CbAdaptor methods processReq & cbAdtConfig MUST be subclassed
         CbAdaptor.processReq = self.processReq
         CbAdaptor.cbAdtConfigure = self.configure
         self.connected = False  # Indicates we are connected to SensorTag
-        self.configured = False # Indicates that adt has been configured
         self.status = "ok"
         self.tempApps = []
         self.irTempApps = []
@@ -106,10 +142,10 @@ class Adaptor(CbAdaptor):
         """
         if self.connected == True:
             tagStatus = "Already connected" # Indicates app restarting
-        else if sim:
+        elif self.sim != 0:
             # In simulation mode (no real devices) just pretend to connect
             self.connected = True
-        while self.connected == False and not self.doStop and not sim:
+        while self.connected == False and not self.doStop and self.sim == 0:
             tagStatus = self.initSensorTag()    
             if tagStatus != "ok":
                 print ModuleName
@@ -120,7 +156,7 @@ class Adaptor(CbAdaptor):
                       "If problem persists SensorTag may be out of range"
         if not self.doStop:
             # Start a thread that continually gets accel and temp values
-            d = threads.deferToThread(self.getValues)
+            reactor.callInThread(self.getValues)
             print ModuleName, self.id, " - ", self.friendly_name, \
                 "successfully initialised"
  
@@ -173,10 +209,6 @@ class Adaptor(CbAdaptor):
         v = (r * 1.0) / (65536/500)
         return v
 
-    def simGattValue(self):
-        """ Provides values in sim mode (without real devices. """
-        pass
-
     def getValues(self):
         """Continually updates accel and temp values.
 
@@ -184,11 +216,10 @@ class Adaptor(CbAdaptor):
         sets the accelReady flag for each attached app to True.  
         """
         while not self.doStop:
-            index = self.gatt.expect(['handle.*', pexpect.TIMEOUT], timeout=10)
-            if not sim:
-                index = self.gatt.expect(['value:.*', pexpect.TIMEOUT], timeout=10)
+            if self.sim == 0:
+                index = self.gatt.expect(['handle.*', pexpect.TIMEOUT], timeout=10)
             else:
-                index = self.simGattValue()
+                index = 0
             if index == 1:
                 # A timeout error. Attempt to restart the SensorTag
                 status = ""
@@ -201,7 +232,10 @@ class Adaptor(CbAdaptor):
                     print ModuleName, self.id, " - ", self.friendly_name, \
                         " re-init status = ", status
             else:
-                raw = self.gatt.after.split()
+                if self.sim == 0:
+                    raw = self.gatt.after.split()
+                else:
+                    raw = self.simValues.getSimValues()
                 #print ModuleName, "raw from SensorTag = ", raw
                 handles = True
                 startI = 2
@@ -248,7 +282,7 @@ class Adaptor(CbAdaptor):
                     else:
                         handles = False
         try:
-            if not sim:
+            if self.sim == 0:
                 self.gatt.kill(9)
                 print ModuleName, self.id, " - ", self.friendly_name, \
                     " gatt process killed"
@@ -391,6 +425,8 @@ class Adaptor(CbAdaptor):
             could be because a new app has been added.
         """
         if not self.configured:
+            if self.sim != 0:
+                self.simValues = SimValues()
             self.startApp()
             self.configured = True
 

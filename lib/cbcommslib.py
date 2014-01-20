@@ -52,13 +52,13 @@ class CbAdaptor:
 
     def processConf(self, config):
         """Config is based on what apps are available."""
-        #print ModuleName, self.id, " configure: "
-        #pprint(config)
+        print ModuleName, self.id, " configure: "
+        pprint(config)
         self.name = config["name"]
         self.friendly_name = config["friendly_name"]
         self.device = config["btAdpt"]
         self.addr = config["btAddr"]
-        self.sim = config["sim"]
+        self.sim = int(config["sim"])
         for app in config["apps"]:
             iName = app["id"]
             if iName not in self.appInstances:
@@ -68,9 +68,8 @@ class CbAdaptor:
                 self.appInstances.append(iName)
                 self.cbFactory[iName] = CbServerFactory(self.processReqThread)
                 reactor.listenUNIX(adtSoc, self.cbFactory[iName])
-        if not self.configured:
-            self.cbAdtConfigure(config)
-            self.configured = True
+        self.cbAdtConfigure(config)
+        self.configured = True
 
     def processManager(self, cmd):
         #print ModuleName, "Received from manager: ", cmd

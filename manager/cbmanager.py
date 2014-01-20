@@ -30,9 +30,9 @@ class ManageBridge:
         """
         self.bridgeRoot = os.getenv('CB_BRIDGE_ROOT', "/home/bridge/bridge")
         print ModuleName, "CB_BRIDGE_ROOT = ", self.bridgeRoot
-        self.noCloud = os.getenv('CB_NO_CLOUD', "False")
+        self.noCloud = os.getenv('CB_NO_CLOUD', False)
         print ModuleName, "CB_NO_CLOUD = ", self.noCloud
-        self.sim = os.getenv('CB_SIM', "False")
+        self.sim = os.getenv('CB_SIM_LEVEL', '0')
         print ModuleName, "CB_SIM = ", self.sim
         self.controllerAddr = os.getenv('CB_CONTROLLER_ADDR', '54.194.28.63')
         print ModuleName, "CB_CONTROLLER_ADDR = ", self.controllerAddr
