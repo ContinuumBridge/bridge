@@ -290,7 +290,9 @@ class ManageBridge:
                 else:
                     self.discover()
             elif msg["body"] == "restart":
-                pass
+                print ModuleName, "Received restart command"
+            elif msg["body"] == "reboot":
+                print ModuleName, "Received reboot command"
             elif msg["body"] == "stop":
                 if self.configured and self.running and not self.stopping:
                     self.stopApps()
