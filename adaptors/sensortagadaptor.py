@@ -106,7 +106,10 @@ class Adaptor(CbAdaptor):
         """
         if self.connected == True:
             tagStatus = "Already connected" # Indicates app restarting
-        while self.connected == False and not self.doStop:
+        else if sim:
+            # In simulation mode (no real devices) just pretend to connect
+            self.connected = True
+        while self.connected == False and not self.doStop and not sim:
             tagStatus = self.initSensorTag()    
             if tagStatus != "ok":
                 print ModuleName
@@ -170,6 +173,10 @@ class Adaptor(CbAdaptor):
         v = (r * 1.0) / (65536/500)
         return v
 
+    def simGattValue(self):
+        """ Provides values in sim mode (without real devices. """
+        pass
+
     def getValues(self):
         """Continually updates accel and temp values.
 
@@ -177,8 +184,11 @@ class Adaptor(CbAdaptor):
         sets the accelReady flag for each attached app to True.  
         """
         while not self.doStop:
-            #index = self.gatt.expect(['value:.*', pexpect.TIMEOUT], timeout=10)
             index = self.gatt.expect(['handle.*', pexpect.TIMEOUT], timeout=10)
+            if not sim:
+                index = self.gatt.expect(['value:.*', pexpect.TIMEOUT], timeout=10)
+            else:
+                index = self.simGattValue()
             if index == 1:
                 # A timeout error. Attempt to restart the SensorTag
                 status = ""
@@ -238,9 +248,10 @@ class Adaptor(CbAdaptor):
                     else:
                         handles = False
         try:
-            self.gatt.kill(9)
-            print ModuleName, self.id, " - ", self.friendly_name, \
-                " gatt process killed"
+            if not sim:
+                self.gatt.kill(9)
+                print ModuleName, self.id, " - ", self.friendly_name, \
+                    " gatt process killed"
         except:
             sys.stderr.write(ModuleName + "Error: could not kill pexpect for" \
                 + self.id + " - " + self.friendly_name + "\n")
