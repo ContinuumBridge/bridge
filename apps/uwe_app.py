@@ -41,6 +41,7 @@ class DataManager:
         #    ", " + str(a[2]) + "\n" 
         #self.datFiles[deviceID]["accel"].write(dat)
         req = {
+               "msg": "req",
                "req": "put",
                "appID": self.appID,
                "deviceID": deviceID,
@@ -54,6 +55,7 @@ class DataManager:
         #dat = str(timeStamp) + ", " + str("%5.1f" %temp) + "\n"
         #self.datFiles[deviceID]["temp"].write(dat)
         req = {
+               "msg": "req",
                "req": "put",
                "appID": self.appID,
                "deviceID": deviceID,
@@ -65,6 +67,7 @@ class DataManager:
 
     def storeIrTemp(self, deviceID, timeStamp, temp):
         req = {
+               "msg": "req",
                "req": "put",
                "appID": self.appID,
                "deviceID": deviceID,
@@ -76,6 +79,7 @@ class DataManager:
 
     def storeButtons(self, deviceID, timeStamp, buttons):
         req = {
+               "msg": "req",
                "req": "put",
                "appID": self.appID,
                "deviceID": deviceID,
@@ -87,6 +91,7 @@ class DataManager:
 
     def storeGyro(self, deviceID, timeStamp, gyro):
         req = {
+               "msg": "req",
                "req": "put",
                "appID": self.appID,
                "deviceID": deviceID,
@@ -98,6 +103,7 @@ class DataManager:
 
     def storeMagnet(self, deviceID, timeStamp, magnet):
         req = {
+               "msg": "req",
                "req": "put",
                "appID": self.appID,
                "deviceID": deviceID,
@@ -202,13 +208,13 @@ class App(CbApp):
         print ModuleName, "resp from conc = ", resp
         if resp["resp"] == "config":
             msg = {"appID": self.id,
-                   "req": "services",
+                   "msg": "services",
                    "idToName": self.idToName,
                    "services": self.devServices}
             self.cbSendMsg(msg, "conc")
         else:
             msg = {"appID": self.id,
-                   "req": "error",
+                   "msg": "error",
                    "message": "unrecognised response from concentrator"}
             self.cbSendMsg(msg, "conc")
 

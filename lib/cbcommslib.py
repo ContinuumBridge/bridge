@@ -175,8 +175,9 @@ class CbApp:
         if not self.configured:
             # Connect to the concentrator
             concSocket = config["concentrator"]
-            initMsg = {"appID": self.id,
-                       "req": "init"}
+            initMsg = {"msg": "init",
+                       "appID": self.id
+                      }
             self.cbFactory["conc"] = CbClientFactory(self.processConcResp, \
                                      initMsg)
             reactor.connectUNIX(concSocket, self.cbFactory["conc"], timeout=10)

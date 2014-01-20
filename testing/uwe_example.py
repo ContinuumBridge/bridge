@@ -17,7 +17,7 @@ if len(sys.argv) < 2:
     print "Usage: manager <bridge ip address>:<bridge socket>"
     exit(1)
 ipAddress = sys.argv[1]
-port = "8880"
+port = "8881"
 
 doStop = False
 

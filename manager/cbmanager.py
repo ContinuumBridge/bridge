@@ -278,6 +278,7 @@ class ManageBridge:
                     print ModuleName, "Please run discovery"
                     msg = {"cmd": "msg",
                            "msg": {"msg": "status",
+                                   "channel": "bridge_manager",
                                    "body": "start_req_with_no_apps_installed"
                                   }
                           }
@@ -288,19 +289,17 @@ class ManageBridge:
                     reactor.callLater(8, self.discover)
                 else:
                     self.discover()
+            elif msg["body"] == "restart":
+                pass
             elif msg["body"] == "stop":
                 if self.configured and self.running and not self.stopping:
                     self.stopApps()
             elif msg["body"] == "stop_manager" or msg["body"] == "stopall":
-                if self.configured and self.running and not self.stopping:
-                    print ModuleName, "Processing stop. Stopping apps"
-                    self.stopApps()
-                    reactor.callLater(10, self.stopAll)
-                else:
-                    self.stopAll()
+                self.stopAll()
             elif msg["body"] == "update_config":
                 req = {"cmd": "msg",
                        "msg": {"msg": "req",
+                               "channel": "bridge_manager",
                                "req": "get",
                                "uri": "/api/v1/current_bridge/bridge"}
                       }
@@ -317,6 +316,14 @@ class ManageBridge:
             print ModuleName, "Received from server: ", msg
 
     def stopAll(self):
+        if self.configured and self.running and not self.stopping:
+            print ModuleName, "Processing stop. Stopping apps"
+            self.stopApps()
+            reactor.callLater(10, self.stopConcentrator)
+        else:
+            self.stopConcentrator()
+ 
+    def stopConcentrator(self):
         """ Kills concentrator & nodejs processes, removes sockets & kills itself """
         print ModuleName, "Stopping concentrator"
         msg = {"cmd": "stop"}
@@ -376,6 +383,7 @@ class ManageBridge:
                     print ModuleName, socket, " already removed"
         msg = {"cmd": "msg",
                "msg": {"msg": "status",
+                       "channel": "bridge_manager",
                        "body": "apps_stopped"
                       }
               }

@@ -147,6 +147,7 @@ class Concentrator():
     def __init__(self, argv):
         self.status = "ok"
         self.doStop = False
+        self.uwe_mode = True
 
         if len(argv) < 3:
             print "cbAdaptor improper number of arguments"
@@ -170,7 +171,7 @@ class Concentrator():
         self.concFactory = CbClientFactory(self.processServerMsg, initMsg)
         reactor.connectTCP("localhost", 5000, self.concFactory, timeout=10)
         # Intermediate for UWE use
-        reactor.listenTCP(8880, Site(RootResource(self.dataStore)))
+        reactor.listenTCP(8881, Site(RootResource(self.dataStore)))
         reactor.run()
 
     def processConf(self, config):
@@ -187,7 +188,7 @@ class Concentrator():
                     # Allows for reconfig on the fly
                     appConcSoc = app["appConcSoc"]
                     self.appInstances.append(iName)
-                    self.cbFactory[iName] = CbServerFactory(self.processReqThread)
+                    self.cbFactory[iName] = CbServerFactory(self.processReq)
                     reactor.listenUNIX(appConcSoc, self.cbFactory[iName])
 
     def processServerMsg(self, msg):
@@ -228,10 +229,6 @@ class Concentrator():
         print ModuleName, "Bye from ", self.id
         sys.exit
 
-    def processReqThread(self, req):
-        """Simplifies calling the adaptor's processReq in a Twisted thread."""
-        self.processReq(req)
-
     def cbSendMsg(self, msg, iName):
         self.cbFactory[iName].sendMsg(msg)
 
@@ -251,19 +248,25 @@ class Concentrator():
         Called separately for every app that can make requests.
         """
         #print ModuleName, "processReq, Req = ", req
-        if req["req"] == "init":
+        if req["msg"] == "init":
             print ModuleName, "init from app ", req["appID"]
             if req["appID"] == "app1":
                 reactor.callLater(6, self.appInit, req["appID"])
-        elif req["req"] == "services":
+        elif req["msg"] == "services":
             for s in req["services"]:
                 self.dataStore.addDevice(s["id"])
             self.dataStore.setConfig(req)
-        elif req["req"] == "put":
-            if req["appID"] == "app1": 
-                if self.dataStore.deviceKnown(req["deviceID"]):
-                    self.dataStore.appendData(req["deviceID"], req["type"], \
-                        req["timeStamp"], req["data"])
+        elif req["msg"] == "req":
+            if self.uwe_mode:
+                # In uwe_mode we act as a web server
+                if req["req"] == "put":
+                    if req["appID"] == "app1": 
+                        if self.dataStore.deviceKnown(req["deviceID"]):
+                            self.dataStore.appendData(req["deviceID"], req["type"], \
+                                req["timeStamp"], req["data"])
+            else:
+                # Just forward req messages from apps to Bridge Controller
+                self.concFactory.sendMsg(msg)
         else:
             pass
 
