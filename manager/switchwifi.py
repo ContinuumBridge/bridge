@@ -13,9 +13,14 @@ ModuleName = "Switch WiFi          "
 import sys
 import time
 import os
+import subprocess
 import pexpect
 
 if __name__ == '__main__':
+
+    bridgeRoot = os.getenv('CB_BRIDGE_ROOT', "/home/bridge/bridge")
+    print ModuleName, "CB_BRIDGE_ROOT = ", bridgeRoot
+ 
     if len(sys.argv) < 2:
         print "Usage: switchwifi [client|server]"
         exit(1)
@@ -26,11 +31,16 @@ if __name__ == '__main__':
         print ModuleName, "wlan0 down"
         os.system("killall wpa_supplicant")
         print ModuleName, "wpa_supplicant process killed"
-        os.system("cp interfaces.server /etc/network/interfaces")
+        interfacesFile = bridgeRoot + "/bridgeconfig/interfaces.server"
+        subprocess.Popen(["cp", interfacesFile, "/etc/network/interfaces"])
         os.system("ifup wlan0")
         print ModuleName, "wlan0 up"
+        dnsmasqFile = bridgeRoot + "/bridgeconfig/dnsmasq.conf"
+        subprocess.Popen(["cp", dnsmasqFile, "/etc/dnsmasq.conf"])
         os.system("service dnsmasq start")
         print ModuleName, "dnsmasq started"
+        hostapdFile = bridgeRoot + "/bridgeconfig/hostapd"
+        subprocess.Popen(["cp", hostapdFile, "/etc/default/hostapd"])
         os.system("service hostapd start")
         print ModuleName, "hostapd started"
         # Because wlan0 loses its ip address when hostapd is started
@@ -42,7 +52,16 @@ if __name__ == '__main__':
         print ModuleName, "dnsmasq stopped"
         os.system("service hostapd stop")
         print ModuleName, "hostapd stopped"
-        os.system("cp interfaces.client /etc/network/interfaces")
+        try:
+            os.system("rm /etc/dnsmasq.conf")
+        except:
+            print ModuleName, "Unable to remove /etc/dnsmasq.conf. Already in client mode?"
+        try:
+            os.system("rm /etc/default/hostapd")
+        except:
+            print ModuleName, "Unable to remove /etc/default.hostapd. Already in client mode?"
+        interfacesFile = bridgeRoot + "/bridgeconfig/interfaces.client"
+        subprocess.Popen(["cp", interfacesFile, "/etc/network/interfaces"])
         os.system("ifup wlan0")
         print ModuleName, "wlan0 up"
     else:
