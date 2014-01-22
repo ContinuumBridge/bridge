@@ -179,6 +179,7 @@ class Concentrator():
         if config != "no_apps":
             self.cbFactory = {}
             self.appInstances = []
+            print ModuleName, "appInstances = ", self.appInstances
             for app in config:
                 iName = app["id"]
                 #print ModuleName, "app: ", iName, " socket: ", appConcSoc

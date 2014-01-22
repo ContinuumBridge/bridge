@@ -77,12 +77,20 @@ while not doStop:
         bridgeData = json.loads(content)
         #pprint(bridgeData)
         for d in bridgeData["data"]:
-            if d["type"] == "temp":
+            if d["type"] == "temperature":
                 localTime = time.localtime(d["timeStamp"])
                 now = time.strftime("%H:%M:%S", localTime)
                 dat = now +\
                     "   " + idToName[bridgeData["device"]] + \
                     " temp  =  " + \
+                    str("%4.1f" %d["data"]) 
+                print dat
+            elif d["type"] == "ir_temperature":
+                localTime = time.localtime(d["timeStamp"])
+                now = time.strftime("%H:%M:%S", localTime)
+                dat = now +\
+                    "   " + idToName[bridgeData["device"]] + \
+                    " ir_temp  =  " + \
                     str("%4.1f" %d["data"]) 
                 print dat
             elif d["type"] == "buttons":
@@ -108,10 +116,20 @@ while not doStop:
                 now = time.strftime("%H:%M:%S", localTime)
                 dat = now +\
                     "   " + idToName[bridgeData["device"]] + \
-                    " gyro = " + str("%5.2f" %d["data"][0]) + \
+                    " gyro  = " + str("%5.2f" %d["data"][0]) + \
                     "  " + str("%5.2f" %d["data"][1]) + \
                     "  " + str("%5.2f" %d["data"][2])
                 print dat
+            elif d["type"] == "magnetometer":
+                localTime = time.localtime(d["timeStamp"])
+                now = time.strftime("%H:%M:%S", localTime)
+                dat = now +\
+                    "   " + idToName[bridgeData["device"]] + \
+                    " mag   = " + str("%5.2f" %d["data"][0]) + \
+                    "  " + str("%5.2f" %d["data"][1]) + \
+                    "  " + str("%5.2f" %d["data"][2])
+                print dat
+
 
 # Disable output of values
 config = {"enable": False}

@@ -65,6 +65,7 @@ class Adaptor(CbAdaptor):
         self.accelApps = []
         self.humidApps = []
         self.gyroApps = []
+        self.magnetApps = []
         self.buttonApps = []
         #CbAdaprot.__init__ MUST be called
         CbAdaptor.__init__(self, argv)
@@ -124,6 +125,15 @@ class Adaptor(CbAdaptor):
             self.gatt.sendline('char-write-cmd 0x5B 07')
             self.gatt.expect('\[LE\]>')
             self.gatt.sendline('char-write-cmd 0x58 0100')
+            self.gatt.expect('\[LE\]>')
+
+            # Enable magnetometer with notification
+            self.gatt.sendline('char-write-cmd 0x44 01')
+            self.gatt.expect('\[LE\]>')
+            self.gatt.sendline('char-write-cmd 0x41 0100')
+            self.gatt.expect('\[LE\]>')
+            # Change to 1s notification from default 2s
+            self.gatt.sendline('char-write-cmd 0x47 66')
             self.gatt.expect('\[LE\]>')
 
             # Enable button-press notification
@@ -209,6 +219,12 @@ class Adaptor(CbAdaptor):
         v = (r * 1.0) / (65536/500)
         return v
 
+    def calcMag(self, raw):
+        # Calculate magnetic-field strength, unit uT, range -1000, +1000
+        s = self.s16tofloat(raw[1] + raw[0])
+        v = (s * 1.0) / (65536/2000)
+        return v
+
     def getValues(self):
         """Continually updates accel and temp values.
 
@@ -270,6 +286,13 @@ class Adaptor(CbAdaptor):
                         gyro["z"] = self.calcGyro(raw[startI+6:startI+8])
                         #print ModuleName, "gyro = ", gyro
                         self.sendGyro(gyro)
+                    elif type.startswith("0x0040"):
+                        mag = {}
+                        mag["x"] = self.calcMag(raw[startI+2:startI+4])
+                        mag["y"] = self.calcMag(raw[startI+4:startI+6])
+                        mag["z"] = self.calcMag(raw[startI+6:startI+8])
+                        #print ModuleName, "mag = ", mag
+                        self.sendMagnet(mag)
                     else:
                        pass
                     # There may be more than one handle in raw. Remove the
@@ -338,6 +361,14 @@ class Adaptor(CbAdaptor):
         for a in self.gyroApps:
             reactor.callFromThread(self.cbSendMsg, msg, a)
 
+    def sendMagnet(self, magnet):
+        msg = {"id": self.id,
+               "content": "magnetometer",
+               "data": magnet,
+               "timeStamp": time.time()}
+        for a in self.magnetApps:
+            reactor.callFromThread(self.cbSendMsg, msg, a)
+
     def processReq(self, req):
         """
         Processes requests from apps.
@@ -362,7 +393,11 @@ class Adaptor(CbAdaptor):
                                  {"parameter": "gyro",
                                   "frequency": "1.0",
                                   "range": "-250:+250 degrees",
-                                  "purpose": "access door"},
+                                  "purpose": "gyro"},
+                                 {"parameter": "magnetometer",
+                                  "frequency": "1.0",
+                                  "range": "-1000:+1000 uT",
+                                  "purpose": "magnetometer"},
                                  {"parameter": "rel_humidity",
                                   "frequency": "1.0",
                                   "purpose": "room"},
@@ -409,6 +444,13 @@ class Adaptor(CbAdaptor):
             else:
                 if "gyro" not in req["services"]:
                     self.gyroApps.remove(req["id"])  
+
+            if req["id"] not in self.magnetApps:
+                if "magnetometer" in req["services"]:
+                    self.magnetApps.append(req["id"])  
+            else:
+                if "magnetometer" not in req["services"]:
+                    self.magnetApps.remove(req["id"])  
 
             if req["id"] not in self.buttonApps:
                 if "buttons" in req["services"]:

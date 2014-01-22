@@ -57,7 +57,18 @@ class DataManager:
                "req": "put",
                "appID": self.appID,
                "deviceID": deviceID,
-               "type": "temp",
+               "type": "temperature",
+               "timeStamp": timeStamp,
+               "data": temp
+              }
+        self.cbSendMsg(req, "conc")
+
+    def storeIrTemp(self, deviceID, timeStamp, temp):
+        req = {
+               "req": "put",
+               "appID": self.appID,
+               "deviceID": deviceID,
+               "type": "ir_temperature",
                "timeStamp": timeStamp,
                "data": temp
               }
@@ -83,7 +94,17 @@ class DataManager:
                "timeStamp": timeStamp,
                "data": gyro
               }
-        #print ModuleName, "Gyro req = ", req
+        self.cbSendMsg(req, "conc")
+
+    def storeMagnet(self, deviceID, timeStamp, magnet):
+        req = {
+               "req": "put",
+               "appID": self.appID,
+               "deviceID": deviceID,
+               "type": "magnetometer",
+               "timeStamp": timeStamp,
+               "data": magnet
+              }
         self.cbSendMsg(req, "conc")
 
 class Accelerometer:
@@ -118,6 +139,16 @@ class TemperatureMeasure():
             #self.prevEpochMin = epochMin
         self.dm.storeTemp(self.id, timeStamp, temp) 
 
+class IrTemperatureMeasure():
+    # Commented-out lines send temperature every minute
+    def __init__(self, id):
+        self.id = id
+
+    def processIrTemp (self, resp):
+        timeStamp = resp["timeStamp"] 
+        temp = resp["data"]
+        self.dm.storeIrTemp(self.id, timeStamp, temp) 
+
 class Buttons():
     def __init__(self, id):
         self.id = id
@@ -137,6 +168,16 @@ class Gyro():
         timeStamp = resp["timeStamp"] 
         self.dm.storeGyro(self.id, timeStamp, gyro)
 
+class Magnet():
+    def __init__(self, id):
+        self.id = id
+
+    def processMagnet(self, resp):
+        mag = [resp["data"]["x"], resp["data"]["y"], \
+               resp["data"]["z"]]
+        timeStamp = resp["timeStamp"] 
+        self.dm.storeMagnet(self.id, timeStamp, mag)
+
 class App(CbApp):
     def __init__(self, argv):
         # The following 3 declarations must be made
@@ -147,7 +188,9 @@ class App(CbApp):
         #
         self.accel = []
         self.gyro = []
+        self.magnet = []
         self.temp = []
+        self.irTemp = []
         self.buttons = []
         self.devices = []
         self.devServices = [] 
@@ -186,10 +229,20 @@ class App(CbApp):
                 if t.id == resp["id"]:
                     t.processTemp(resp)
                     break
+        elif resp["content"] == "ir_temperature":
+            for t in self.irTemp:
+                if t.id == resp["id"]:
+                    t.processIrTemp(resp)
+                    break
         elif resp["content"] == "gyro":
             for g in self.gyro:
                 if g.id == resp["id"]:
                     g.processGyro(resp)
+                    break
+        elif resp["content"] == "magnetometer":
+            for g in self.magnet:
+                if g.id == resp["id"]:
+                    g.processMagnet(resp)
                     break
         elif resp["content"] == "buttons":
             for b in self.buttons:
@@ -204,6 +257,10 @@ class App(CbApp):
                     self.temp.append(TemperatureMeasure(resp["id"]))
                     self.temp[-1].dm = self.dm
                     serviceReq.append("temperature")
+                if p["parameter"] == "ir_temperature":
+                    self.irTemp.append(IrTemperatureMeasure(resp["id"]))
+                    self.irTemp[-1].dm = self.dm
+                    serviceReq.append("ir_temperature")
                 elif p["parameter"] == "acceleration":
                     self.accel.append(Accelerometer(resp["id"]))
                     self.accel[-1].dm = self.dm
@@ -212,6 +269,10 @@ class App(CbApp):
                     self.gyro.append(Gyro(resp["id"]))
                     self.gyro[-1].dm = self.dm
                     serviceReq.append("gyro")
+                elif p["parameter"] == "magnetometer":
+                    self.magnet.append(Magnet(resp["id"]))
+                    self.magnet[-1].dm = self.dm
+                    serviceReq.append("magnetometer")
                 elif p["parameter"] == "buttons":
                     self.buttons.append(Buttons(resp["id"]))
                     self.buttons[-1].dm = self.dm
