@@ -28,7 +28,7 @@ class ManageBridge:
     def __init__(self):
         """ apps and adts data structures are stored in a local file.
         """
-        self.bridgeRoot = os.getenv('CB_BRIDGE_ROOT', "/home/bridge/bridge")
+        self.bridgeRoot = os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..'))
         print ModuleName, "CB_BRIDGE_ROOT = ", self.bridgeRoot
         self.noCloud = os.getenv('CB_NO_CLOUD', False)
         print ModuleName, "CB_NO_CLOUD = ", self.noCloud

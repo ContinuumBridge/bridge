@@ -62,13 +62,13 @@ controllerAuth(CONTROLLER_API, BRIDGE_EMAIL, BRIDGE_PASSWORD).then(function(sess
         controllerSocket.toController.push(jsonMessage);
     });
 
-    /*
     setTimeout(function sendMessage() {
         console.log('Sending message!');
-        controllerSocket.toController.push('Test message!');
-        setTimeout(sendMessage, 2000);
+        var msg = {};
+        msg.uri = '/api/v1/device_discovery';
+        controllerSocket.toController.push(JSON.stringify(msg));
+        setTimeout(sendMessage, 6000);
     }, 6000);
-    */
 
 }, function(error) {
     console.log('controllerAuth returned error', error);
