@@ -178,11 +178,12 @@ class ManageBridge:
         print ModuleName, self.discoveredDevices
         msg = {"cmd": "msg",
                "msg": self.discoveredDevices}
-        self.cbSendConcMsg(msg)
+        reactor.callFromThread(self.cbSendConcMsg, msg)
         self.discovered = True
 
     def discover(self):
-        d = threads.deferToThread(self.doDiscover)
+        # Call in thread so that manager can still process other messages
+        reactor.callInThread(self.doDiscover)
 
     def readConfig(self):
         appRoot = self.bridgeRoot + "/apps/"
@@ -265,12 +266,22 @@ class ManageBridge:
                 else:
                     print ModuleName, "Can't start adaptors & apps"
                     print ModuleName, "Please run discovery"
+                    msg = {"cmd": "msg",
+                           "msg": {"msg": "status",
+                                   "body": "start_req_with_no_apps_installed"
+                                  }
+                          }
+                    self.cbSendConcMsg(req)
             elif msg["body"] == "discover":
-                self.discover()
-            elif msg["body"] == "stopapps":
+                if self.configured and not self.stopping:
+                    self.stopApps()
+                    reactor.callLater(8, self.discover)
+                else:
+                    self.discover()
+            elif msg["body"] == "stop":
                 if not self.stopping:
                     self.stopApps()
-            elif msg["body"] == "stopall" or msg["body"] == "stop":
+            elif msg["body"] == "stop_manager":
                 if not self.stopping:
                     print ModuleName, "Processing stop. Stopping apps"
                     self.stopApps()
@@ -292,6 +303,8 @@ class ManageBridge:
                        "type": "conc"}
                 self.processClient(req)
                 self.concNoApps = False
+        else:
+            print ModuleName, "Received from server: ", msg
 
     def stopAll(self):
         """ Kills concentrator & nodejs processes, removes sockets & kills itself """
@@ -415,6 +428,14 @@ class ManageBridge:
                     msg["id"]
                 response = {"cmd": "error"}
                 self.cbSendMsg(response, msg["id"])
+#        elif msg["status"] == "ready":
+#            if msg["id"] == "conc":
+#                    msg = {"cmd": "msg",
+#                           "msg": {"msg": "status",
+#                                   "body": "ready"
+#                                  }
+#                          }
+#                    self.cbSendConcMsg(msg)
 
 if __name__ == '__main__':
     m = ManageBridge()

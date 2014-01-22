@@ -43,6 +43,7 @@ controllerAuth(CONTROLLER_API, BRIDGE_EMAIL, BRIDGE_PASSWORD).then(function(sess
 
         console.log('Bridge >', message.msg);
 
+        /*
         if (message.msg == 'req') {
             if (message.uri == '/api/v1/current_bridge/bridge') {
                 
@@ -59,16 +60,25 @@ controllerAuth(CONTROLLER_API, BRIDGE_EMAIL, BRIDGE_PASSWORD).then(function(sess
                 });
             }
         }
+        */
         controllerSocket.toController.push(jsonMessage);
+        var msg = {};
+        msg.message = 'request';
+        msg.body = 'request';
+        controllerSocket.toController.push(JSON.stringify(msg));
     });
 
+    /*
     setTimeout(function sendMessage() {
         console.log('Sending message!');
         var msg = {};
-        msg.uri = '/api/v1/device_discovery';
+        msg.message = 'request';
+        msg.body = 'request';
+        //msg.uri = '/api/v1/device_discovery';
         controllerSocket.toController.push(JSON.stringify(msg));
         setTimeout(sendMessage, 6000);
     }, 6000);
+    */
 
 }, function(error) {
     console.log('controllerAuth returned error', error);

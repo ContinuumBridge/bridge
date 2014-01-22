@@ -20,11 +20,16 @@ function BridgeConcentrator(port) {
 
             console.log('Server > Connected to Bridge');
 
+            /*
+            msg = {};
+            msg.msg = 'status';
+            msg.body = 'connected';
+            fromBridge.push(JSON.stringify(msg));
+            */
+
             toBridge.onValue(function(message) {
 
-                //var messageJSON = JSON.stringify(message);
-                console.log('Writing to bridge', message);
-                //console.log('Writing JSON to bridge', messageJSON);
+                //console.log('Writing to bridge', message);
                 socket.write(message + '\r\n');
             });
         }); 

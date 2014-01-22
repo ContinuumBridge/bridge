@@ -210,9 +210,9 @@ class Concentrator():
             #Adaptor must check doStop more often than every 8 seconds
             reactor.callLater(8, self.stopReactor)
         elif cmd["cmd"] == "config":
-            reactor.callInThread(self.processConf, cmd["config"])
+            self.processConf(cmd["config"])
             msg = {"id": self.id,
-                   "status": "ok"}
+                   "status": "ready"}
         elif cmd["cmd"] != "ok":
             msg = {"id": self.id,
                    "status": "unknown"}

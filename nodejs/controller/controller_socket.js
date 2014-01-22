@@ -22,6 +22,8 @@ function ControllerSocket(controllerURL, sessionID) {
 
         console.log('Server > Connected to Bridge Controller');
 
+        //fromController
+
         toController.onValue(function(message) {
             socket.emit('message', message); 
         });
