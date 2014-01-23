@@ -32,17 +32,24 @@ if __name__ == '__main__':
             os.system("sudo hciconfig hci0 up")
         except:
             print ModuleName, "Unable to bring up hci0 interface"
+            d = {"status": "error"}        
+            print json.dumps(d)
+            sys.exit()
         try:
             cmd = "sudo hcitool lescan"
             p = pexpect.spawn(cmd)
         except:
             sys.stderr.write(ModuleName + "Error: lescan failed to spawn\n")
+            d = {"status": "error"}        
+            print json.dumps(d)
             sys.exit()
         try:
             p.expect('.*', timeout=10)
             p.expect('.*', timeout=10)
         except:
             sys.stderr.write(ModuleName + "Error. Nothing returned from pexpect\n")
+            d = {"status": "error"}        
+            print json.dumps(d)
             sys.exit()
         startTime = time.time()
         endTime = startTime + 10

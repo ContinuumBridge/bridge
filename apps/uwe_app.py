@@ -201,7 +201,6 @@ class App(CbApp):
     def processConcResp(self, resp):
         print ModuleName, "resp from conc = ", resp
         if resp["resp"] == "config":
-            time.sleep(5) # Ensures config received from adaptors
             msg = {"appID": self.id,
                    "req": "services",
                    "idToName": self.idToName,

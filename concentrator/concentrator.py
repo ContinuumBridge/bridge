@@ -207,8 +207,7 @@ class Concentrator():
             self.doStop = True
             msg = {"id": self.id,
                    "status": "stopping"}
-            #Adaptor must check doStop more often than every 8 seconds
-            reactor.callLater(8, self.stopReactor)
+            reactor.callLater(2, self.stopReactor)
         elif cmd["cmd"] == "config":
             self.processConf(cmd["config"])
             msg = {"id": self.id,
@@ -239,6 +238,12 @@ class Concentrator():
     def cbSendManagerMsg(self, msg):
         self.managerFactory.sendMsg(msg)
 
+    def appInit(self, appID):
+        """ Request delayed to give app time to configure. """
+        resp = {"id": "conc",
+                "resp": "config"}
+        self.cbSendMsg(resp, appID)
+
     def processReq(self, req):
         """
         Processes requests from apps.
@@ -249,9 +254,7 @@ class Concentrator():
         if req["req"] == "init":
             print ModuleName, "init from app ", req["appID"]
             if req["appID"] == "app1":
-                resp = {"id": "conc",
-                        "resp": "config"}
-                self.cbSendMsg(resp, req["appID"])
+                reactor.callLater(6, self.appInit, req["appID"])
         elif req["req"] == "services":
             for s in req["services"]:
                 self.dataStore.addDevice(s["id"])
@@ -261,11 +264,6 @@ class Concentrator():
                 if self.dataStore.deviceKnown(req["deviceID"]):
                     self.dataStore.appendData(req["deviceID"], req["type"], \
                         req["timeStamp"], req["data"])
-                else:
-                    # Unknown device, request config update
-                    resp = {"id": "conc",
-                            "resp": "config"}
-                    self.cbSendMsg(resp, req["appID"])
         else:
             pass
 

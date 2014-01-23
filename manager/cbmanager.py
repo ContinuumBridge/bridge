@@ -41,6 +41,7 @@ class ManageBridge:
         self.discovered = False
         self.configured = False
         self.reqSync = False
+        self.running = False
         self.stopping = False
         self.concNoApps = False
         self.appProcs = []
@@ -100,6 +101,24 @@ class ManageBridge:
             print ModuleName, "Concentrator failed to start"
             print ModuleName, "Params: ", exe, id, mgrSoc
 
+    def startApps(self):
+        for a in self.apps:
+            try:
+                id = a["app"]["id"]
+                exe = a["app"]["exe"]
+                mgrSoc = a["app"]["mgrSoc"]
+                p = subprocess.Popen([exe, mgrSoc, id])
+                self.appProcs.append(p)
+                print ModuleName, id, " started"
+            except:
+                print ModuleName, id, " failed to start"
+        # Give time for everything to start before we consider ourselves running
+        reactor.callLater(10, self.setRunning)
+
+    def setRunning(self):
+        print ModuleName, "Bridge running"
+        self.running = True
+
     def startAll(self):
         self.stopping = False
         # Manager sockets may already exist. If so, delete them
@@ -139,23 +158,14 @@ class ManageBridge:
                 time.sleep(2)
 
         # Give time for all adaptors to start before starting apps
-        time.sleep(5)
-        for a in self.apps:
-            try:
-                id = a["app"]["id"]
-                exe = a["app"]["exe"]
-                mgrSoc = a["app"]["mgrSoc"]
-                p = subprocess.Popen([exe, mgrSoc, id])
-                self.appProcs.append(p)
-                print ModuleName, id, " started"
-            except:
-                print ModuleName, id, " failed to start"
- 
+        reactor.callLater(5, self.startApps)
+
     def doDiscover(self):
         self.discoveredDevices = {}
         exe = self.bridgeRoot + "/manager/discovery.py"
         protocol = "btle"
         output = subprocess.check_output([exe, protocol, self.sim])
+        print ModuleName, "Discover output = ", output
         discOutput = json.loads(output)
         self.discoveredDevices["msg"] = "req"
         self.discoveredDevices["req"] = "post"
@@ -271,18 +281,18 @@ class ManageBridge:
                                    "body": "start_req_with_no_apps_installed"
                                   }
                           }
-                    self.cbSendConcMsg(req)
+                    self.cbSendConcMsg(msg)
             elif msg["body"] == "discover":
-                if self.configured and not self.stopping:
+                if self.configured and self.running and not self.stopping:
                     self.stopApps()
                     reactor.callLater(8, self.discover)
                 else:
                     self.discover()
             elif msg["body"] == "stop":
-                if not self.stopping:
+                if self.configured and self.running and not self.stopping:
                     self.stopApps()
-            elif msg["body"] == "stop_manager":
-                if not self.stopping:
+            elif msg["body"] == "stop_manager" or msg["body"] == "stopall":
+                if self.configured and self.running and not self.stopping:
                     print ModuleName, "Processing stop. Stopping apps"
                     self.stopApps()
                     reactor.callLater(10, self.stopAll)
@@ -331,7 +341,11 @@ class ManageBridge:
             except:
                 print ModuleName, socket, " already removed"
         print ModuleName, "Stopping reactor"
-        reactor.stop()
+        try:
+            # try/except just to suppress errors due to removed sockets
+            reactor.stop()
+        except:
+            pass
         sys.exit
 
     def stopApps(self):
@@ -342,6 +356,7 @@ class ManageBridge:
         for a in mgrSocs:
             msg = {"cmd": "stop"}
             self.cbSendMsg(msg, a)
+        self.running = False
         reactor.callLater(8, self.killAppProcs)
 
     def killAppProcs(self):
@@ -428,14 +443,6 @@ class ManageBridge:
                     msg["id"]
                 response = {"cmd": "error"}
                 self.cbSendMsg(response, msg["id"])
-#        elif msg["status"] == "ready":
-#            if msg["id"] == "conc":
-#                    msg = {"cmd": "msg",
-#                           "msg": {"msg": "status",
-#                                   "body": "ready"
-#                                  }
-#                          }
-#                    self.cbSendConcMsg(msg)
 
 if __name__ == '__main__':
     m = ManageBridge()
