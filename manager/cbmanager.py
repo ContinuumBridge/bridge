@@ -20,6 +20,8 @@ from twisted.internet import task
 from twisted.protocols.basic import LineReceiver
 from twisted.internet.protocol import ReconnectingClientFactory
 from pprint import pprint
+from cbcommslib import CbClientProtocol
+from cbcommslib import CbClientFactory
 from cbcommslib import CbServerProtocol
 from cbcommslib import CbServerFactory
 
@@ -82,7 +84,11 @@ class ManageBridge:
 
     def startConcentrator(self):
         # Open a socket for communicating with the concentrator
-        s = "mgr-conc"
+        s = "skt-mgr-conc"
+        try:
+            os.remove(s)
+        except:
+            pass
         try:
             self.cbConcFactory = CbServerFactory(self.processClient)
             reactor.listenUNIX(s, self.cbConcFactory, backlog=4)
@@ -93,13 +99,24 @@ class ManageBridge:
         # Now start the concentrator in a subprocess
         exe = self.concPath
         id = "conc"
-        mgrSoc = "mgr-conc"
+        mgrSoc = "skt-mgr-conc"
         try:
             self.concProc = subprocess.Popen([exe, mgrSoc, id])
             print ModuleName, "Started concentrator"
         except:
             print ModuleName, "Concentrator failed to start"
-            print ModuleName, "Params: ", exe, id, mgrSoc
+
+        # Initiate comms with supervisor, which started the manager in the first place
+        s = "skt-super-mgr"
+        initMsg = {"id": "manager",
+                   "msg": "status",
+                   "status": "ok"} 
+        #try:
+        self.cbSupervisorFactory = CbClientFactory(self.processSuper, initMsg)
+        reactor.connectUNIX(s, self.cbSupervisorFactory, timeout=10)
+        print ModuleName, "Opened supervisor socket ", s
+        #except:
+            #print ModuleName, "Cannot open supervisor socket ", s
 
     def startApps(self):
         for a in self.apps:
@@ -218,7 +235,7 @@ class ManageBridge:
             # Process config to determine routing:
             for d in self.devices:
                 d["adaptor_install"][0]["id"] = "dev" + str(d["adaptor_install"][0]["id"])
-                socket = "mgr-" + str(d["adaptor_install"][0]["id"])
+                socket = "skt-mgr-" + str(d["adaptor_install"][0]["id"])
                 d["adaptor_install"][0]["mgrSoc"] = socket
                 d["adaptor_install"][0]["adaptor"]["exe"] = adtRoot + \
                     d["adaptor_install"][0]["adaptor"]["exe"]
@@ -228,8 +245,8 @@ class ManageBridge:
             for a in self.apps:
                 a["app"]["id"] = "app" + str(a["app"]["id"])
                 a["app"]["exe"] = appRoot + a["app"]["exe"]
-                a["app"]["mgrSoc"] = "mgr-" + str(a["app"]["id"])
-                a["app"]["concSoc"] = "conc-" + str(a["app"]["id"])
+                a["app"]["mgrSoc"] = "skt-mgr-" + str(a["app"]["id"])
+                a["app"]["concSoc"] = "skt-conc-" + str(a["app"]["id"])
                 for appDev in a["device_permissions"]:
                     uri = appDev["device_install"]
                     for d in self.devices: 
@@ -265,6 +282,21 @@ class ManageBridge:
             json.dump(msg, configFile)
         status = self.readConfig()
         print ModuleName, status
+
+    def processSuper(self, msg):
+        """ A simple watchdog. Just replies with ok every time it gets a message. """
+        if msg["msg"] == "status":
+            if msg["status"] == "ok":
+                resp = {"msg": "status",
+                        "status": "ok"
+                       }
+                self.cbSendSuperMsg("resp")
+        elif msg["msg"] == "stopall":
+            resp = {"msg": "status",
+                    "status": "stopping"
+                   }
+            self.cbSendSuperMsg("resp")
+            reactor.callLater(0.2, self.stopAll)
 
     def processControlMsg(self, msg):
         print ModuleName, "Controller msg = ", msg
@@ -302,7 +334,7 @@ class ManageBridge:
                 req = {"cmd": "msg",
                        "msg": {"msg": "req",
                                "channel": "bridge_manager",
-                               "req": "get",
+                               "verb": "get",
                                "uri": "/api/v1/current_bridge/bridge"}
                       }
                 self.cbSendConcMsg(req)
@@ -355,7 +387,7 @@ class ManageBridge:
             reactor.stop()
         except:
             pass
-        sys.exit
+        sys.exit(0)
 
     def stopApps(self):
         """ Asks apps & adaptors to clean up nicely and die. """
@@ -396,6 +428,9 @@ class ManageBridge:
 
     def cbSendConcMsg(self, msg):
         self.cbConcFactory.sendMsg(msg)
+
+    def cbSendSuperMsg(self, msg):
+        self.cbSupervisorFactory.sendMsg(msg)
 
     def processClient(self, msg):
         print ModuleName, "Received msg from client", msg

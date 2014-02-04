@@ -40,7 +40,7 @@ class WiFiSetup():
         self.bridgeRoot = os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..'))
         print ModuleName, "CB_BRIDGE_ROOT = ", self.bridgeRoot
 
-    def checkClientConnected(self):
+    def clientConnected(self):
         try:
             cmd = 'ping -b 255.255.255.255'
             p = pexpect.spawn(cmd)
@@ -51,9 +51,10 @@ class WiFiSetup():
         if index == 1:
             print ModuleName, "Client connection timed out. Changing to server"
             p.kill(9)
-            return "timeout"
+            return False
         else:
-            return "connected"
+            p.kill(9)
+            return True
  
     def getCredentials(self):
         exe = self.bridgeRoot + "/manager/wificonfig.py"
@@ -64,9 +65,9 @@ class WiFiSetup():
             print ModuleName, "Can't run wificonfig"
             self.connected = False
         index = p.expect(['Credentials.*', pexpect.TIMEOUT], timeout=120)
+        p.kill(9)
         if index == 1:
             print ModuleName, "SSID and WPA key not supplied before timeout"
-            p.kill(9)
             return False
         else:
             raw = p.after.split()
@@ -77,37 +78,45 @@ class WiFiSetup():
             return True
 
     def getConnected(self):
+        """ If the Bridge is not connected assume that we're going to connect
+            using WiFi. Try to connect using current settings. If we can't,
+            switch to server mode and ask user for SSDI and WPA key with a 
+            2 minute timeout. If we've got credentials, use these and try
+            again, otherwise return with failed status.
+        """
         s = SwitchWiFi()
         # Ensure we are in client mode
         s.switch("client")
-        clientConnected = self.checkClientConnected()
-        clientConnected = False
-        if clientConnected:
-            print ModuleName, "Client connected: ", clientConnected
-            sys.exit()
+        if clientConnected():
+            return True
         else:
             print ModuleName, "Can't connect. Switching to server mode"
             s.switch("server")
-        ok = self.getCredentials()
-        if ok:
-            try:
-                call(["rm", "/etc/wpa_supplicant/wpa_supplicant.conf"])
-            except:
-                pass
-            wpa_proto_file = self.bridgeRoot + "/bridgeconfig/wpa_supplicant.conf.proto"
-            wpa_config_file = self.bridgeRoot + "/bridgeconfig/wpa_supplicant.conf"
-            i = open(wpa_proto_file, 'r')
-            o = open(wpa_config_file, 'w')
-            for line in i:
-                line = line.replace("XXXX", self.ssid)
-                line = line.replace("YYYY", self.wpa_key)
-                o.write(line) 
-            i.close()
-            o.close()
-            s.switch("client")
-        else:
-            print ModuleName, "Not OK"
-
+            if self.getCredentials():
+                try:
+                    call(["rm", "/etc/wpa_supplicant/wpa_supplicant.conf"])
+                except:
+                    pass
+                wpa_proto_file = self.bridgeRoot + "/bridgeconfig/wpa_supplicant.conf.proto"
+                wpa_config_file = self.bridgeRoot + "/bridgeconfig/wpa_supplicant.conf"
+                i = open(wpa_proto_file, 'r')
+                o = open(wpa_config_file, 'w')
+                for line in i:
+                    line = line.replace("XXXX", self.ssid)
+                    line = line.replace("YYYY", self.wpa_key)
+                    o.write(line) 
+                i.close()
+                o.close()
+                s.switch("client")
+                if clientConnected():
+                    print ModuleName, "Client connected"
+                    return True
+                else:
+                    return False
+            else:
+                print ModuleName, "Did not get WiFi SSID & WPA from a human."
+                return False
+    
 if __name__ == '__main__':
     wiFiSetup = WiFiSetup(sys.argv)
     wiFiSetup.getConnected()

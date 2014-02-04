@@ -192,8 +192,7 @@ class BridgeControlProtocol(LineReceiver):
                                 "apps": self.apps
                                }
                       }
-        #:w
-        self.sendLine(json.dumps(self.config))
+        #self.sendLine(json.dumps(self.config))
     
     def lineReceived(self, rawMsg):
         self.watchTime = time.time()
