@@ -49,6 +49,7 @@ class ManageBridge:
         self.appProcs = []
         self.concConfig = []
         self.cbFactory = {} 
+        self.appListen = {}
         status = self.readConfig()
         print ModuleName, status
         self.initBridge()
@@ -91,7 +92,7 @@ class ManageBridge:
             pass
         try:
             self.cbConcFactory = CbServerFactory(self.processClient)
-            reactor.listenUNIX(s, self.cbConcFactory, backlog=4)
+            self.concListen = reactor.listenUNIX(s, self.cbConcFactory, backlog=4)
             print ModuleName, "Opened manager socket ", s
         except:
             print ModuleName, "Socket already exits: ", s
@@ -152,7 +153,7 @@ class ManageBridge:
         for s in mgrSocs:
             try:
                 self.cbFactory[s] = CbServerFactory(self.processClient)
-                reactor.listenUNIX(mgrSocs[s], self.cbFactory[s], backlog=4)
+                self.appListen[s] = reactor.listenUNIX(mgrSocs[s], self.cbFactory[s], backlog=4)
                 print ModuleName, "Opened manager socket ", s,  mgrSocs[s]
             except:
                 print ModuleName, "Manager socket already exits: ", s, mgrSocs[s]
@@ -366,6 +367,7 @@ class ManageBridge:
         reactor.callLater(1, self.stopManager)
 
     def stopManager(self):
+        self.concListen.stopListening()
         try:
             self.concProc.kill()
         except:
@@ -387,7 +389,7 @@ class ManageBridge:
             reactor.stop()
         except:
             pass
-        sys.exit(0)
+        sys.exit()
 
     def stopApps(self):
         """ Asks apps & adaptors to clean up nicely and die. """
@@ -401,7 +403,12 @@ class ManageBridge:
         reactor.callLater(8, self.killAppProcs)
 
     def killAppProcs(self):
-        """ In case apps & adaptors have not shut down, kill their processes. """
+        # Stop listing on sockets
+        mgrSocs = self.listMgrSocs()
+        for a in mgrSocs:
+           print ModuleName, "Stop listening on ", a
+           self.appListen[a].stopListening()
+        # In case apps & adaptors have not shut down, kill their processes.
         for p in self.appProcs:
             try:
                 p.kill()

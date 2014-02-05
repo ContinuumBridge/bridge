@@ -52,13 +52,12 @@ class Supervisor:
         except:
             print ModuleName, "Bridge manager failed to start:", exe
         
-        if not restart and self.sim = 0:
+        if not restart:
             # Only check connections when not in simulation mode
             try:
                 reactor.callLater(0.5, self.checkConnection)
             except:
                 print ModuleName, "Unable to call checkConnection"
-        if not restart:
             reactor.run()
 
     def cbSendManagerMsg(self, msg):
@@ -129,7 +128,8 @@ class Supervisor:
         reactor.callLater(self.watchDogInterval, self.reboot)
 
     def reboot(self):
-        call(["reboot"])
+        if self.sim = 0:
+            call(["reboot"])
         reactor.stop()
         sys.exit()
 
