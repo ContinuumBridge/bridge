@@ -200,13 +200,13 @@ class BridgeControlProtocol(LineReceiver):
         print "Message received: ", 
         pprint(msg)
         if msg["msg"] == "req":
-            if msg["req"] == "get":
+            if msg["verb"] == "get":
                 if msg["uri"] == "/api/v1/current_bridge/bridge":
                     print "Config requested"
                     self.sendLine(json.dumps(self.config))
                 else:
                     print "Unrecognised GET"
-            elif msg["req"] == "post":
+            elif msg["verb"] == "post":
                 if msg["uri"] == "/api/v1/device_discovery":
                     print "Discovered devices:"
                     pprint(msg)

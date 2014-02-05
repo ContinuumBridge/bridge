@@ -185,7 +185,7 @@ class ManageBridge:
         print ModuleName, "Discover output = ", output
         discOutput = json.loads(output)
         self.discoveredDevices["msg"] = "req"
-        self.discoveredDevices["req"] = "post"
+        self.discoveredDevices["verb"] = "post"
         self.discoveredDevices["uri"] = "/api/v1/device_discovery"
         self.discoveredDevices["body"] = []
         if self.configured:
