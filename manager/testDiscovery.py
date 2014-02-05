@@ -25,7 +25,8 @@ if __name__ == '__main__':
                          "name": "SensorTag", 
                          "addr": "22.22.22.22.22.22"})
     d["devices"].append({"method": "btle",
-                         "name": "SensorTag", 
+                         "manufacturer_name": "Texas Instruments",
+                         "name": "Test Device 1", 
                          "addr": "33.33.33.33.33.33"})
     d["devices"].append({"method": "btle",
                          "name": "SensorTag", 

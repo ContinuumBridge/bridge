@@ -52,7 +52,11 @@ class Supervisor:
         except:
             print ModuleName, "Bridge manager failed to start:", exe
         
+<<<<<<< HEAD
         if not restart:
+=======
+        if not restart and self.sim == 0:
+>>>>>>> 7e3b6a6ef334948612f72afc177838a6e485a371
             # Only check connections when not in simulation mode
             try:
                 reactor.callLater(0.5, self.checkConnection)
@@ -90,7 +94,7 @@ class Supervisor:
             # Manager is well and truely dead.
             self.killBridge()
 
-    def killBridge():
+    def killBridge(self):
         # For now, just do a reboot rather than anything more elegant
         self.reboot()
 
@@ -128,8 +132,13 @@ class Supervisor:
         reactor.callLater(self.watchDogInterval, self.reboot)
 
     def reboot(self):
+<<<<<<< HEAD
         if self.sim = 0:
             call(["reboot"])
+=======
+        self.mgrPort.stopListening()
+        call(["reboot"])
+>>>>>>> 7e3b6a6ef334948612f72afc177838a6e485a371
         reactor.stop()
         sys.exit()
 

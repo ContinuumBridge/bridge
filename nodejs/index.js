@@ -2,7 +2,7 @@
 // Get the arguments passed to node
 
 var CONTROLLER_IP = (process.argv[2]) ? process.argv[2] : '54.194.28.63';
-var CONTROLLER_API = 'http://' + CONTROLLER_IP + ':8000/api/v1/';
+var CONTROLLER_API = 'http://' + CONTROLLER_IP + '/api/v1/';
 var CONTROLLER_SOCKET = 'http://' + CONTROLLER_IP + ':3000/';
 var BRIDGE_EMAIL = (process.argv[3]) ? process.argv[3] : '28b45a59a875478ebcbdf327c18dbfb1@continuumbridge.com';
 var BRIDGE_PASSWORD = (process.argv[4]) ? process.argv[4] : 'oX3ZGWS/yY1l+PaEFsBp11yixvK6b7O5UiK9M9TV8YBnjPXl3bDLw9eXQZvpmNdr';
@@ -41,7 +41,7 @@ controllerAuth(CONTROLLER_API, BRIDGE_EMAIL, BRIDGE_PASSWORD).then(function(sess
 
         var message = JSON.parse(jsonMessage);
 
-        console.log('Bridge >', message.msg);
+        //console.log('Bridge >', message.msg);
 
         /*
         if (message.msg == 'req') {
