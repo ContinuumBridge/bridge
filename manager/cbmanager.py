@@ -89,7 +89,7 @@ class ManageBridge:
         try:
             os.remove(s)
         except:
-            pass
+            print ModuleName, "Conc socket was not present: ", s
         try:
             self.cbConcFactory = CbServerFactory(self.processClient)
             self.concListen = reactor.listenUNIX(s, self.cbConcFactory, backlog=4)
@@ -222,8 +222,8 @@ class ManageBridge:
             with open('bridge.config', 'r') as configFile:
                 config = json.load(configFile)
                 configRead = True
-                print ModuleName, "readConfig"
-                pprint(config)
+                #print ModuleName, "readConfig"
+                #pprint(config)
         except:
             print ModuleName, "Warning. No config file exists"
             self.configured = False
@@ -268,36 +268,36 @@ class ManageBridge:
                             break
         if self.configured:
             print ModuleName, "Config information processed:"
-            print ModuleName, "Apps:"
-            pprint(self.apps)
-            print ""
-            print ModuleName, "Devices:"
-            pprint(self.devices)
-            print ""
+            #print ModuleName, "Apps:"
+            #pprint(self.apps)
+            #print ""
+            #print ModuleName, "Devices:"
+            #pprint(self.devices)
+            #print ""
         return "Configured"
     
     def updateConfig(self, msg):
-        print ModuleName, "Config received from controller:"
-        pprint(msg)
+        #print ModuleName, "Config received from controller:"
+        #pprint(msg)
         with open('bridge.config', 'w') as configFile:
             json.dump(msg, configFile)
         status = self.readConfig()
         print ModuleName, status
 
     def processSuper(self, msg):
-        """ A simple watchdog. Just replies with ok every time it gets a message. """
-        if msg["msg"] == "status":
-            if msg["status"] == "ok":
-                resp = {"msg": "status",
-                        "status": "ok"
-                       }
-                self.cbSendSuperMsg("resp")
-        elif msg["msg"] == "stopall":
+        """ A watchdog. Replies with status=ok or a restart/reboot command. """
+        if msg["msg"] == "stopall":
             resp = {"msg": "status",
                     "status": "stopping"
                    }
-            self.cbSendSuperMsg("resp")
+            self.cbSendSuperMsg(resp)
             reactor.callLater(0.2, self.stopAll)
+
+        else:
+            resp = {"msg": "status",
+                    "status": "ok"
+                   }
+            self.cbSendSuperMsg(resp)
 
     def processControlMsg(self, msg):
         print ModuleName, "Controller msg = ", msg
@@ -324,8 +324,26 @@ class ManageBridge:
                     self.discover()
             elif msg["body"] == "restart":
                 print ModuleName, "Received restart command"
+                resp = {"msg": "restart"}
+                self.cbSendSuperMsg(resp)
+                msg = {"cmd": "msg",
+                       "msg": {"msg": "status",
+                               "channel": "bridge_manager",
+                               "body": "restarting"
+                              }
+                      }
+                self.cbSendConcMsg(msg)
             elif msg["body"] == "reboot":
                 print ModuleName, "Received reboot command"
+                resp = {"msg": "reboot"}
+                self.cbSendSuperMsg(resp)
+                msg = {"cmd": "msg",
+                       "msg": {"msg": "status",
+                               "channel": "bridge_manager",
+                               "body": "rebooting"
+                              }
+                      }
+                self.cbSendConcMsg(msg)
             elif msg["body"] == "stop":
                 if self.configured and self.running and not self.stopping:
                     self.stopApps()
@@ -384,12 +402,8 @@ class ManageBridge:
             except:
                 print ModuleName, socket, " already removed"
         print ModuleName, "Stopping reactor"
-        try:
-            # try/except just to suppress errors due to removed sockets
-            reactor.stop()
-        except:
-            pass
-        sys.exit()
+        reactor.stop()
+        sys.exit
 
     def stopApps(self):
         """ Asks apps & adaptors to clean up nicely and die. """

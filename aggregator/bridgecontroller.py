@@ -5,41 +5,47 @@
 # Proprietary and confidential
 # Written by Peter Claydon
 #
-sim = False
 
 import json
 import sys
 import time
 from twisted.internet import threads
-from twisted.internet.protocol import Protocol, Factory
 from twisted.internet import reactor, defer
-from twisted.protocols.basic import LineReceiver
+from cbcommslib import CbServerProtocol
+from cbcommslib import CbServerFactory
 from pprint import pprint
  
-class BridgeControlProtocol(LineReceiver):
+class BridgeControl:
  
     def __init__(self):
         self.watchTime = time.time()
         self.checkWatchDog = True
         self.watchTick = 0
-        #w = threads.deferToThread(self.watchDog)
         self.stopProg = False
         self.devs = []
         self.appDevs = []
         self.apps = []
         self.config = {}
+        self.bridgePort = 5000
+        self.cbFactory = CbServerFactory(self.processResp)
+        reactor.callLater(0.5, self.startListening)
+        reactor.callLater(1, self.checkCmd)
+        reactor.run()
 
-    def connectionMade(self):
-        print "Connection made from Bridge"
+    def cbSendMsg(self, msg):
+        self.cbFactory.sendMsg(msg)
 
-    def connectionLost(self, reason):
-        print "Bridge closed connection"
+    def startListening(self):
+        try:
+            self.mgrListen = reactor.listenTCP(self.bridgePort, self.cbFactory, backlog=4)
+            print "Lisening on Bridge port ", self.bridgePort
+        except:
+            print "Failed to listen on Bridge port ", self.bridgePort
 
     def checkCmdThread(self):
         processed = False
         while not processed:
             cmd = raw_input("Command > ")
-            #print "Command was: ", cmd
             if cmd == "exit":
                 self.stopProg = True
                 processed = True
@@ -47,23 +53,30 @@ class BridgeControlProtocol(LineReceiver):
                 msg  = {"msg": "cmd",
                         "body": "discover"}
                 print "Sending command to bridge: ", msg
-                reactor.callFromThread(self.sendLine, json.dumps(msg))
+                reactor.callFromThread(self.cbSendMsg, msg)
                 processed = True
-            elif cmd == "start" or cmd == "stop" or cmd == "stopapps" \
-                         or cmd == "stopall":
+            #elif cmd == "start" or cmd == "stop" or cmd == "stopapps" \
+                         #or cmd == "stopall":
+            elif cmd in ["start", "stop", "stopapps", "stopall"]:
                 msg  = {"msg": "cmd",
                         "body": cmd}
                 print "Sending command to bridge: ", msg
-                reactor.callFromThread(self.sendLine, json.dumps(msg))
+                reactor.callFromThread(self.cbSendMsg, msg)
+            elif cmd in ["restart", "reboot"]:
+                msg  = {"msg": "cmd",
+                        "body": cmd}
+                print "Sending command to bridge: ", msg
+                reactor.callFromThread(self.cbSendMsg, msg)
+                reactor.callFromThread(self.reconnect)
             elif cmd == "update_config" or cmd == "update":
                 msg  = {"msg": "cmd",
                         "body": "update_config"}
                 print "Sending command to bridge: ", msg
-                reactor.callFromThread(self.sendLine, json.dumps(msg))
+                reactor.callFromThread(self.cbSendMsg, msg)
             elif cmd == "":
                 pass
             else:
-                print "Unrecognised input: ", cmd
+                sys.stdout.write("Unrecognised input: " +  cmd + " > ")
         if self.stopProg:
             reactor.callFromThread(self.doStop)
 
@@ -74,6 +87,13 @@ class BridgeControlProtocol(LineReceiver):
         except:
             print "Could not stop reactor"
         sys.exit
+
+    def reconnect(self):
+        reactor.callLater(10, self.stopListen)
+
+    def stopListen(self):
+        self.mgrListen.stopListening()
+        reactor.callLater(5, self.startListening)
             
     def checkCmd(self):
         reactor.callInThread(self.checkCmdThread)
@@ -107,10 +127,7 @@ class BridgeControlProtocol(LineReceiver):
     def buildBridgeData(self, friendly, purpose, currentDev):
         numDevs = len(self.devs)
         devNum = numDevs + 1
-        if sim:
-            exe = 'testSensorTagAdaptor.py'
-        else:
-            exe = 'sensortagadaptor.py'
+        exe = 'sensortagadaptor.py'
         dev =  \
               {"adaptor_install": [
                 {
@@ -192,53 +209,39 @@ class BridgeControlProtocol(LineReceiver):
                                 "apps": self.apps
                                }
                       }
-        #self.sendLine(json.dumps(self.config))
+        #self.cbSendMsg(self.config)
     
-    def lineReceived(self, rawMsg):
-        self.watchTime = time.time()
-        msg = json.loads(rawMsg)
-        print "Message received: ", 
-        pprint(msg)
+    def processResp(self, msg):
+        print "Message received: ", msg
         if msg["msg"] == "req":
             if msg["verb"] == "get":
                 if msg["uri"] == "/api/v1/current_bridge/bridge":
-                    print "Config requested"
-                    self.sendLine(json.dumps(self.config))
+                    sys.stdout.write("Config requested > ")
+                    self.cbSendMsg(self.config)
                 else:
-                    print "Unrecognised GET"
+                    sys.stdout.write("Unrecognised GET > ")
             elif msg["verb"] == "post":
                 if msg["uri"] == "/api/v1/device_discovery":
                     print "Discovered devices:"
                     pprint(msg)
                     self.processDiscovered(msg["body"])
+                    sys.stdout.write("> ")
                     #self.checkCmd()
                 else:
-                    print "Unrecognised POST"
+                    sys.stdout.write("Unrecognised POST > ")
             else:
                 print "Unrecognised req from bridge"
         elif msg["msg"] == "status":
             if msg["body"] == "ready":
-                print "Bridge ready"
+                sys.stdout.write("Bridge ready > ")
                 self.checkCmd()
             else:
                 print msg["body"]
+                sys.stdout.write(msg["body"] + " > ")
         else:
-            print "Unknown message received from bridge" 
+            sys.stdout.write("Unknown message received from bridge > ")
       
 if __name__ == '__main__':
- 
-    if len(sys.argv) < 2:
-        print "Usage: manager <bridge ip address>:<bridge socket>"
-        exit(1)
-    bridgeSoc = sys.argv[1]
+    a = BridgeControl()
 
-    bridgeSocFactory=Factory()
-    bridgeSocFactory.protocol = BridgeControlProtocol
 
-    try:
-        reactor.listenTCP(int(bridgeSoc), bridgeSocFactory)
-        print "Opened Bridge socket ", bridgeSoc
-    except:
-        print "Failed to open Bridge socket ", bridgeSoc
-
-    reactor.run()

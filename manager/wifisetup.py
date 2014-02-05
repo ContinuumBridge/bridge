@@ -35,7 +35,7 @@ from twisted.web.server import NOT_DONE_YET
 
 class WiFiSetup():
 
-    def __init__(self, bridgeRoot):
+    def __init__(self):
         print ModuleName
         self.bridgeRoot = os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..'))
         print ModuleName, "CB_BRIDGE_ROOT = ", self.bridgeRoot
@@ -118,5 +118,5 @@ class WiFiSetup():
                 return False
     
 if __name__ == '__main__':
-    wiFiSetup = WiFiSetup(sys.argv)
+    wiFiSetup = WiFiSetup()
     wiFiSetup.getConnected()

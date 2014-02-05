@@ -163,15 +163,15 @@ class Concentrator():
                    "type": "conc",
                    "status": "req-config"} 
         self.managerFactory = CbClientFactory(self.processManager, initMsg)
-        reactor.connectUNIX(managerSocket, self.managerFactory, timeout=10)
+        self.managerConnect = reactor.connectUNIX(managerSocket, self.managerFactory, timeout=10)
 
         # Connection to websockets process
         initMsg = {"msg": "status",
                    "body": "ready"}
         self.concFactory = CbClientFactory(self.processServerMsg, initMsg)
-        reactor.connectTCP("localhost", 5000, self.concFactory, timeout=10)
+        self.jsConnect = reactor.connectTCP("localhost", 5000, self.concFactory, timeout=10)
         # Intermediate for UWE use
-        reactor.listenTCP(8881, Site(RootResource(self.dataStore)))
+        self.uweListen = reactor.listenTCP(8881, Site(RootResource(self.dataStore)))
         reactor.run()
 
     def processConf(self, config):
@@ -192,6 +192,7 @@ class Concentrator():
                     reactor.listenUNIX(appConcSoc, self.cbFactory[iName])
 
     def processServerMsg(self, msg):
+        print ModuleName, "Received from controller: ", msg
         msg["status"] = "control_msg"
         self.cbSendManagerMsg(msg)
 
@@ -208,7 +209,7 @@ class Concentrator():
             self.doStop = True
             msg = {"id": self.id,
                    "status": "stopping"}
-            reactor.callLater(2, self.stopReactor)
+            reactor.callLater(0.2, self.stopReactor)
         elif cmd["cmd"] == "config":
             self.processConf(cmd["config"])
             msg = {"id": self.id,
@@ -222,12 +223,15 @@ class Concentrator():
         self.cbSendManagerMsg(msg)
 
     def stopReactor(self):
-        try:
-            reactor.stop()
-        except:
-             print ModuleName, self.id, " stop: reactor was not running"
-        print ModuleName, "Bye from ", self.id
-        sys.exit
+        d1 = defer.maybeDeferred(self.jsConnect.disconnect)
+        d2 = defer.maybeDeferred(self.managerConnect.disconnect)
+        d3 = defer.maybeDeferred(self.uweListen.stopListening)
+        d = defer.gatherResults([d1, d2, d3], consumeErrors=True)
+        d.addCallback(self.goodbye)
+
+    def goodbye(self, status):
+        reactor.stop()
+        print ModuleName, "Bye from ", self.id, " Status: ", status
 
     def cbSendMsg(self, msg, iName):
         self.cbFactory[iName].sendMsg(msg)
