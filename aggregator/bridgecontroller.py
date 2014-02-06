@@ -38,9 +38,9 @@ class BridgeControl:
     def startListening(self):
         try:
             self.mgrListen = reactor.listenTCP(self.bridgePort, self.cbFactory, backlog=4)
-            print "Lisening on Bridge port ", self.bridgePort
+            print "Lisening on Bridge port > ", self.bridgePort
         except:
-            print "Failed to listen on Bridge port ", self.bridgePort
+            print "Failed to listen on Bridge port > ", self.bridgePort
 
     def checkCmdThread(self):
         processed = False
@@ -52,7 +52,7 @@ class BridgeControl:
             elif cmd == "discover":
                 msg  = {"msg": "cmd",
                         "body": "discover"}
-                print "Sending command to bridge: ", msg
+                print "Sending command to bridge: > ", msg
                 reactor.callFromThread(self.cbSendMsg, msg)
                 processed = True
             #elif cmd == "start" or cmd == "stop" or cmd == "stopapps" \
@@ -60,23 +60,23 @@ class BridgeControl:
             elif cmd in ["start", "stop", "stopapps", "stopall"]:
                 msg  = {"msg": "cmd",
                         "body": cmd}
-                print "Sending command to bridge: ", msg
+                print "Sending command to bridge: > ", msg
                 reactor.callFromThread(self.cbSendMsg, msg)
             elif cmd in ["restart", "reboot"]:
                 msg  = {"msg": "cmd",
                         "body": cmd}
-                print "Sending command to bridge: ", msg
+                print "Sending command to bridge: > ", msg
                 reactor.callFromThread(self.cbSendMsg, msg)
                 reactor.callFromThread(self.reconnect)
             elif cmd == "update_config" or cmd == "update":
                 msg  = {"msg": "cmd",
                         "body": "update_config"}
-                print "Sending command to bridge: ", msg
+                print "Sending command to bridge: > ", msg
                 reactor.callFromThread(self.cbSendMsg, msg)
             elif cmd == "":
                 pass
             else:
-                sys.stdout.write("Unrecognised input: " +  cmd + " > ")
+                print "Unrecognised input: > ", cmd
         if self.stopProg:
             reactor.callFromThread(self.doStop)
 
@@ -97,8 +97,6 @@ class BridgeControl:
             
     def checkCmd(self):
         reactor.callInThread(self.checkCmdThread)
-        if self.stopProg:
-            self.doStop()
 
     def processDiscovered(self, dat):
         #print "processDiscovered: ", dat
@@ -129,37 +127,31 @@ class BridgeControl:
         devNum = numDevs + 1
         exe = 'sensortagadaptor.py'
         dev =  \
-              {"adaptor_install": [
+              {"adaptor":
                 {
                  "name": currentDev["name"],
                  "id": devNum,
-                 "adaptor": 
-                   {
-                    "name": "CB SensorTag Adt",
-                    "provider": "ContinuumBridge",
-                    "purpose": purpose,
-                    "protocol": currentDev["protocol"],
-                    "version": 2,
-                    "url": "www.continuumbridge.com/adt/cbSensorTagAdtV2",
-                    "exe": exe,
-                    "resource_uri": "/api/V1/device/" + str(devNum)
-                    },
+                 "name": "CB SensorTag Adt",
+                 "provider": "ContinuumBridge",
+                 "purpose": purpose,
+                 "protocol": currentDev["protocol"],
+                 "version": 2,
+                 "url": "www.continuumbridge.com/adt/cbSensorTagAdtV2",
+                 "exe": exe,
                  "device": "/api/v1/device/" + str(devNum),
-                 "id": devNum,
-                 "resource_uri": "/api/v1/adaptor_install/" + str(devNum)
-                 }
-                ],
+                 "resource_uri": "/api/v1/adaptor/" + str(devNum)
+                 },
                "bridge": "random bridge test text",
                "device": "random device test text",
                "id": devNum,
                "friendly_name": friendly,
                "mac_addr": currentDev["mac_addr"],
-               "resource_url": "/api/V1/device/" + str(devNum)
+               "resource_uri": "/api/v1/device_install/" + str(devNum)
               }
         self.devs.append(dev)
 
         appDev = {
-                  "device_install": "/api/v1/adaptor_install/" + str(devNum),
+                  "device_install": "/api/v1/device_install/" + str(devNum),
                   "resource_uri": "/api/v1/app_device_permission/1/"
                  } 
         self.appDevs.append(appDev)
@@ -214,32 +206,31 @@ class BridgeControl:
     def processResp(self, msg):
         print "Message received: ", msg
         if msg["msg"] == "req":
-            if msg["verb"] == "get":
-                if msg["uri"] == "/api/v1/current_bridge/bridge":
-                    sys.stdout.write("Config requested > ")
-                    self.cbSendMsg(self.config)
-                else:
-                    sys.stdout.write("Unrecognised GET > ")
-            elif msg["verb"] == "post":
-                if msg["uri"] == "/api/v1/device_discovery":
-                    print "Discovered devices:"
-                    pprint(msg)
-                    self.processDiscovered(msg["body"])
-                    sys.stdout.write("> ")
-                    #self.checkCmd()
-                else:
-                    sys.stdout.write("Unrecognised POST > ")
+            if "req" in msg:
+                if msg["req"] == "get":
+                    if msg["uri"] == "/api/v1/current_bridge/bridge":
+                        print "Config requested > "
+                        self.cbSendMsg(self.config)
+                    else:
+                        print "Unrecognised GET > "
+            elif "verb" in msg:
+                if msg["verb"] == "post":
+                    if msg["uri"] == "/api/v1/device_discovery":
+                        print "Discovered devices:"
+                        pprint(msg)
+                        self.processDiscovered(msg["body"])
+                    else:
+                        print "Unrecognised POST > "
             else:
-                print "Unrecognised req from bridge"
+                print "Unrecognised req from bridge > "
         elif msg["msg"] == "status":
             if msg["body"] == "ready":
-                sys.stdout.write("Bridge ready > ")
-                self.checkCmd()
+                print "Bridge ready > "
+                #self.checkCmd()
             else:
                 print msg["body"]
-                sys.stdout.write(msg["body"] + " > ")
         else:
-            sys.stdout.write("Unknown message received from bridge > ")
+            print "Unknown message received from bridge > "
       
 if __name__ == '__main__':
     a = BridgeControl()

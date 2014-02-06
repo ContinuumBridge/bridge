@@ -160,7 +160,7 @@ class ManageBridge:
 
         # Start adaptors
         for d in self.devices:
-            exe = d["adaptor"]["adaptor"]["exe"]
+            exe = d["adaptor"]["exe"]
             fName = d["friendly_name"]
             id = d["adaptor"]["id"]
             mgrSoc = d["adaptor"]["mgrSoc"]
@@ -222,8 +222,8 @@ class ManageBridge:
             with open('bridge.config', 'r') as configFile:
                 config = json.load(configFile)
                 configRead = True
-                #print ModuleName, "readConfig"
-                #pprint(config)
+                print ModuleName, "readConfig"
+                pprint(config)
         except:
             print ModuleName, "Warning. No config file exists"
             self.configured = False
@@ -238,8 +238,8 @@ class ManageBridge:
                 d["adaptor"]["id"] = "dev" + str(d["adaptor"]["id"])
                 socket = "skt-mgr-" + str(d["adaptor"]["id"])
                 d["adaptor"]["mgrSoc"] = socket
-                d["adaptor"]["adaptor"]["exe"] = adtRoot + \
-                    d["adaptor"]["adaptor"]["exe"]
+                d["adaptor"]["exe"] = adtRoot + \
+                    d["adaptor"]["exe"]
                 # Add a apps list to each device adaptor
                 d["adaptor"]["apps"] = []
             # Add socket descriptors to apps and devices
@@ -251,9 +251,10 @@ class ManageBridge:
                 for appDev in a["device_permissions"]:
                     uri = appDev["device_install"]
                     for d in self.devices: 
-                        if d["adaptor"]["resource_uri"] == uri:
+                        print ModuleName, "uri = ", uri, " device uri = ", d["resource_uri"]
+                        if d["resource_uri"] == uri:
                             socket = "skt-" \
-                                + d["adaptor"]["id"] + "-" + a["app"]["id"]
+                                + str(d["id"]) + "-" + str(a["app"]["id"])
                             d["adaptor"]["apps"].append(
                                                     {"adtSoc": socket,
                                                      "name": a["app"]["name"],
@@ -261,19 +262,19 @@ class ManageBridge:
                                                     }) 
                             appDev["adtSoc"] = socket
                             appDev["id"] = d["adaptor"]["id"]
-                            appDev["name"] = d["adaptor"]["adaptor"]["name"]
+                            appDev["name"] = d["adaptor"]["name"]
                             appDev["friendly_name"] = \
                                 d["friendly_name"]
                             appDev["adtSoc"] = socket
                             break
         if self.configured:
             print ModuleName, "Config information processed:"
-            #print ModuleName, "Apps:"
-            #pprint(self.apps)
-            #print ""
-            #print ModuleName, "Devices:"
-            #pprint(self.devices)
-            #print ""
+            print ModuleName, "Apps:"
+            pprint(self.apps)
+            print ""
+            print ModuleName, "Devices:"
+            pprint(self.devices)
+            print ""
         return "Configured"
     
     def updateConfig(self, msg):
@@ -479,7 +480,7 @@ class ManageBridge:
                         "cmd": "config",
                         "config": 
                             {"apps": d["adaptor"]["apps"], 
-                             "name": d["adaptor"]["adaptor"]["name"],
+                             "name": d["adaptor"]["name"],
                              "friendly_name": d["friendly_name"],
                              "btAddr": d["mac_addr"],
                              "btAdpt": "hci0", 
