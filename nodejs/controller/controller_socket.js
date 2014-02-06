@@ -17,6 +17,7 @@ function ControllerSocket(controllerURL, sessionID) {
 
     var fromController = new Bacon.Bus();
     var toController = new Bacon.Bus();
+    var unsubscribeControllerSocket = function(){};
 
     socket.on('connect', function() { 
 
@@ -24,7 +25,7 @@ function ControllerSocket(controllerURL, sessionID) {
 
         //fromController
 
-        toController.onValue(function(message) {
+        unsubscribeControllerSocket = toController.onValue(function(message) {
             socket.emit('message', message); 
         });
     });
@@ -37,6 +38,7 @@ function ControllerSocket(controllerURL, sessionID) {
 
     socket.on('disconnect', function() {
 
+        unsubscribeControllerSocket();
         console.log('Server > Disconnected from Bridge Controller');
     }); 
 

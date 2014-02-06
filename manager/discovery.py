@@ -76,11 +76,14 @@ if __name__ == '__main__':
     else: 
         # Simulation without real devices - just supply some sample data
         discoveredAddresses = ["22.22.22.22.22.22", "33.33.33.33.33.33", "44.44.44.44.44.44"]
+        names = ["Test Device 1", "Test Device 2", "Test Device 3"]
+        manufacturers = ["Texas Instruments", "Texas Instruments", "Shenzhen Youhong Technology Co."]
     d = {}
     d["status"] = "discovered"
     d["body"] = []
     for a in range (len(discoveredAddresses)):
         d["body"].append({"protocol": "btle",
-                          "name": "SensorTag", 
+                          "name": names[a], 
+                          "manufacturer_name": manufacturers[a], 
                           "mac_addr": discoveredAddresses[a]})
     print json.dumps(d)

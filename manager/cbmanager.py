@@ -38,8 +38,8 @@ class ManageBridge:
         print ModuleName, "CB_SIM = ", self.sim
         self.controllerAddr = os.getenv('CB_CONTROLLER_ADDR', '54.194.28.63')
         print ModuleName, "CB_CONTROLLER_ADDR = ", self.controllerAddr
-        self.email = "cde5fb1645e74314a3e6841a4df0828d@continuumbridge.com"
-        self.password = "zqN17m94GftDvNiWNGls+6tyxryCJFWxzWC5hs/fTmF7YXn4i8eogVa/HzwK5fK2"
+        self.email = os.getenv('CB_BRIDGE_EMAIL', 'cde5fb1645e74314a3e6841a4df0828d@continuumbridge.com')
+        self.password = os.getenv('CB_BRIDGE_PASSWORD', 'zqN17m94GftDvNiWNGls+6tyxryCJFWxzWC5hs/fTmF7YXn4i8eogVa/HzwK5fK2')
         self.discovered = False
         self.configured = False
         self.reqSync = False
