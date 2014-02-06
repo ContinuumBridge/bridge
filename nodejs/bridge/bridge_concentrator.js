@@ -20,13 +20,6 @@ function BridgeConcentrator(port) {
 
             console.log('Server > Connected to Bridge');
 
-            /*
-            msg = {};
-            msg.msg = 'status';
-            msg.body = 'connected';
-            fromBridge.push(JSON.stringify(msg));
-            */
-
             toBridge.onValue(function(message) {
 
                 //console.log('Writing to bridge', message);
@@ -36,7 +29,7 @@ function BridgeConcentrator(port) {
 
         socket.on('data', function(data) {
 
-            //console.log('Raw data', data);
+            console.log('Raw data', data);
             fromBridge.push(data);
         }); 
 
