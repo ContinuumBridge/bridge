@@ -78,7 +78,7 @@ class ManageBridge:
     def listMgrSocs(self):
         mgrSocs = {}
         for d in self.devices:
-            mgrSocs[d["adaptor_install"][0]["id"]] = d["adaptor_install"][0]["mgrSoc"]
+            mgrSocs[d["adaptor"]["id"]] = d["adaptor"]["mgrSoc"]
         for a in self.apps:
             mgrSocs[a["app"]["id"]] = a["app"]["mgrSoc"]
         return mgrSocs
@@ -160,10 +160,10 @@ class ManageBridge:
 
         # Start adaptors
         for d in self.devices:
-            exe = d["adaptor_install"][0]["adaptor"]["exe"]
+            exe = d["adaptor"]["adaptor"]["exe"]
             fName = d["friendly_name"]
-            id = d["adaptor_install"][0]["id"]
-            mgrSoc = d["adaptor_install"][0]["mgrSoc"]
+            id = d["adaptor"]["id"]
+            mgrSoc = d["adaptor"]["mgrSoc"]
             try:
                 p = subprocess.Popen([exe, mgrSoc, id])
                 self.appProcs.append(p)
@@ -194,7 +194,7 @@ class ManageBridge:
                 addrFound = False
                 if d["protocol"] == "btle":
                     for oldDev in self.devices:
-                       if oldDev["adaptor_install"][0]["adaptor"]["protocol"] == "btle": 
+                       if oldDev["adaptor"]["adaptor"]["protocol"] == "btle": 
                            if d["mac_addr"] == oldDev["mac_addr"]:
                                addrFound = True
                 if addrFound == False:
@@ -235,13 +235,13 @@ class ManageBridge:
         if self.configured:
             # Process config to determine routing:
             for d in self.devices:
-                d["adaptor_install"][0]["id"] = "dev" + str(d["adaptor_install"][0]["id"])
-                socket = "skt-mgr-" + str(d["adaptor_install"][0]["id"])
-                d["adaptor_install"][0]["mgrSoc"] = socket
-                d["adaptor_install"][0]["adaptor"]["exe"] = adtRoot + \
-                    d["adaptor_install"][0]["adaptor"]["exe"]
+                d["adaptor"]["id"] = "dev" + str(d["adaptor"]["id"])
+                socket = "skt-mgr-" + str(d["adaptor"]["id"])
+                d["adaptor"]["mgrSoc"] = socket
+                d["adaptor"]["adaptor"]["exe"] = adtRoot + \
+                    d["adaptor"]["adaptor"]["exe"]
                 # Add a apps list to each device adaptor
-                d["adaptor_install"][0]["apps"] = []
+                d["adaptor"]["apps"] = []
             # Add socket descriptors to apps and devices
             for a in self.apps:
                 a["app"]["id"] = "app" + str(a["app"]["id"])
@@ -251,17 +251,17 @@ class ManageBridge:
                 for appDev in a["device_permissions"]:
                     uri = appDev["device_install"]
                     for d in self.devices: 
-                        if d["adaptor_install"][0]["resource_uri"] == uri:
+                        if d["adaptor"]["resource_uri"] == uri:
                             socket = "skt-" \
-                                + d["adaptor_install"][0]["id"] + "-" + a["app"]["id"]
-                            d["adaptor_install"][0]["apps"].append(
+                                + d["adaptor"]["id"] + "-" + a["app"]["id"]
+                            d["adaptor"]["apps"].append(
                                                     {"adtSoc": socket,
                                                      "name": a["app"]["name"],
                                                      "id": a["app"]["id"]
                                                     }) 
                             appDev["adtSoc"] = socket
-                            appDev["id"] = d["adaptor_install"][0]["id"]
-                            appDev["name"] = d["adaptor_install"][0]["adaptor"]["name"]
+                            appDev["id"] = d["adaptor"]["id"]
+                            appDev["name"] = d["adaptor"]["adaptor"]["name"]
                             appDev["friendly_name"] = \
                                 d["friendly_name"]
                             appDev["adtSoc"] = socket
@@ -353,7 +353,7 @@ class ManageBridge:
                 req = {"cmd": "msg",
                        "msg": {"msg": "req",
                                "channel": "bridge_manager",
-                               "verb": "get",
+                               "req": "get",
                                "uri": "/api/v1/current_bridge/bridge"}
                       }
                 self.cbSendConcMsg(req)
@@ -474,12 +474,12 @@ class ManageBridge:
                         break
             elif msg["type"] == "adt": 
                 for d in self.devices:
-                    if d["adaptor_install"][0]["id"] == msg["id"]:
+                    if d["adaptor"]["id"] == msg["id"]:
                         response = {
                         "cmd": "config",
                         "config": 
-                            {"apps": d["adaptor_install"][0]["apps"], 
-                             "name": d["adaptor_install"][0]["adaptor"]["name"],
+                            {"apps": d["adaptor"]["apps"], 
+                             "name": d["adaptor"]["adaptor"]["name"],
                              "friendly_name": d["friendly_name"],
                              "btAddr": d["mac_addr"],
                              "btAdpt": "hci0", 
