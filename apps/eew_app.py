@@ -5,7 +5,7 @@
 # Proprietary and confidential
 # Written by Peter Claydon
 #
-ModuleName = "uwe_app             " 
+ModuleName = "eew_app             " 
 
 import sys
 import os.path
@@ -89,6 +89,23 @@ class DataManager:
               }
         self.cbSendMsg(req, "conc")
 
+    def storeHumidity(self, deviceID, timeStamp, h):
+        req = {
+               "msg": "req",
+               "verb": "post",
+               "channel": self.appNum,
+               "body": {
+                        "msg": "data",
+                        "appID": self.appID,
+                        "deviceID": deviceID,
+                        "type": "rel_humidity",
+                        "timeStamp": timeStamp,
+                        "data": h
+                       }
+              }
+        self.cbSendMsg(req, "conc")
+
+
     def storeButtons(self, deviceID, timeStamp, buttons):
         req = {
                "msg": "req",
@@ -139,45 +156,71 @@ class DataManager:
 
 class Accelerometer:
     def __init__(self, id):
+        self.threshold = 0.035
+        self.previous = [0.0, 0.0, 0.0]
         self.id = id
 
     def processAccel(self, resp):
-        accel = [resp["data"]["x"], resp["data"]["y"], \
-                resp["data"]["z"]]
+        accel = [resp["data"]["x"], resp["data"]["y"], resp["data"]["z"]]
         timeStamp = resp["timeStamp"]
-        self.dm.storeAccel(self.id, timeStamp, accel) 
-        #localTime = time.localtime(resp["accel"]["timeStamp"])
-        #now = time.strftime("%H:%M:%S", localTime)
-        #print ModuleName, self.id, now, " accel: ", accel
- 
+        event = False
+        for a in range(3):
+            if abs(accel[a] - self.previous[a]) > self.threshold:
+                event = True
+                break
+        if event:
+            self.dm.storeAccel(self.id, timeStamp, accel)
+            self.previous = accel
+
 class TemperatureMeasure():
-    # Commented-out lines send temperature every minute
+    """ Either send temp every minute or when it changes. """
     def __init__(self, id):
+        # self.mode is either regular or on_change
+        self.mode = "on_change"
+        self.minChange = 0.2
         self.id = id
-        #epochTime = time.time()
-        #self.prevEpochMin = int(epochTime - epochTime%60)
-        #self.currentTemp = {"objT": 0, "ambT": 0}
+        epochTime = time.time()
+        self.prevEpochMin = int(epochTime - epochTime%60)
+        self.currentTemp = 0.0
 
     def processTemp (self, resp):
         timeStamp = resp["timeStamp"] 
         temp = resp["data"]
-        #epochMin = int(timeStamp - timeStamp%60)
-        #if epochMin != self.prevEpochMin:
-            #temp = resp["data"]
-            #self.currentTemp = {"temp": temp}
-            #self.dm.storeTemp(self.id, self.prevEpochMin, temp) 
-            #self.prevEpochMin = epochMin
-        self.dm.storeTemp(self.id, timeStamp, temp) 
+        if self.mode == "regular":
+            epochMin = int(timeStamp - timeStamp%60)
+            if epochMin != self.prevEpochMin:
+                temp = resp["data"]
+                self.dm.storeTemp(self.id, self.prevEpochMin, temp) 
+                self.prevEpochMin = epochMin
+        else:
+            if abs(temp-self.currentTemp) >= 0.2:
+                self.dm.storeTemp(self.id, timeStamp, temp) 
+                self.currentTemp = temp
 
 class IrTemperatureMeasure():
-    # Commented-out lines send temperature every minute
+    """ Either send temp every minute or when it changes. """
     def __init__(self, id):
+        # self.mode is either regular or on_change
+        self.mode = "on_change"
+        self.minChange = 0.2
         self.id = id
+        epochTime = time.time()
+        self.prevEpochMin = int(epochTime - epochTime%60)
+        self.currentTemp = 0.0
 
     def processIrTemp (self, resp):
         timeStamp = resp["timeStamp"] 
         temp = resp["data"]
-        self.dm.storeIrTemp(self.id, timeStamp, temp) 
+        if self.mode == "regular":
+            epochMin = int(timeStamp - timeStamp%60)
+            if epochMin != self.prevEpochMin:
+                temp = resp["data"]
+                self.dm.storeIrTemp(self.id, self.prevEpochMin, temp) 
+                self.prevEpochMin = epochMin
+        else:
+            if abs(temp-self.currentTemp) >= 0.2:
+                self.dm.storeIrTemp(self.id, timeStamp, temp) 
+                self.currentTemp = temp
 
 class Buttons():
     def __init__(self, id):
@@ -191,22 +234,52 @@ class Buttons():
 class Gyro():
     def __init__(self, id):
         self.id = id
+        self.threshold = 0.5
+        self.previous = [0.0, 0.0, 0.0]
 
     def processGyro(self, resp):
-        gyro = [resp["data"]["x"], resp["data"]["y"], \
-                resp["data"]["z"]]
+        gyro = [resp["data"]["x"], resp["data"]["y"], resp["data"]["z"]]
         timeStamp = resp["timeStamp"] 
-        self.dm.storeGyro(self.id, timeStamp, gyro)
+        event = False
+        for a in range(3):
+            if abs(gyro[a] - self.previous[a]) > self.threshold:
+                event = True
+                break
+        if event:
+            self.dm.storeGyro(self.id, timeStamp, gyro)
+            self.previous = gyro
 
 class Magnet():
     def __init__(self, id):
         self.id = id
+        self.threshold = 0.5
+        self.previous = [0.0, 0.0, 0.0]
 
     def processMagnet(self, resp):
-        mag = [resp["data"]["x"], resp["data"]["y"], \
-               resp["data"]["z"]]
+        mag = [resp["data"]["x"], resp["data"]["y"], resp["data"]["z"]]
         timeStamp = resp["timeStamp"] 
-        self.dm.storeMagnet(self.id, timeStamp, mag)
+        event = False
+        for a in range(3):
+            if abs(mag[a] - self.previous[a]) > self.threshold:
+                event = True
+                break
+        if event:
+            self.dm.storeMagnet(self.id, timeStamp, mag)
+            self.previous = mag
+
+class Humid():
+    """ Either send temp every minute or when it changes. """
+    def __init__(self, id):
+        self.minChange = 0.25
+        self.id = id
+        self.previous = 0.0
+
+    def processHumidity (self, resp):
+        h = resp["data"]
+        timeStamp = resp["timeStamp"] 
+        if abs(h-self.previous) >= self.minChange:
+            self.dm.storeHumidity(self.id, timeStamp, h) 
+            self.previous = h
 
 class App(CbApp):
     def __init__(self, argv):
@@ -222,6 +295,7 @@ class App(CbApp):
         self.temp = []
         self.irTemp = []
         self.buttons = []
+        self.humidity = []
         self.devices = []
         self.devServices = [] 
         self.idToName = {} 
@@ -285,6 +359,11 @@ class App(CbApp):
                 if b.id == resp["id"]:
                     b.processButtons(resp)
                     break
+        elif resp["content"] == "rel_humidity":
+            for b in self.humidity:
+                if b.id == resp["id"]:
+                    b.processHumidity(resp)
+                    break
         elif resp["content"] == "services":
             self.devServices.append(resp)
             serviceReq = []
@@ -313,6 +392,10 @@ class App(CbApp):
                     self.buttons.append(Buttons(resp["id"]))
                     self.buttons[-1].dm = self.dm
                     serviceReq.append("buttons")
+                elif p["parameter"] == "rel_humidity":
+                    self.humidity.append(Humid(resp["id"]))
+                    self.humidity[-1].dm = self.dm
+                    serviceReq.append("rel_humidity")
             self.dm.initDevice(resp["id"])
             msg = {"id": self.id,
                    "req": "services",

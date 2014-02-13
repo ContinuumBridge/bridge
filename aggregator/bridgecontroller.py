@@ -25,6 +25,8 @@ class BridgeControl:
         self.devs = []
         self.appDevs = []
         self.apps = []
+        jsonFilename = "jsonfile"
+        self.jsonFile = open(jsonFilename, "a+", 0)
         self.config = {}
         self.bridgePort = 5000
         self.cbFactory = CbServerFactory(self.processResp)
@@ -159,6 +161,7 @@ class BridgeControl:
         numApps = len(self.apps)
         if numApps == 0:
             appNum = numApps + 1
+            """
             app = {"app":{"id": appNum,
                           "name": "living",
                           "provider": "ContinuumBridge",
@@ -173,23 +176,23 @@ class BridgeControl:
                    "resource_uri": "/api/v1/app_install/" + str(appNum)
                   }
             self.apps.append(app)
-#            appNum = appNum + 1
-#            app = {"app":{"id": str(appNum),
-#                          "name": "Temp Monitor",
-#                          "provider": "ContinuumBridge",
-#                          "version": 2,
-#                          "url": "www.continuumbridge.com/apps/cbtempmonitor",
-#                          "exe": "tempmonitor.py",
-#                          #"exe": "testLiving.py",
-#                          "resource_uri": "/api/v1/app/" + str(appNum)
-#                         },
-#                   "bridge": "",
-#                   "devices": self.appDevs,
-#                   "id": str(appNum),
-#                   "resource_uri": "/api/v1/app_install/" + str(appNum)
-#                  }
-#            self.apps.append(app)
-#    
+            """
+            app = {"app":{"id": appNum,
+                          "name": "EEW App",
+                          "provider": "ContinuumBridge",
+                          "version": 1,
+                          "url": "www.continuumbridge.com/apps/cbLivingV2",
+                          "exe": "eew_app.py",
+                          "resource_uri": "/api/v1/app/" + str(appNum)
+                         },
+                   "bridge": "",
+                   "device_permissions": self.appDevs,
+                   "id": appNum,
+                   "resource_uri": "/api/v1/app_install/" + str(appNum)
+                  }
+            self.apps.append(app)
+            #appNum = appNum + 1
+    
         self.config = {"msg": "response",
                        "uri": "/api/vi/current_bridge/bridge",
                        "body": {"id": 42,
@@ -204,7 +207,7 @@ class BridgeControl:
         #self.cbSendMsg(self.config)
     
     def processResp(self, msg):
-        print "Message received: ", msg
+        #print "Message received: ", msg
         if msg["msg"] == "req":
             if "req" in msg:
                 if msg["req"] == "get":
@@ -221,6 +224,9 @@ class BridgeControl:
                         self.processDiscovered(msg["body"])
                     else:
                         print "Unrecognised POST > "
+                elif msg["verb"] == "put":
+                    l = json.dumps(msg) + "\n"
+                    self.jsonFile.write(l)
             else:
                 print "Unrecognised req from bridge > "
         elif msg["msg"] == "status":

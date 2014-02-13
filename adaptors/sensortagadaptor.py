@@ -323,7 +323,7 @@ class Adaptor(CbAdaptor):
 
     def sendHumidity(self, relHumidity):
         msg = {"id": self.id,
-               "content": "relHumidity",
+               "content": "rel_humidity",
                "timeStamp": time.time(),
                "data": relHumidity}
         for a in self.humidApps:
@@ -375,7 +375,7 @@ class Adaptor(CbAdaptor):
         Called in a thread and so it is OK if it blocks.
         Called separately for every app that can make requests.
         """
-        #print ModuleName, "processReq, req = ", req
+        print ModuleName, "processReq, req = ", req
         tagStatus = "ok"
         if req["req"] == "init":
             resp = {"name": self.name,

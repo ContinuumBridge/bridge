@@ -23,7 +23,7 @@ class Supervisor:
     def __init__(self):
         self.bridgeRoot = os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..'))
         print ModuleName, "CB_BRIDGE_ROOT = ", self.bridgeRoot
-        self.sim = os.getenv('CB_SIM_LEVEL', '0')
+        self.sim = os.getenv('CB_SIM_LEVEL', 0)
         print ModuleName, "CB_SIM = ", self.sim
         self.watchDogInterval = 30 # Number of secs between bridge manager checks
         self.connectionCheckInterval = 60 # Check internet connection this often
@@ -157,11 +157,11 @@ class Supervisor:
 
     def reboot(self):
         reactor.stop()
-        s = "skt-super-mgr"
         if self.sim == 0:
             call(["reboot"])
         else:
             print ModuleName, "Would have rebooted if not in sim mode."
+        exit()
 
 if __name__ == '__main__':
     s = Supervisor()

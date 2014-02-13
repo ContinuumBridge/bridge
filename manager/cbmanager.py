@@ -78,7 +78,7 @@ class ManageBridge:
     def listMgrSocs(self):
         mgrSocs = {}
         for d in self.devices:
-            mgrSocs[d["adaptor"]["id"]] = d["adaptor"]["mgrSoc"]
+            mgrSocs[d["id"]] = d["adaptor"]["mgrSoc"]
         for a in self.apps:
             mgrSocs[a["app"]["id"]] = a["app"]["mgrSoc"]
         return mgrSocs
@@ -162,7 +162,7 @@ class ManageBridge:
         for d in self.devices:
             exe = d["adaptor"]["exe"]
             fName = d["friendly_name"]
-            id = d["adaptor"]["id"]
+            id = d["id"]
             mgrSoc = d["adaptor"]["mgrSoc"]
             try:
                 p = subprocess.Popen([exe, mgrSoc, id])
@@ -194,7 +194,7 @@ class ManageBridge:
                 addrFound = False
                 if d["protocol"] == "btle":
                     for oldDev in self.devices:
-                       if oldDev["adaptor"]["adaptor"]["protocol"] == "btle": 
+                       if oldDev["adaptor"]["protocol"] == "btle": 
                            if d["mac_addr"] == oldDev["mac_addr"]:
                                addrFound = True
                 if addrFound == False:
@@ -235,8 +235,8 @@ class ManageBridge:
         if self.configured:
             # Process config to determine routing:
             for d in self.devices:
-                d["adaptor"]["id"] = "dev" + str(d["adaptor"]["id"])
-                socket = "skt-mgr-" + str(d["adaptor"]["id"])
+                d["id"] = "dev" + str(d["id"])
+                socket = "skt-mgr-" + str(d["id"])
                 d["adaptor"]["mgrSoc"] = socket
                 d["adaptor"]["exe"] = adtRoot + \
                     d["adaptor"]["exe"]
@@ -261,7 +261,7 @@ class ManageBridge:
                                                      "id": a["app"]["id"]
                                                     }) 
                             appDev["adtSoc"] = socket
-                            appDev["id"] = d["adaptor"]["id"]
+                            appDev["id"] = d["id"]
                             appDev["name"] = d["adaptor"]["name"]
                             appDev["friendly_name"] = \
                                 d["friendly_name"]
@@ -470,12 +470,13 @@ class ManageBridge:
                                             "sim": self.sim,
                                             "config": {"adts": a["device_permissions"],
                                                        "concentrator": conc}}
+                                print ModuleName, "Response = ", msg["id"], response
                                 self.cbSendMsg(response, msg["id"])
                                 break
                         break
             elif msg["type"] == "adt": 
                 for d in self.devices:
-                    if d["adaptor"]["id"] == msg["id"]:
+                    if d["id"] == msg["id"]:
                         response = {
                         "cmd": "config",
                         "config": 
@@ -487,6 +488,7 @@ class ManageBridge:
                              "sim": self.sim
                             }
                         }
+                        print ModuleName, "Response = ", msg["id"], response
                         self.cbSendMsg(response, msg["id"])
                         break
             elif msg["type"] == "conc":

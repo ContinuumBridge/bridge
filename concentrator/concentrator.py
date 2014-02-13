@@ -147,7 +147,8 @@ class Concentrator():
     def __init__(self, argv):
         self.status = "ok"
         self.doStop = False
-        self.uwe_mode = True
+        self.conc_mode = os.getenv('CB_CONCENTRATOR', 'server')
+        print ModuleName, "CB_CONCENTRATOR = ", self.conc_mode
 
         if len(argv) < 3:
             print "cbAdaptor improper number of arguments"
@@ -171,7 +172,8 @@ class Concentrator():
         self.concFactory = CbClientFactory(self.processServerMsg, initMsg)
         self.jsConnect = reactor.connectTCP("localhost", 5000, self.concFactory, timeout=10)
         # Intermediate for UWE use
-        self.uweListen = reactor.listenTCP(8881, Site(RootResource(self.dataStore)))
+        if self.conc_mode == "server":
+            self.uweListen = reactor.listenTCP(8881, Site(RootResource(self.dataStore)))
         reactor.run()
 
     def processConf(self, config):
@@ -180,7 +182,6 @@ class Concentrator():
         if config != "no_apps":
             self.cbFactory = {}
             self.appInstances = []
-            print ModuleName, "appInstances = ", self.appInstances
             for app in config:
                 iName = app["id"]
                 #print ModuleName, "app: ", iName, " socket: ", appConcSoc
@@ -225,8 +226,11 @@ class Concentrator():
     def stopReactor(self):
         d1 = defer.maybeDeferred(self.jsConnect.disconnect)
         d2 = defer.maybeDeferred(self.managerConnect.disconnect)
-        d3 = defer.maybeDeferred(self.uweListen.stopListening)
-        d = defer.gatherResults([d1, d2, d3], consumeErrors=True)
+        if self.conc_mode == "server":
+            d3 = defer.maybeDeferred(self.uweListen.stopListening)
+            d = defer.gatherResults([d1, d2, d3], consumeErrors=True)
+        else:
+            d = defer.gatherResults([d1, d2], consumeErrors=True)
         d.addCallback(self.goodbye)
 
     def goodbye(self, status):
@@ -256,21 +260,21 @@ class Concentrator():
             print ModuleName, "init from app ", req["appID"]
             if req["appID"] == "app1":
                 reactor.callLater(6, self.appInit, req["appID"])
-        elif req["msg"] == "services":
-            for s in req["services"]:
-                self.dataStore.addDevice(s["id"])
-            self.dataStore.setConfig(req)
         elif req["msg"] == "req":
-            if self.uwe_mode:
-                # In uwe_mode we act as a web server
-                if req["req"] == "put":
-                    if req["appID"] == "app1": 
-                        if self.dataStore.deviceKnown(req["deviceID"]):
-                            self.dataStore.appendData(req["deviceID"], req["type"], \
-                                req["timeStamp"], req["data"])
+            if self.conc_mode == "server":
+                if req["verb"] == "post":
+                    if req["channel"] == 1:
+                        if req["body"]["msg"] == "services":
+                            for s in req["body"]["services"]:
+                                self.dataStore.addDevice(s["id"])
+                                self.dataStore.setConfig(req["body"])
+                        elif req["body"]["msg"] == "data":
+                            if self.dataStore.deviceKnown(req["body"]["deviceID"]):
+                                self.dataStore.appendData(req["body"]["deviceID"], req["body"]["type"], \
+                                    req["body"]["timeStamp"], req["body"]["data"])
             else:
                 # Just forward req messages from apps to Bridge Controller
-                self.concFactory.sendMsg(msg)
+                self.concFactory.sendMsg(req)
         else:
             pass
 

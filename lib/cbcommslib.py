@@ -72,7 +72,7 @@ class CbAdaptor:
         self.configured = True
 
     def processManager(self, cmd):
-        #print ModuleName, "Received from manager: ", cmd
+        print ModuleName, "Received from manager: ", cmd
         if cmd["cmd"] == "stop":
             self.doStop = True
             msg = {"id": self.id,

@@ -93,6 +93,14 @@ while not doStop:
                     " ir_temp  =  " + \
                     str("%4.1f" %d["data"]) 
                 print dat
+            elif d["type"] == "rel_humidity":
+                localTime = time.localtime(d["timeStamp"])
+                now = time.strftime("%H:%M:%S", localTime)
+                dat = now +\
+                    "   " + idToName[bridgeData["device"]] + \
+                    " rel H    =  " + \
+                    str("%4.1f" %d["data"]) 
+                print dat
             elif d["type"] == "buttons":
                 localTime = time.localtime(d["timeStamp"])
                 now = time.strftime("%H:%M:%S", localTime)

@@ -27,11 +27,13 @@ if __name__ == '__main__':
     protocol = sys.argv[1]
     sim = sys.argv[2]
     discoveredAddresses = []
+    names = []
+    manufacturers = []
     if sim == "0":
         try:
             os.system("sudo hciconfig hci0 up")
         except:
-            print ModuleName, "Unable to bring up hci0 interface"
+            #print ModuleName, "Unable to bring up hci0 interface"
             d = {"status": "error"}        
             print json.dumps(d)
             sys.exit()
@@ -61,12 +63,16 @@ if __name__ == '__main__':
                 found = False
                 if len(discoveredAddresses) == 0:
                     discoveredAddresses.append(addr)
+                    names.append("Test Device 1")
+                    manufacturers.append("Texas Instruments")
                 else:
                     for a in discoveredAddresses:
                         if addr == a:
                             found = True
                     if found == False:
                         discoveredAddresses.append(addr)
+                        names.append("SensorTag")
+                        manufacturers.append("Texas Instruments")
             except:
                 sys.stderr.write(ModuleName + "lescan skip \n")
         try:

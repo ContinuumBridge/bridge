@@ -43,9 +43,11 @@ class WiFiSetup():
     def clientConnected(self):
         try:
             cmd = 'ping -b 255.255.255.255'
+            # This is ContinuumBridge portal ip address
+            cmd = 'ping 54.194.28.63'
             p = pexpect.spawn(cmd)
         except:
-            print ModuleName, "Can't spawn ping to broadcast address"
+            print ModuleName, "Can't spawn ping"
             self.connected = False
         index = p.expect(['time', pexpect.TIMEOUT], timeout=10)
         if index == 1:
@@ -78,10 +80,10 @@ class WiFiSetup():
             return True
 
     def getConnected(self):
-        """ If the Bridge is not connected assume that we're going to connect
-            using WiFi. Try to connect using current settings. If we can't,
+        """ If the Bridge is not connected assume that we are going to connect
+            using WiFi. Try to connect using current settings. If we cannot,
             switch to server mode and ask user for SSDI and WPA key with a 
-            2 minute timeout. If we've got credentials, use these and try
+            2 minute timeout. If we have got credentials, use these and try
             again, otherwise return with failed status.
         """
         s = SwitchWiFi()
