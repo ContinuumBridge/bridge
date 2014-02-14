@@ -4,6 +4,7 @@ build
 manager/*.db
 manager/*.config
 *.py[cod]
+thisbridge/*
 
 # C extensions
 *.so

@@ -24,22 +24,14 @@ from cbcommslib import CbClientProtocol
 from cbcommslib import CbClientFactory
 from cbcommslib import CbServerProtocol
 from cbcommslib import CbServerFactory
+from cbconfig import *
 
 class ManageBridge:
 
     def __init__(self):
         """ apps and adts data structures are stored in a local file.
         """
-        self.bridgeRoot = os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..'))
-        print ModuleName, "CB_BRIDGE_ROOT = ", self.bridgeRoot
-        self.noCloud = os.getenv('CB_NO_CLOUD', False)
-        print ModuleName, "CB_NO_CLOUD = ", self.noCloud
-        self.sim = os.getenv('CB_SIM_LEVEL', '0')
-        print ModuleName, "CB_SIM = ", self.sim
-        self.controllerAddr = os.getenv('CB_CONTROLLER_ADDR', '54.194.28.63')
-        print ModuleName, "CB_CONTROLLER_ADDR = ", self.controllerAddr
-        self.email = os.getenv('CB_BRIDGE_EMAIL', 'cde5fb1645e74314a3e6841a4df0828d@continuumbridge.com')
-        self.password = os.getenv('CB_BRIDGE_PASSWORD', 'zqN17m94GftDvNiWNGls+6tyxryCJFWxzWC5hs/fTmF7YXn4i8eogVa/HzwK5fK2')
+        print ModuleName, "CB_NO_CLOUD = ", CB_NO_CLOUD
         self.discovered = False
         self.configured = False
         self.reqSync = False
@@ -55,16 +47,16 @@ class ManageBridge:
         self.initBridge()
 
     def initBridge(self):
-        if self.noCloud != "True":
+        if CB_NO_CLOUD != True:
             print ModuleName, "Bridge Manager Starting JS Concentrator"
             exe = "nodejs"
-            path = self.bridgeRoot + "/nodejs/index.js"
-            try:
-                self.nodejsProc = subprocess.Popen([exe, path, self.controllerAddr, \
-                                                    self.email, self.password])
-                print ModuleName, "Started node.js"
-            except:
-                print ModuleName, "node.js failed to start. exe = ", exe
+            path = CB_BRIDGE_ROOT + "/nodejs/index.js"
+            #try:
+            self.nodejsProc = subprocess.Popen([exe, path,  CB_CONTROLLER_ADDR, \
+                                                    CB_BRIDGE_EMAIL, CB_BRIDGE_PASSWORD])
+           #     print ModuleName, "Started node.js"
+           # except:
+           #     print ModuleName, "node.js failed to start. exe = ", exe
         else:
             print ModuleName, "Running without Cloud Server"
         # Give time for node interface to start
@@ -85,7 +77,7 @@ class ManageBridge:
 
     def startConcentrator(self):
         # Open a socket for communicating with the concentrator
-        s = "skt-mgr-conc"
+        s = CB_SOCKET_DIR + "skt-mgr-conc"
         try:
             os.remove(s)
         except:
@@ -100,7 +92,7 @@ class ManageBridge:
         # Now start the concentrator in a subprocess
         exe = self.concPath
         id = "conc"
-        mgrSoc = "skt-mgr-conc"
+        mgrSoc = CB_SOCKET_DIR + "skt-mgr-conc"
         try:
             self.concProc = subprocess.Popen([exe, mgrSoc, id])
             print ModuleName, "Started concentrator"
@@ -108,7 +100,7 @@ class ManageBridge:
             print ModuleName, "Concentrator failed to start"
 
         # Initiate comms with supervisor, which started the manager in the first place
-        s = "skt-super-mgr"
+        s = CB_SOCKET_DIR + "skt-super-mgr"
         initMsg = {"id": "manager",
                    "msg": "status",
                    "status": "ok"} 
@@ -180,9 +172,9 @@ class ManageBridge:
 
     def doDiscover(self):
         self.discoveredDevices = {}
-        exe = self.bridgeRoot + "/manager/discovery.py"
+        exe = CB_BRIDGE_ROOT + "/manager/discovery.py"
         protocol = "btle"
-        output = subprocess.check_output([exe, protocol, self.sim])
+        output = subprocess.check_output([exe, protocol, str(CB_SIM_LEVEL)])
         print ModuleName, "Discover output = ", output
         discOutput = json.loads(output)
         self.discoveredDevices["msg"] = "req"
@@ -214,29 +206,33 @@ class ManageBridge:
         reactor.callInThread(self.doDiscover)
 
     def readConfig(self):
-        appRoot = self.bridgeRoot + "/apps/"
-        adtRoot = self.bridgeRoot + "/adaptors/"
-        self.concPath = self.bridgeRoot + "/concentrator/concentrator.py"
+        appRoot = CB_BRIDGE_ROOT + "/apps/"
+        adtRoot = CB_BRIDGE_ROOT + "/adaptors/"
+        self.concPath = CB_BRIDGE_ROOT + "/concentrator/concentrator.py"
+        configFile = CB_CONFIG_DIR + "/bridge.config"
         configRead = False
         try:
-            with open('bridge.config', 'r') as configFile:
+            with open(configFile, 'r') as configFile:
                 config = json.load(configFile)
                 configRead = True
                 print ModuleName, "readConfig"
-                pprint(config)
+                #pprint(config)
         except:
             print ModuleName, "Warning. No config file exists"
             self.configured = False
         if configRead:
-            self.apps = config["body"]["apps"]
-            self.devices = config["body"]["devices"]
-            self.configured = True
+            try:
+                self.apps = config["body"]["apps"]
+                self.devices = config["body"]["devices"]
+                self.configured = True
+            except:
+                print ModuleName, "bridge.config appears to be corrupt. Ignoring."
 
         if self.configured:
             # Process config to determine routing:
             for d in self.devices:
                 d["id"] = "dev" + str(d["id"])
-                socket = "skt-mgr-" + str(d["id"])
+                socket = CB_SOCKET_DIR + "skt-mgr-" + str(d["id"])
                 d["adaptor"]["mgrSoc"] = socket
                 d["adaptor"]["exe"] = adtRoot + \
                     d["adaptor"]["exe"]
@@ -246,14 +242,14 @@ class ManageBridge:
             for a in self.apps:
                 a["app"]["id"] = "app" + str(a["app"]["id"])
                 a["app"]["exe"] = appRoot + a["app"]["exe"]
-                a["app"]["mgrSoc"] = "skt-mgr-" + str(a["app"]["id"])
-                a["app"]["concSoc"] = "skt-conc-" + str(a["app"]["id"])
+                a["app"]["mgrSoc"] = CB_SOCKET_DIR + "skt-mgr-" + str(a["app"]["id"])
+                a["app"]["concSoc"] = CB_SOCKET_DIR + "skt-conc-" + str(a["app"]["id"])
                 for appDev in a["device_permissions"]:
                     uri = appDev["device_install"]
                     for d in self.devices: 
                         print ModuleName, "uri = ", uri, " device uri = ", d["resource_uri"]
                         if d["resource_uri"] == uri:
-                            socket = "skt-" \
+                            socket = CB_SOCKET_DIR + "skt-" \
                                 + str(d["id"]) + "-" + str(a["app"]["id"])
                             d["adaptor"]["apps"].append(
                                                     {"adtSoc": socket,
@@ -280,7 +276,8 @@ class ManageBridge:
     def updateConfig(self, msg):
         #print ModuleName, "Config received from controller:"
         #pprint(msg)
-        with open('bridge.config', 'w') as configFile:
+        configFile = CB_CONFIG_DIR + "/bridge.config"
+        with open(configFile, 'w') as configFile:
             json.dump(msg, configFile)
         status = self.readConfig()
         print ModuleName, status
@@ -413,6 +410,7 @@ class ManageBridge:
         mgrSocs = self.listMgrSocs()
         for a in mgrSocs:
             msg = {"cmd": "stop"}
+            print ModuleName, "Stopping ", a
             self.cbSendMsg(msg, a)
         self.running = False
         reactor.callLater(8, self.killAppProcs)
@@ -467,7 +465,7 @@ class ManageBridge:
                             if c["id"] == msg["id"]:
                                 conc = c["appConcSoc"]
                                 response = {"cmd": "config",
-                                            "sim": self.sim,
+                                            "sim": CB_SIM_LEVEL,
                                             "config": {"adts": a["device_permissions"],
                                                        "concentrator": conc}}
                                 print ModuleName, "Response = ", msg["id"], response
@@ -485,7 +483,7 @@ class ManageBridge:
                              "friendly_name": d["friendly_name"],
                              "btAddr": d["mac_addr"],
                              "btAdpt": "hci0", 
-                             "sim": self.sim
+                             "sim": CB_SIM_LEVEL
                             }
                         }
                         print ModuleName, "Response = ", msg["id"], response

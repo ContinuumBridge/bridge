@@ -63,7 +63,7 @@ if __name__ == '__main__':
                 found = False
                 if len(discoveredAddresses) == 0:
                     discoveredAddresses.append(addr)
-                    names.append("Test Device 1")
+                    names.append("SensorTag")
                     manufacturers.append("Texas Instruments")
                 else:
                     for a in discoveredAddresses:

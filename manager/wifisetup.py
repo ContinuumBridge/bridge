@@ -42,7 +42,7 @@ class WiFiSetup():
 
     def clientConnected(self):
         try:
-            cmd = 'ping -b 255.255.255.255'
+            #cmd = 'ping -b 255.255.255.255'
             # This is ContinuumBridge portal ip address
             cmd = 'ping 54.194.28.63'
             p = pexpect.spawn(cmd)

@@ -17,14 +17,10 @@ from twisted.internet import threads
 from twisted.internet import reactor, defer
 from cbcommslib import CbServerProtocol
 from cbcommslib import CbServerFactory
+from cbconfig import *
 
 class Supervisor:
-
     def __init__(self):
-        self.bridgeRoot = os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..'))
-        print ModuleName, "CB_BRIDGE_ROOT = ", self.bridgeRoot
-        self.sim = os.getenv('CB_SIM_LEVEL', 0)
-        print ModuleName, "CB_SIM = ", self.sim
         self.watchDogInterval = 30 # Number of secs between bridge manager checks
         self.connectionCheckInterval = 60 # Check internet connection this often
         self.reconnectCount = 0  
@@ -35,7 +31,7 @@ class Supervisor:
 
     def startManager(self, restart):
         # Open a socket for communicating with the bridge manager
-        s = "skt-super-mgr"
+        s = CB_SOCKET_DIR + "skt-super-mgr"
         # Try to remove socket in case of prior crash & no clean-up
         try:
             os.remove(s)
@@ -46,7 +42,7 @@ class Supervisor:
         self.mgrPort = reactor.listenUNIX(s, self.cbManagerFactory, backlog=4)
 
         # Start the manager in a subprocess
-        exe = self.bridgeRoot + "/manager/cbmanager.py"
+        exe = CB_BRIDGE_ROOT + "/manager/cbmanager.py"
         try:
             self.managerProc = Popen([exe])
             print ModuleName, "Started bridge manager"
@@ -157,11 +153,13 @@ class Supervisor:
 
     def reboot(self):
         reactor.stop()
-        if self.sim == 0:
-            call(["reboot"])
+        if CB_SIM_LEVEL == 0:
+            try:
+                call(["reboot"])
+            except:
+                print ModuleName, "Unable to reboot, probably because bridge not run as root."
         else:
             print ModuleName, "Would have rebooted if not in sim mode."
-        exit()
 
 if __name__ == '__main__':
     s = Supervisor()
