@@ -20,5 +20,12 @@
   "optionalDependencies": {},
   "engines": {
     "node": "*"
-  }
+  },
+  "readmeFilename": "README.md",
+  "gitHead": "e116f2d75fb3aff9a80344507865c1b0e9e29f50",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "license": "BSD"
 }

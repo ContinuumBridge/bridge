@@ -34,7 +34,7 @@ class RootResource(Resource):
 
     def render_POST(self, request):
         form = request.content.getvalue()
-        print ModuleName, "POST. form = ", form
+        #print ModuleName, "POST. form = ", form
         print "Credentials = ", request.args["ssid"][0], request.args["wpa"][0]
         response = "<html><font size=7>Thank you. Trying to connect.</font></html>"
         return response

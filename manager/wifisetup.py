@@ -42,9 +42,8 @@ class WiFiSetup():
 
     def clientConnected(self):
         try:
-            #cmd = 'ping -b 255.255.255.255'
             # This is ContinuumBridge portal ip address
-            cmd = 'ping 54.194.28.63'
+            cmd = 'ping continuumbridge.com'
             p = pexpect.spawn(cmd)
         except:
             print ModuleName, "Can't spawn ping"
@@ -66,7 +65,7 @@ class WiFiSetup():
         except:
             print ModuleName, "Can't run wificonfig"
             self.connected = False
-        index = p.expect(['Credentials.*', pexpect.TIMEOUT], timeout=120)
+        index = p.expect(['Credentials.*', pexpect.TIMEOUT], timeout=300)
         p.kill(9)
         if index == 1:
             print ModuleName, "SSID and WPA key not supplied before timeout"
@@ -88,10 +87,11 @@ class WiFiSetup():
         """
         s = SwitchWiFi()
         # Ensure we are in client mode
-        s.switch("client")
-        if clientConnected():
-            return True
-        else:
+        #s.switch("client")
+        #if self.clientConnected():
+        #    return True
+        #else:
+        if True:
             print ModuleName, "Can't connect. Switching to server mode"
             s.switch("server")
             if self.getCredentials():
@@ -100,7 +100,7 @@ class WiFiSetup():
                 except:
                     pass
                 wpa_proto_file = self.bridgeRoot + "/bridgeconfig/wpa_supplicant.conf.proto"
-                wpa_config_file = self.bridgeRoot + "/bridgeconfig/wpa_supplicant.conf"
+                wpa_config_file = self.bridgeRoot + "/thisbridge/wpa_supplicant.conf"
                 i = open(wpa_proto_file, 'r')
                 o = open(wpa_config_file, 'w')
                 for line in i:
@@ -110,7 +110,7 @@ class WiFiSetup():
                 i.close()
                 o.close()
                 s.switch("client")
-                if clientConnected():
+                if self.clientConnected():
                     print ModuleName, "Client connected"
                     return True
                 else:

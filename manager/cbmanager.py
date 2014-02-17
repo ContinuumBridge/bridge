@@ -47,9 +47,9 @@ class ManageBridge:
         self.initBridge()
 
     def initBridge(self):
-        if CB_NO_CLOUD != True:
+        if CB_NO_CLOUD != "True":
             print ModuleName, "Bridge Manager Starting JS Concentrator"
-            exe = "nodejs"
+            exe = "node"
             path = CB_BRIDGE_ROOT + "/nodejs/index.js"
             #try:
             self.nodejsProc = subprocess.Popen([exe, path,  CB_CONTROLLER_ADDR, \

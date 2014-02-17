@@ -5,7 +5,8 @@ if [ -f ../thisbridge/thisbridge.sh ]; then
     # Must source so that exports affect the parent script
     source ../thisbridge/thisbridge.sh
     export PYTHONPATH='/home/bridge/bridge/lib'
-    ./cbsupervisor.py >> ../thisbridge/bridge.log 2>&1 &
+    #./cbsupervisor.py >> ../thisbridge/bridge.log 2>&1 &
+    ./cbsupervisor.py
 else
     echo "thisbridge.sh file does not exist"
     exit
