@@ -17,29 +17,65 @@ class DataManager:
     """ Managers data storage for all sensors """
     def __init__(self, cbSendMsg):
         self.cbSendMsg = cbSendMsg
-        self.datFiles = {}
+        self.now = self.niceTime(time.time())
+        self.cvsList = []
+        self.cvsLine = []
+        self.index = []
 
-    def initDevice(self, deviceID):
-        print ModuleName, "initDevices, deviceID = ", deviceID
-        #self.datFiles[deviceID] = {}
-        #tempFile = deviceID + "temp"
-        #if os.path.isfile(tempFile):
-        #    self.datFiles[deviceID]["temp"] = open(deviceID + "temp", "a+", 0)
-        #else:
-        #    self.datFiles[deviceID]["temp"] = open(deviceID + "temp", "a+", 0)
-        #    self.datFiles[deviceID]["temp"].write("epochTime,objT,ambT\n")
-        #accelFile = deviceID + "accel"
-        #if os.path.isfile(accelFile):
-        #    self.datFiles[deviceID]["accel"] = open(deviceID + "accel", "a+", 0)
-        #else:
-        #    self.datFiles[deviceID]["accel"] = open(deviceID + "accel", "a+", 0)
-        #    self.datFiles[deviceID]["accel"].write("epochTime,e0,e1,e2\n")
+    def niceTime(self, timeStamp):
+        localtime = time.localtime(timeStamp)
+        milliseconds = '%03d' % int((timeStamp - int(timeStamp)) * 1000)
+        now = time.strftime('%Y:%m:%d,  %H:%M:%S:', localtime) + milliseconds
+        return now
+
+    def writeCVS(self, timeStamp):
+        self.then = self.now
+        self.now = self.niceTime(timeStamp)
+        if self.now != self.then:
+            self.f.write(self.then + ", ")
+            for i in range(len(self.cvsLine)):
+                self.f.write(self.cvsLine[i] + ", ")
+                self.cvsLine[i] = ""
+            self.f.write("\n")
+
+    def initFile(self, idToName):
+        self.idToName = idToName
+        for i in self.idToName:
+            self.index.append(i)
+        print ModuleName, "self.index = ", self.index
+        services = ["temperature", 
+                    "ir_temperature", 
+                    "accel x", "accel y", "accel z",
+                    "buttons l", "buttons r",
+                    "rel humidily",
+                    "pressure"]
+        self.numberServices = len(services)
+        for i in self.idToName:
+            for s in services:
+                self.cvsList.append(s)
+                self.cvsLine.append("")
+        print ModuleName, "cvsList = ", self.cvsList        
+        fileName = "../thisbridge/eew_app.csv"
+        if os.path.isfile(fileName):
+            self.f = open(fileName, "a+", 0)
+        else:
+            print ModuleName, "Opening new file"
+            self.f = open(fileName, "a+", 0)
+            for d in self.idToName:
+                self.f.write(d + ", " + self.idToName[d] + "\n")
+            self.f.write("date, time, ")
+            for i in self.cvsList:
+                self.f.write(i + ", ")
+            self.f.write("\n")
+            #self.f.close()
 
     def storeAccel(self, deviceID, timeStamp, a):
-        #timeStamp = str(int(timeStamp*10)/10)
-        #dat = str("%12.1f" %timeStamp) + ", " + str(a[0]) + ", " + str(a[1]) + \
-        #    ", " + str(a[2]) + "\n" 
-        #self.datFiles[deviceID]["accel"].write(dat)
+        self.writeCVS(timeStamp)
+        index = self.index.index(deviceID)
+        #print ModuleName, "index = ", index
+        for i in range(3):
+            self.cvsLine[index*self.numberServices + 2 + i] = str("%2.3f" %a[i])
+        #print ModuleName, "time: ", self.niceTime(timeStamp), " accel: ", a
         req = {
                "msg": "req",
                "verb": "post",
@@ -56,8 +92,9 @@ class DataManager:
         self.cbSendMsg(req, "conc")
 
     def storeTemp(self, deviceID, timeStamp, temp):
-        #dat = str(timeStamp) + ", " + str("%5.1f" %temp) + "\n"
-        #self.datFiles[deviceID]["temp"].write(dat)
+        self.writeCVS(timeStamp)
+        index = self.index.index(deviceID)
+        self.cvsLine[index*self.numberServices + 0] = str("%2.1f" %temp)
         req = {
                "msg": "req",
                "verb": "post",
@@ -74,6 +111,9 @@ class DataManager:
         self.cbSendMsg(req, "conc")
 
     def storeIrTemp(self, deviceID, timeStamp, temp):
+        self.writeCVS(timeStamp)
+        index = self.index.index(deviceID)
+        self.cvsLine[index*self.numberServices + 1] = str("%2.1f" %temp)
         req = {
                "msg": "req",
                "verb": "post",
@@ -90,6 +130,9 @@ class DataManager:
         self.cbSendMsg(req, "conc")
 
     def storeHumidity(self, deviceID, timeStamp, h):
+        self.writeCVS(timeStamp)
+        index = self.index.index(deviceID)
+        self.cvsLine[index*self.numberServices + 7] = str("%2.1f" %h)
         req = {
                "msg": "req",
                "verb": "post",
@@ -107,6 +150,10 @@ class DataManager:
 
 
     def storeButtons(self, deviceID, timeStamp, buttons):
+        self.writeCVS(timeStamp)
+        index = self.index.index(deviceID)
+        self.cvsLine[index*self.numberServices + 5] = str(buttons["leftButton"])
+        self.cvsLine[index*self.numberServices + 6] = str(buttons["rightButton"])
         req = {
                "msg": "req",
                "verb": "post",
@@ -396,7 +443,6 @@ class App(CbApp):
                     self.humidity.append(Humid(resp["id"]))
                     self.humidity[-1].dm = self.dm
                     serviceReq.append("rel_humidity")
-            self.dm.initDevice(resp["id"])
             msg = {"id": self.id,
                    "req": "services",
                    "services": serviceReq}
@@ -422,6 +468,7 @@ class App(CbApp):
                 print ModuleName, "configure app, adaptor name = ", name
                 self.idToName[adtID] = friendly_name
                 self.devices.append(adtID)
+        self.dm.initFile(self.idToName)
 
 if __name__ == '__main__':
 

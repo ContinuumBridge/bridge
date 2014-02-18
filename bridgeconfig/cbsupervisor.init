@@ -23,7 +23,9 @@ case "$1" in
   stop)
     echo "Stopping cbsupervisor"
     # kill application you want to stop
-    killall cbsupervisor
+    killall python
+    killall gatttool
+    killall node
     ;;
   *)
     echo "Usage: /etc/init.d/noip {start|stop}"
