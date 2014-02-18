@@ -3,6 +3,7 @@ var SERVER_PORT = 3000;
 // Set up the socket client
 var io = require('socket.io-client');
 var Bacon = require('baconjs').Bacon;
+    Q = require('q');
 
 /* Controller Web Socket */
 
@@ -10,9 +11,10 @@ module.exports = ControllerSocket;
 
 function ControllerSocket(controllerURL, sessionID) {
 
+    console.log('Attempting to connect to', controllerURL);
     var controllerSocket = {};
 
-    var socketAddress = controllerURL + '?sessionID=' + sessionID;
+    var socketAddress = controllerURL + "?sessionID=" + sessionID;
     var socket = io.connect(socketAddress);
 
     var fromController = new Bacon.Bus();

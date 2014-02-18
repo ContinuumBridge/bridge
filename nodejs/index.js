@@ -1,13 +1,13 @@
 
-// Get the arguments passed to node
+var getenv = require('getenv');
 
-var CONTROLLER_IP = (process.argv[2]) ? process.argv[2] : '54.194.28.63';
-var CONTROLLER_API = 'http://' + CONTROLLER_IP + '/api/v1/';
-var CONTROLLER_SOCKET = 'http://' + CONTROLLER_IP + ':3000/';
-var BRIDGE_EMAIL = (process.argv[3]) ? process.argv[3] : '28b45a59a875478ebcbdf327c18dbfb1@continuumbridge.com';
-var BRIDGE_PASSWORD = (process.argv[4]) ? process.argv[4] : 'oX3ZGWS/yY1l+PaEFsBp11yixvK6b7O5UiK9M9TV8YBnjPXl3bDLw9eXQZvpmNdr';
+var CONTROLLER_API = "http://" + getenv('CB_DJANGO_CONTROLLER_ADDR') + "/api/v1/";
+var CONTROLLER_SOCKET = "http://" + getenv('CB_NODE_CONTROLLER_ADDR') + "/"; 
+var BRIDGE_EMAIL = getenv('CB_BRIDGE_EMAIL', '28b45a59a875478ebcbdf327c18dbfb1@continuumbridge.com');
+var BRIDGE_PASSWORD = getenv('CB_BRIDGE_PASSWORD', 'oX3ZGWS/yY1l+PaEFsBp11yixvK6b7O5UiK9M9TV8YBnjPXl3bDLw9eXQZvpmNdr');
 
 console.log('CONTROLLER_API', CONTROLLER_API);
+console.log('CONTROLLER_SOCKET', CONTROLLER_SOCKET);
 console.log('BRIDGE_EMAIL', BRIDGE_EMAIL);
 console.log('BRIDGE_PASSWORD', BRIDGE_PASSWORD);
 
@@ -15,12 +15,12 @@ var BridgeConcentrator = require('./bridge/bridge_concentrator.js');
 var bridgeConcentrator = new BridgeConcentrator(5000);
 
 var controllerAuth = require('./controller/controller_auth.js');
+var ControllerSocket = require('./controller/controller_socket.js');
 
 controllerAuth(CONTROLLER_API, BRIDGE_EMAIL, BRIDGE_PASSWORD).then(function(sessionID) {
 
     console.log('SessionID:', sessionID);
 
-    var ControllerSocket = require('./controller/controller_socket.js');
     controllerSocket = new ControllerSocket(CONTROLLER_SOCKET, sessionID);
 
     controllerSocket.fromController.onValue(function(message) {
