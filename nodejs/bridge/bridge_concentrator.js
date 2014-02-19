@@ -16,16 +16,13 @@ function BridgeConcentrator(port) {
 
         socket.setEncoding('utf8');
 
-        socket.on('connect', function() {
+        console.log('Concentrator > Connected to Bridge');
 
-            console.log('Server > Connected to Bridge');
+        toBridge.onValue(function(message) {
 
-            toBridge.onValue(function(message) {
-
-                //console.log('Writing to bridge', message);
-                socket.write(message + '\r\n');
-            });
-        }); 
+            console.log('Writing to bridge', message);
+            socket.write(message + '\r\n');
+        });
 
         socket.on('data', function(data) {
 
