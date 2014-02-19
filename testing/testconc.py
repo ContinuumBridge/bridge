@@ -15,20 +15,11 @@ from pprint import pprint
 from twisted.internet.protocol import Protocol, Factory
 from twisted.internet.protocol import ReconnectingClientFactory
 from twisted.protocols.basic import LineReceiver
-from twisted.internet import task
-from twisted.internet import threads
+from twisted.internet.protocol import ClientFactory
+from twisted.internet.protocol import ReconnectingClientFactory
 from twisted.internet import defer
 from twisted.internet import reactor
 from twisted.application.internet import TCPServer
-from twisted.application.service import Application
-from twisted.web.resource import Resource
-from twisted.web.server import Site
-from twisted.internet.task import deferLater
-from twisted.web.server import NOT_DONE_YET
-from cbcommslib import CbClientProtocol
-from cbcommslib import CbClientFactory
-from cbcommslib import CbServerProtocol
-from cbcommslib import CbServerFactory
 
 class Concentrator():
     def __init__(self, argv):
@@ -59,6 +50,43 @@ class Concentrator():
     def stopAll(self):
         print ModuleName, "Stopping reactor"
         reactor.stop()
+
+class CbClientProtocol(LineReceiver):
+    def __init__(self, processMsg, initMsg):
+        self.processMsg = processMsg
+        self.initMsg = initMsg
+
+    def connectionMade(self):
+        print "Connected to node"
+        self.sendLine(json.dumps(self.initMsg))
+
+    def lineReceived(self, data):
+        print "Message received"
+        self.processMsg(json.loads(data))
+
+    def sendMsg(self, msg):
+        self.sendLine(json.dumps(msg))
+
+class CbClientFactory(ReconnectingClientFactory):
+    def __init__(self, processMsg, initMsg):
+        self.processMsg = processMsg
+        self.initMsg = initMsg
+
+    def buildProtocol(self, addr):
+        self.proto = CbClientProtocol(self.processMsg, self.initMsg)
+        return self.proto
+
+    def sendMsg(self, msg):
+        self.proto.sendMsg(msg)
+
+    def clientConnectionFailed(self, connector, reason):
+        print "Client connection failed: ", reason
+
+    def clientConnectionLost(self, connector, reason):
+        print "Client connection lost: ", reason
+
+    def startedConnecting(self, connector): 
+        print "Started connecting"
 
 if __name__ == '__main__':
     concentrator = Concentrator(sys.argv)
