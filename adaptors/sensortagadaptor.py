@@ -88,7 +88,7 @@ class Adaptor(CbAdaptor):
         self.gatt.expect('\[LE\]>')
         self.gatt.sendline('connect')
         self.gatt.expect('\[LE\]>', timeout=5)
-        index = self.gatt.expect(['successful', pexpect.TIMEOUT], timeout=5)
+        index = self.gatt.expect(['successful', pexpect.TIMEOUT], timeout=20)
         if index == 1:
             print ModuleName, "Connection to device timed out for", self.id, \
                 " - ", self.friendly_name
@@ -96,28 +96,52 @@ class Adaptor(CbAdaptor):
             return "timeout"
         else:
             print ModuleName, self.id, " - ", self.friendly_name, " connected"
+            self.connected = True
+            return "ok"
+
+    def switchSensors(self):
+        """ Call whenever an app updates its sensor configuration. Turns
+            individual sensors in the Tag on or off.
+        """
+        self.handles = {}
+        self.handles["accl"] = {"en": 0x31, "notify": 0x2e, "period": 0x34}
+        self.handles["temp"] = {"en": 0x29, "notify": 0x26}
+        if accelApps:		
             # Enable accelerometer
-            self.gatt.sendline('char-write-cmd 0x31 01')
+            self.gatt.sendline('char-write-cmd self.handles["accel"]["en"] 01')
             self.gatt.expect('\[LE\]>')
-            self.gatt.sendline('char-write-cmd 0x2e 0100')
+            self.gatt.sendline('char-write-cmd self.handles["accel"]["notify"] 0100')
             self.gatt.expect('\[LE\]>')
             # Period = 0x34 value x 10 ms (thought to be 0x0a)
             # Was running with 0x0A = 100 ms, now 0x22 = 500 ms
             self.gatt.sendline('char-write-cmd 0x34 22')
             self.gatt.expect('\[LE\]>')
+        else:
+            # Disable accelerometer
+            self.gatt.sendline('char-write-cmd self.handles["accel"]["en"] 00')
+            self.gatt.expect('\[LE\]>')
 
+        if tempApps or irTempApps:
             # Enable temperature sensors with notification
-            self.gatt.sendline('char-write-cmd 0x29 01')
+            self.gatt.sendline('char-write-cmd self.handles["temp"]["en"] 01')
             self.gatt.expect('\[LE\]>')
             self.gatt.sendline('char-write-cmd 0x26 0100')
             self.gatt.expect('\[LE\]>')
+        else:
+            self.gatt.sendline('char-write-cmd 0x29 00')
+            self.gatt.expect('\[LE\]>')
 
+        if humidApps:
             # Enable humidity sensor with notification
             self.gatt.sendline('char-write-cmd 0x3C 01')
             self.gatt.expect('\[LE\]>')
             self.gatt.sendline('char-write-cmd 0x39 0100')
             self.gatt.expect('\[LE\]>')
+        else:
+            self.gatt.sendline('char-write-cmd 0x3C 01')
+            self.gatt.expect('\[LE\]>')
  
+        if gyroApps:
             # Enable gyro with notification
             # Write 0 to turn off gyroscope, 1 to enable X axis only, 2 to
             # enable Y axis only, 3 = X and Y, 4 = Z only, 5 = X and Z, 6 =
@@ -126,7 +150,11 @@ class Adaptor(CbAdaptor):
             self.gatt.expect('\[LE\]>')
             self.gatt.sendline('char-write-cmd 0x58 0100')
             self.gatt.expect('\[LE\]>')
+        else:
+            self.gatt.sendline('char-write-cmd 0x5B 00')
+            self.gatt.expect('\[LE\]>')
 
+        if magnetApps:
             # Enable magnetometer with notification
             self.gatt.sendline('char-write-cmd 0x44 01')
             self.gatt.expect('\[LE\]>')
@@ -135,14 +163,17 @@ class Adaptor(CbAdaptor):
             # Change to 1s notification from default 2s
             self.gatt.sendline('char-write-cmd 0x47 66')
             self.gatt.expect('\[LE\]>')
+        else:
+            self.gatt.sendline('char-write-cmd 0x44 01')
+            self.gatt.expect('\[LE\]>')
 
+        if buttonApps:
             # Enable button-press notification
             self.gatt.sendline('char-write-cmd 0x60 0100')
             self.gatt.expect('\[LE\]>')
-            # We're connected!
-            self.connected = True
-            print ModuleName, self.id, " - ", self.friendly_name, " configured"
-            return "ok"
+        else:
+            self.gatt.sendline('char-write-cmd 0x60 0o00')
+            self.gatt.expect('\[LE\]>')
 
     def startApp(self):
         """
@@ -226,7 +257,7 @@ class Adaptor(CbAdaptor):
         return v
 
     def getValues(self):
-        """Continually updates accel and temp values.
+        """Continually updates sensor values.
 
         Run in a thread. When new accel values are received, the thread
         sets the accelReady flag for each attached app to True.  
@@ -458,6 +489,7 @@ class Adaptor(CbAdaptor):
             else:
                 if "buttons" not in req["services"]:
                     self.buttonApps.remove(req["id"])  
+            self.switchSensors()
         else:
             pass
 

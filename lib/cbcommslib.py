@@ -26,7 +26,6 @@ class CbAdaptor:
     ModuleName = "CbAdaptor           " 
 
     def __init__(self, argv):
-        self.status = "ok"
         self.doStop = False
         self.configured = False
         self.cbFactory = {}
@@ -66,7 +65,7 @@ class CbAdaptor:
                 name = app["name"]
                 adtSoc = app["adtSoc"]
                 self.appInstances.append(iName)
-                self.cbFactory[iName] = CbServerFactory(self.processReqThread)
+                self.cbFactory[iName] = CbServerFactory(self.processReq)
                 reactor.listenUNIX(adtSoc, self.cbFactory[iName])
         self.cbAdtConfigure(config)
         self.configured = True
@@ -100,18 +99,8 @@ class CbAdaptor:
         print ModuleName, "Bye from ", self.id
         sys.exit
 
-    def processReqThread(self, req):
-        """Simplifies calling the adaptor's processReq in a Twisted thread."""
-        self.processReq(req)
-
     def cbSendMsg(self, msg, iName):
         self.cbFactory[iName].sendMsg(msg)
-
-    def reportStatus(self):
-        return self.status
-
-    def setStatus(self, newStatus):
-        self.status = newStatus
 
 class CbApp:
     """This should be sub-classed by any app."""
@@ -120,7 +109,6 @@ class CbApp:
     def __init__(self, argv):
         self.cbFactory = {}
         self.adtInstances = []
-        self.status = "ok"
         self.doStop = False
         self.friendlyLookup = {}
         self.configured = False
@@ -168,8 +156,7 @@ class CbApp:
                 initMsg = {"id": self.id,
                            "appClass": self.appClass,
                            "req": "init"}
-                self.cbFactory[iName] = CbClientFactory(self.processRespThread, \
-                                        initMsg)
+                self.cbFactory[iName] = CbClientFactory(self.processResp, initMsg)
                 reactor.connectUNIX(adtSoc, self.cbFactory[iName], timeout=10)
         # Connect to Concentrator socket
         if not self.configured:
@@ -213,10 +200,6 @@ class CbApp:
              print ModuleName, self.id, " stop: reactor was not running"
         print ModuleName, "Bye from ", self.id
         sys.exit
-
-    def processRespThread(self, resp):
-        """Simplifies calling the app's processResp in a Twisted thread."""
-        self.processResp(resp)
 
     def cbSendMsg(self, msg, iName):
         self.cbFactory[iName].sendMsg(msg)
