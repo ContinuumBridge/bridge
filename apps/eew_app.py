@@ -417,24 +417,31 @@ class App(CbApp):
                 # Comment out sensor values that are not required by this app
                 if p["parameter"] == "temperature":
                     self.temp.append(TemperatureMeasure(resp["id"]))
+                    self.temp[-1].dm = self.dm
                     serviceReq.append("temperature")
                 if p["parameter"] == "ir_temperature":
                     self.irTemp.append(IrTemperatureMeasure(resp["id"]))
+                    self.irTemp[-1].dm = self.dm
                     serviceReq.append("ir_temperature")
                 elif p["parameter"] == "acceleration":
                     self.accel.append(Accelerometer(resp["id"]))
                     serviceReq.append("acceleration")
+                    self.accel[-1].dm = self.dm
                 #elif p["parameter"] == "gyro":
                 #    self.gyro.append(Gyro(resp["id"]))
+                #    self.gyro[-1].dm = self.dm
                 #   serviceReq.append("gyro")
                 #elif p["parameter"] == "magnetometer":
                 #    self.magnet.append(Magnet(resp["id"]))
+                #    self.magnet[-1].dm = self.dm
                 #    serviceReq.append("magnetometer")
                 elif p["parameter"] == "buttons":
                     self.buttons.append(Buttons(resp["id"]))
+                    self.buttons[-1].dm = self.dm
                     serviceReq.append("buttons")
                 elif p["parameter"] == "rel_humidity":
                     self.humidity.append(Humid(resp["id"]))
+                    self.humidity[-1].dm = self.dm
                     serviceReq.append("rel_humidity")
             msg = {"id": self.id,
                    "req": "services",

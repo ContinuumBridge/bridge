@@ -60,11 +60,11 @@ class Supervisor:
             reactor.run()
 
     def cbSendManagerMsg(self, msg):
-        print ModuleName, "Sending msg to manager: ", msg
+        #print ModuleName, "Sending msg to manager: ", msg
         self.cbManagerFactory.sendMsg(msg)
 
     def processManager(self, msg):
-        print ModuleName, "processManager received: ", msg
+        #print ModuleName, "processManager received: ", msg
         self.timeStamp = time.time()
         if msg["msg"] == "restart":
             msg = {"msg": "stopall"

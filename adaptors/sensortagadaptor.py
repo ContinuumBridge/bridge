@@ -60,6 +60,8 @@ class Adaptor(CbAdaptor):
         CbAdaptor.cbAdtConfigure = self.configure
         self.connected = False  # Indicates we are connected to SensorTag
         self.status = "ok"
+        self.state = "idle"
+        self.processedApps = []
         self.tempApps = []
         self.irTempApps = []
         self.accelApps = []
@@ -69,6 +71,25 @@ class Adaptor(CbAdaptor):
         self.buttonApps = []
         #CbAdaprot.__init__ MUST be called
         CbAdaptor.__init__(self, argv)
+
+    def states(self, action):
+        if self.state == "idle":
+            if action == "connected":
+                self.state = "connected"
+            elif action == "inUse":
+                self.state = "inUse"
+        elif self.state == "connected":
+            if action == "inUse":
+                self.state = "activate"
+        elif self.state == "inUse":
+            if action == "connected":
+                self.state = "activate"
+        if self.state == "activate":
+            print ModuleName, "Activating"
+            self.switchSensors()
+            reactor.callInThread(self.getValues)
+            self.state = "running"
+        print ModuleName, "state = ", self.state
 
     def initSensorTag(self):
         print ModuleName, "initSensorTag", self.id, " - ", self.friendly_name
@@ -99,49 +120,79 @@ class Adaptor(CbAdaptor):
             self.connected = True
             return "ok"
 
+    def checkAllProcessed(self, appID):
+        self.processedApps.append(appID)
+        found = False
+        for a in self.processedApps:
+            if a in self.appInstances:
+                found = True
+        if found:
+            self.states("inUse")
+
     def switchSensors(self):
         """ Call whenever an app updates its sensor configuration. Turns
             individual sensors in the Tag on or off.
         """
         self.handles = {}
-        self.handles["accl"] = {"en": 0x31, "notify": 0x2e, "period": 0x34}
-        self.handles["temp"] = {"en": 0x29, "notify": 0x26}
-        if accelApps:		
+        self.primary = {"temp": 0x23,
+                        "accel": 0x2E
+                       }
+        self.handles["temp"] = {"en": str(hex(self.primary["temp"] + 6)), 
+                                "notify": str(hex(self.primary["temp"] + 3)),
+                                "data": str(format(self.primary["temp"] + 2, "#06x"))
+                               }
+        self.handles["accel"] = {"en": str(hex(self.primary["accel"] + 6)), 
+                                 "notify": str(hex(self.primary["accel"] + 3)),
+                                 "period": str(hex(self.primary["accel"] + 9)), 
+                                 "data": str(format(self.primary["accel"] + 2, "#06x"))
+                                }
+        #print ModuleName, "handles: ", self.handles["temp"]["data"], self.handles["accel"]["data"]
+        if self.accelApps:
             # Enable accelerometer
-            self.gatt.sendline('char-write-cmd self.handles["accel"]["en"] 01')
+            line = 'char-write-cmd ' + self.handles["accel"]["en"] + ' 01'
+            #print ModuleName, "line = ", line
+            self.gatt.sendline(line)
             self.gatt.expect('\[LE\]>')
-            self.gatt.sendline('char-write-cmd self.handles["accel"]["notify"] 0100')
+            line = 'char-write-cmd ' + self.handles["accel"]["notify"] + ' 0100'
+            #print ModuleName, "line = ", line
+            self.gatt.sendline(line)
             self.gatt.expect('\[LE\]>')
             # Period = 0x34 value x 10 ms (thought to be 0x0a)
             # Was running with 0x0A = 100 ms, now 0x22 = 500 ms
-            self.gatt.sendline('char-write-cmd 0x34 22')
+            line = 'char-write-cmd ' + self.handles["accel"]["period"] + ' 22'
+            #print ModuleName, "line = ", line
+            self.gatt.sendline(line)
             self.gatt.expect('\[LE\]>')
         else:
             # Disable accelerometer
-            self.gatt.sendline('char-write-cmd self.handles["accel"]["en"] 00')
+            line = 'char-write-cmd ' + self.handles["accel"]["en"] + ' 00'
+            self.gatt.sendline(line)
             self.gatt.expect('\[LE\]>')
 
-        if tempApps or irTempApps:
+        if self.tempApps or self.irTempApps:
             # Enable temperature sensors with notification
-            self.gatt.sendline('char-write-cmd self.handles["temp"]["en"] 01')
+            line = 'char-write-cmd ' + self.handles["temp"]["en"] + ' 01'
+            self.gatt.sendline(line)
+            #print ModuleName, "line = ", line
             self.gatt.expect('\[LE\]>')
+            #self.gatt.sendline('char-write-cmd 0x26 0100')
             self.gatt.sendline('char-write-cmd 0x26 0100')
             self.gatt.expect('\[LE\]>')
         else:
             self.gatt.sendline('char-write-cmd 0x29 00')
             self.gatt.expect('\[LE\]>')
 
-        if humidApps:
+        if self.humidApps:
             # Enable humidity sensor with notification
-            self.gatt.sendline('char-write-cmd 0x3C 01')
+            self.gatt.sendline('char-write-cmd 0x3F 01')
             self.gatt.expect('\[LE\]>')
-            self.gatt.sendline('char-write-cmd 0x39 0100')
+            self.gatt.sendline('char-write-cmd 0x3C 0100')
             self.gatt.expect('\[LE\]>')
         else:
-            self.gatt.sendline('char-write-cmd 0x3C 01')
+            self.gatt.sendline('char-write-cmd 0x3F 01')
             self.gatt.expect('\[LE\]>')
  
-        if gyroApps:
+        if self.gyroApps:
             # Enable gyro with notification
             # Write 0 to turn off gyroscope, 1 to enable X axis only, 2 to
             # enable Y axis only, 3 = X and Y, 4 = Z only, 5 = X and Z, 6 =
@@ -154,7 +205,7 @@ class Adaptor(CbAdaptor):
             self.gatt.sendline('char-write-cmd 0x5B 00')
             self.gatt.expect('\[LE\]>')
 
-        if magnetApps:
+        if self.magnetApps:
             # Enable magnetometer with notification
             self.gatt.sendline('char-write-cmd 0x44 01')
             self.gatt.expect('\[LE\]>')
@@ -167,15 +218,18 @@ class Adaptor(CbAdaptor):
             self.gatt.sendline('char-write-cmd 0x44 01')
             self.gatt.expect('\[LE\]>')
 
-        if buttonApps:
+        if self.buttonApps:
             # Enable button-press notification
             self.gatt.sendline('char-write-cmd 0x60 0100')
             self.gatt.expect('\[LE\]>')
         else:
             self.gatt.sendline('char-write-cmd 0x60 0o00')
             self.gatt.expect('\[LE\]>')
+        if self.accelApps or self.tempApps or self.irTemoApps or self.humidApps \
+                or self.gyroAoos or self.buttonApps or self.magnetApps:
+            pass
 
-    def startApp(self):
+    def connectSensorTag(self):
         """
         Continually attempts to connect to the device.
         Gating with doStop needed because adaptor may be stopped before
@@ -189,17 +243,12 @@ class Adaptor(CbAdaptor):
         while self.connected == False and not self.doStop and self.sim == 0:
             tagStatus = self.initSensorTag()    
             if tagStatus != "ok":
-                print ModuleName
                 print ModuleName, "ERROR. ", self.id, " - ", \
                     self.friendly_name, " failed to initialise"
-                print ModuleName, "Please press side button"
-                print ModuleName, \
-                      "If problem persists SensorTag may be out of range"
         if not self.doStop:
-            # Start a thread that continually gets accel and temp values
-            reactor.callInThread(self.getValues)
             print ModuleName, self.id, " - ", self.friendly_name, \
                 "successfully initialised"
+            self.states("connected")
  
     def s16tofloat(self, s16):
         f = float.fromhex(s16)
@@ -264,7 +313,7 @@ class Adaptor(CbAdaptor):
         """
         while not self.doStop:
             if self.sim == 0:
-                index = self.gatt.expect(['handle.*', pexpect.TIMEOUT], timeout=10)
+                index = self.gatt.expect(['handle.*', pexpect.TIMEOUT], timeout=20)
             else:
                 index = 0
             if index == 1:
@@ -288,7 +337,7 @@ class Adaptor(CbAdaptor):
                 startI = 2
                 while handles:
                     type = raw[startI]
-                    if type.startswith("0x002d"): 
+                    if type.startswith(self.handles["accel"]["data"]): 
                         # Accelerometer descriptor
                         #print ModuleName, "raw accel = ", raw 
                         accel = {}
@@ -302,12 +351,12 @@ class Adaptor(CbAdaptor):
                         buttons = {"leftButton": (int(raw[startI+2]) & 2) >> 1,
                                    "rightButton": int(raw[startI+2]) & 1}
                         self.sendButtons(buttons)
-                    elif type.startswith("0x0025"):
+                    elif type.startswith(self.handles["temp"]["data"]):
                         # Temperature descriptor
                         objT, ambT = self.calcTemperature(raw[startI+2:startI+6])
                         self.sendTemp(ambT)
                         self.sendIrTemp(objT)
-                    elif type.startswith("0x0038"):
+                    elif type.startswith("0x003b"):
                         relHumidity = self.calcHumidity(raw[startI+2:startI+6])
                         self.sendHumidity(relHumidity)
                     elif type.startswith("0x0057"):
@@ -489,7 +538,8 @@ class Adaptor(CbAdaptor):
             else:
                 if "buttons" not in req["services"]:
                     self.buttonApps.remove(req["id"])  
-            self.switchSensors()
+
+            self.checkAllProcessed(req["id"])
         else:
             pass
 
@@ -501,7 +551,7 @@ class Adaptor(CbAdaptor):
         if not self.configured:
             if self.sim != 0:
                 self.simValues = SimValues()
-            self.startApp()
+            self.connectSensorTag()
             self.configured = True
 
 if __name__ == '__main__':
