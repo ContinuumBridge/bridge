@@ -1,5 +1,12 @@
 
 var getenv = require('getenv');
+var winston = require('winston');
+
+var BridgeConcentrator = require('./bridge/bridge_concentrator.js');
+var bridgeConcentrator = new BridgeConcentrator(5000);
+
+var controllerAuth = require('./controller/controller_auth.js');
+var ControllerSocket = require('./controller/controller_socket.js');
 
 var CONTROLLER_API = "http://" + getenv('CB_DJANGO_CONTROLLER_ADDR') + "/api/v1/";
 var CONTROLLER_SOCKET = "http://" + getenv('CB_NODE_CONTROLLER_ADDR') + "/"; 
@@ -10,12 +17,6 @@ console.log('CONTROLLER_API', CONTROLLER_API);
 console.log('CONTROLLER_SOCKET', CONTROLLER_SOCKET);
 console.log('BRIDGE_EMAIL', BRIDGE_EMAIL);
 console.log('BRIDGE_PASSWORD', BRIDGE_PASSWORD);
-
-var BridgeConcentrator = require('./bridge/bridge_concentrator.js');
-var bridgeConcentrator = new BridgeConcentrator(5000);
-
-var controllerAuth = require('./controller/controller_auth.js');
-var ControllerSocket = require('./controller/controller_socket.js');
 
 controllerAuth(CONTROLLER_API, BRIDGE_EMAIL, BRIDGE_PASSWORD).then(function(sessionID) {
 

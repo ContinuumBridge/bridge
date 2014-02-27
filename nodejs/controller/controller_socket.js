@@ -13,6 +13,7 @@ function ControllerSocket(controllerURL, sessionID) {
 
     console.log('Attempting to connect to', controllerURL);
     var controllerSocket = {};
+    controllerSocket.connected = false;
 
     var socketAddress = controllerURL + "?sessionID=" + sessionID;
     var socket = io.connect(socketAddress);
@@ -23,13 +24,12 @@ function ControllerSocket(controllerURL, sessionID) {
 
     socket.on('connect', function() { 
 
-        console.log('Server > Connected to Bridge Controller');
-
-        //fromController
+        controllerSocket.connected = true;
 
         unsubscribeControllerSocket = toController.onValue(function(message) {
             socket.emit('message', message); 
         });
+        console.log('Server > Connected to Bridge Controller');
     });
 
     socket.on('message', function(message) {
@@ -40,6 +40,7 @@ function ControllerSocket(controllerURL, sessionID) {
 
     socket.on('disconnect', function() {
 
+        controllerSocket.connected = false;
         unsubscribeControllerSocket();
         console.log('Server > Disconnected from Bridge Controller');
     }); 
