@@ -51,12 +51,12 @@ class ManageBridge:
             print ModuleName, "Bridge Manager Starting JS Concentrator"
             exe = "/opt/node/bin/node"
             path = CB_BRIDGE_ROOT + "/nodejs/index.js"
-            #try:
-            self.nodejsProc = subprocess.Popen([exe, path,  CB_CONTROLLER_ADDR, \
+            try:
+                self.nodejsProc = subprocess.Popen([exe, path,  CB_CONTROLLER_ADDR, \
                                                     CB_BRIDGE_EMAIL, CB_BRIDGE_PASSWORD])
-           #     print ModuleName, "Started node.js"
-           # except:
-           #     print ModuleName, "node.js failed to start. exe = ", exe
+                print ModuleName, "Started node.js"
+            except:
+                print ModuleName, "node.js failed to start. exe = ", exe
         else:
             print ModuleName, "Running without Cloud Server"
         # Give time for node interface to start

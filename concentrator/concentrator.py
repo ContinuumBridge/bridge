@@ -29,12 +29,14 @@ from cbcommslib import CbClientProtocol
 from cbcommslib import CbClientFactory
 from cbcommslib import CbServerProtocol
 from cbcommslib import CbServerFactory
+import dropbox
 
 class DataStore():
     def __init__(self):
         self.config = {}
         self.appData = {}
         self.enabled = False
+        self.count = 0
 
     def setConfig(self, config):
         self.config = config
@@ -49,6 +51,7 @@ class DataStore():
                                          "timeStamp": timeStamp,
                                          "data": data
                                        })
+            self.count += 1
             #print ModuleName, "appendData = ", device, type, data
 
     def addDevice(self, d):
@@ -65,8 +68,19 @@ class DataStore():
         self.appData[device] = [] 
         return data
 
+    def getAllData(self):
+        data = self.appData
+        for d in self.appData:
+            self.appData[d] = []
+        self.count = 0
+        return data
+
+    def howBig(self):
+        return self.count
+
     def enableOutput(self, enable):
         self.enabled = enable
+        print ModuleName, "enableOutput: ", self.enabled
 
 class DevicePage(Resource):
     isLeaf = True
@@ -147,7 +161,7 @@ class Concentrator():
     def __init__(self, argv):
         self.status = "ok"
         self.doStop = False
-        self.conc_mode = os.getenv('CB_CONCENTRATOR', 'server')
+        self.conc_mode = os.getenv('CB_CONCENTRATOR', 'client')
         print ModuleName, "CB_CONCENTRATOR = ", self.conc_mode
 
         if len(argv) < 3:
@@ -174,6 +188,16 @@ class Concentrator():
         # Intermediate for UWE use
         if self.conc_mode == "server":
             self.uweListen = reactor.listenTCP(8881, Site(RootResource(self.dataStore)))
+
+        if self.conc_mode == 'client':
+            self.dataStore.enableOutput(True)
+
+        # Connect to Dropbox
+        if self.conc_mode == 'client':
+            access_token = 'yd0PQdjPz0sAAAAAAAAAAWoWEA1yPLVJ5BfBy4I9NKta-yJrb-UJPPtXeh4Emkgt'
+            self.client = dropbox.client.DropboxClient(access_token)
+            print ModuleName, 'linked account: ', self.client.account_info()
+
         reactor.run()
 
     def processConf(self, config):
@@ -249,6 +273,12 @@ class Concentrator():
                 "resp": "config"}
         self.cbSendMsg(resp, appID)
 
+    def dropData(self):
+        f = open('../thisbridge/eew_app.csv', 'rb')
+        response = self.client.put_file('/eew_app.csv', f)
+        print ModuleName, 'uploaded: ', response
+        self.dataStore.getAllData()
+
     def processReq(self, req):
         """
         Processes requests from apps.
@@ -261,20 +291,18 @@ class Concentrator():
             if req["appID"] == "app1":
                 reactor.callLater(6, self.appInit, req["appID"])
         elif req["msg"] == "req":
-            if self.conc_mode == "server":
-                if req["verb"] == "post":
-                    if req["channel"] == 1:
-                        if req["body"]["msg"] == "services":
-                            for s in req["body"]["services"]:
-                                self.dataStore.addDevice(s["id"])
-                                self.dataStore.setConfig(req["body"])
-                        elif req["body"]["msg"] == "data":
-                            if self.dataStore.deviceKnown(req["body"]["deviceID"]):
-                                self.dataStore.appendData(req["body"]["deviceID"], req["body"]["type"], \
-                                    req["body"]["timeStamp"], req["body"]["data"])
-            else:
-                # Just forward req messages from apps to Bridge Controller
-                self.concFactory.sendMsg(req)
+            if req["verb"] == "post":
+                if req["channel"] == 1:
+                    if req["body"]["msg"] == "services":
+                        for s in req["body"]["services"]:
+                            self.dataStore.addDevice(s["id"])
+                            self.dataStore.setConfig(req["body"])
+                    elif req["body"]["msg"] == "data":
+                        if self.dataStore.deviceKnown(req["body"]["deviceID"]):
+                            self.dataStore.appendData(req["body"]["deviceID"], req["body"]["type"], \
+                                req["body"]["timeStamp"], req["body"]["data"])
+                if self.conc_mode == 'client' and self.dataStore.howBig() > 10:
+                    self.dropData()
         else:
             pass
 

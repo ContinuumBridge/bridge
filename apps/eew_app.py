@@ -13,6 +13,23 @@ import time
 from pprint import pprint
 from cbcommslib import CbApp
 
+# Enable required sensors
+TEMP = True
+IRTEMP = True
+ACCEL = True
+HUMIDITY = True
+GYRO = False
+MAGNET = False
+BUTTONS = True
+
+# Mininum change in parameters before it is reported
+TEMP_MIN_CHANGE = 0.2
+IRTEMP_MIN_CHANGE = 0.5
+HUMIDITY_MIN_CHANGE = 0.5
+ACCEL_MIN_CHANGE = 0.02
+GYRO_MIN_CHANGE = 0.5
+MAGNET_MIN_CHANGE = 0.5
+
 class DataManager:
     """ Managers data storage for all sensors """
     def __init__(self, cbSendMsg):
@@ -202,7 +219,6 @@ class DataManager:
 
 class Accelerometer:
     def __init__(self, id):
-        self.threshold = 0.035
         self.previous = [0.0, 0.0, 0.0]
         self.id = id
 
@@ -211,7 +227,7 @@ class Accelerometer:
         timeStamp = resp["timeStamp"]
         event = False
         for a in range(3):
-            if abs(accel[a] - self.previous[a]) > self.threshold:
+            if abs(accel[a] - self.previous[a]) > ACCEL_MIN_CHANGE:
                 event = True
                 break
         if event:
@@ -239,7 +255,7 @@ class TemperatureMeasure():
                 self.dm.storeTemp(self.id, self.prevEpochMin, temp) 
                 self.prevEpochMin = epochMin
         else:
-            if abs(temp-self.currentTemp) >= 0.2:
+            if abs(temp-self.currentTemp) >= TEMP_MIN_CHANGE:
                 self.dm.storeTemp(self.id, timeStamp, temp) 
                 self.currentTemp = temp
 
@@ -264,7 +280,7 @@ class IrTemperatureMeasure():
                 self.dm.storeIrTemp(self.id, self.prevEpochMin, temp) 
                 self.prevEpochMin = epochMin
         else:
-            if abs(temp-self.currentTemp) >= 0.2:
+            if abs(temp-self.currentTemp) >= IRTEMP_MIN_CHANGE:
                 self.dm.storeIrTemp(self.id, timeStamp, temp) 
                 self.currentTemp = temp
 
@@ -280,7 +296,6 @@ class Buttons():
 class Gyro():
     def __init__(self, id):
         self.id = id
-        self.threshold = 0.5
         self.previous = [0.0, 0.0, 0.0]
 
     def processGyro(self, resp):
@@ -288,7 +303,7 @@ class Gyro():
         timeStamp = resp["timeStamp"] 
         event = False
         for a in range(3):
-            if abs(gyro[a] - self.previous[a]) > self.threshold:
+            if abs(gyro[a] - self.previous[a]) > GYRO_MIN_CHANGE:
                 event = True
                 break
         if event:
@@ -298,7 +313,6 @@ class Gyro():
 class Magnet():
     def __init__(self, id):
         self.id = id
-        self.threshold = 0.5
         self.previous = [0.0, 0.0, 0.0]
 
     def processMagnet(self, resp):
@@ -306,7 +320,7 @@ class Magnet():
         timeStamp = resp["timeStamp"] 
         event = False
         for a in range(3):
-            if abs(mag[a] - self.previous[a]) > self.threshold:
+            if abs(mag[a] - self.previous[a]) > MAGNET_MIN_CHANGE:
                 event = True
                 break
         if event:
@@ -316,14 +330,13 @@ class Magnet():
 class Humid():
     """ Either send temp every minute or when it changes. """
     def __init__(self, id):
-        self.minChange = 0.25
         self.id = id
         self.previous = 0.0
 
     def processHumidity (self, resp):
         h = resp["data"]
         timeStamp = resp["timeStamp"] 
-        if abs(h-self.previous) >= self.minChange:
+        if abs(h-self.previous) >= HUMIDITY_MIN_CHANGE:
             self.dm.storeHumidity(self.id, timeStamp, h) 
             self.previous = h
 
@@ -414,35 +427,42 @@ class App(CbApp):
             self.devServices.append(resp)
             serviceReq = []
             for p in resp["services"]:
-                # Comment out sensor values that are not required by this app
+                # Based on services offered & whether we want to enable them
                 if p["parameter"] == "temperature":
-                    self.temp.append(TemperatureMeasure(resp["id"]))
-                    self.temp[-1].dm = self.dm
-                    serviceReq.append("temperature")
-                if p["parameter"] == "ir_temperature":
-                    self.irTemp.append(IrTemperatureMeasure(resp["id"]))
-                    self.irTemp[-1].dm = self.dm
-                    serviceReq.append("ir_temperature")
+                    if TEMP:
+                        self.temp.append(TemperatureMeasure(resp["id"]))
+                        self.temp[-1].dm = self.dm
+                        serviceReq.append("temperature")
+                elif p["parameter"] == "ir_temperature":
+                    if IRTEMP:
+                        self.irTemp.append(IrTemperatureMeasure(resp["id"]))
+                        self.irTemp[-1].dm = self.dm
+                        serviceReq.append("ir_temperature")
                 elif p["parameter"] == "acceleration":
-                    self.accel.append(Accelerometer(resp["id"]))
-                    serviceReq.append("acceleration")
-                    self.accel[-1].dm = self.dm
-                #elif p["parameter"] == "gyro":
-                #    self.gyro.append(Gyro(resp["id"]))
-                #    self.gyro[-1].dm = self.dm
-                #   serviceReq.append("gyro")
-                #elif p["parameter"] == "magnetometer":
-                #    self.magnet.append(Magnet(resp["id"]))
-                #    self.magnet[-1].dm = self.dm
-                #    serviceReq.append("magnetometer")
+                    if ACCEL:
+                        self.accel.append(Accelerometer(resp["id"]))
+                        serviceReq.append("acceleration")
+                        self.accel[-1].dm = self.dm
+                elif p["parameter"] == "gyro":
+                    if GYRO:
+                        self.gyro.append(Gyro(resp["id"]))
+                        self.gyro[-1].dm = self.dm
+                        serviceReq.append("gyro")
+                elif p["parameter"] == "magnetometer":
+                    if MAGNET: 
+                        self.magnet.append(Magnet(resp["id"]))
+                        self.magnet[-1].dm = self.dm
+                        serviceReq.append("magnetometer")
                 elif p["parameter"] == "buttons":
-                    self.buttons.append(Buttons(resp["id"]))
-                    self.buttons[-1].dm = self.dm
-                    serviceReq.append("buttons")
+                    if BUTTONS:
+                        self.buttons.append(Buttons(resp["id"]))
+                        self.buttons[-1].dm = self.dm
+                        serviceReq.append("buttons")
                 elif p["parameter"] == "rel_humidity":
-                    self.humidity.append(Humid(resp["id"]))
-                    self.humidity[-1].dm = self.dm
-                    serviceReq.append("rel_humidity")
+                    if HUMIDITY:
+                        self.humidity.append(Humid(resp["id"]))
+                        self.humidity[-1].dm = self.dm
+                        serviceReq.append("rel_humidity")
             msg = {"id": self.id,
                    "req": "services",
                    "services": serviceReq}

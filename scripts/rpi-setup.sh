@@ -53,3 +53,4 @@ sudo cp -r node-v0.10.2-linux-arm-pi/* /opt/node
 
 pip install httplib2
 #pip install dataset
+pip install dropbox
