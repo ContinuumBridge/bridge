@@ -4,13 +4,20 @@ from dropbox.rest import ErrorResponse, RESTSocketError
 from dropbox.datastore import DatastoreError, DatastoreManager, Date, Bytes
 from pprint import pprint
 import time
+import os
 
-access_token = 'yd0PQdjPz0sAAAAAAAAAAWoWEA1yPLVJ5BfBy4I9NKta-yJrb-UJPPtXeh4Emkgt'
-client = DropboxClient(access_token)
+access_token = os.getenv('CB_DROPBOX_TOKEN', 'NO_TOKEN')
+print "Dropbox access token = ", access_token
+try:
+    client = DropboxClient(access_token)
+except:
+    print "Could not access Dropbox. Wrong access token?"
+    exit()
 
 manager = DatastoreManager(client)
 ds = manager.list_datastores()
-datastore = manager.open_default_datastore()
+#datastore = manager.open_default_datastore()
+datastore = manager.open_or_create_datastore('cbr-7')
 devTable = datastore.get_table('dev1')
 ir_temps = devTable.query(Type='ir_temperature')
 values = []

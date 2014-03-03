@@ -14,5 +14,6 @@ manager = dropbox.datastore.DatastoreManager(client)
 ds = manager.list_datastores()
 print "ds = ", ds
 #datastore = manager.open_default_datastore()
-manager.delete_datastore('default')
+#manager.delete_datastore('cbr-7')
+manager.delete_datastore('cbrtest')
 

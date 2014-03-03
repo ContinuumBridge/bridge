@@ -7,6 +7,9 @@
 #
 ModuleName = "Concentrator        "
 
+# Number of samples stored locally before a commit to Dropbox
+DROPBOX_COMMIT_COUNT = 10
+
 import sys
 import time
 import os
@@ -86,21 +89,25 @@ class DataStore():
 
 class DropboxStore():
     def __init__(self, hostname):
-        access_token = 'yd0PQdjPz0sAAAAAAAAAAWoWEA1yPLVJ5BfBy4I9NKta-yJrb-UJPPtXeh4Emkgt'
-        self.client = DropboxClient(access_token)
-        self.manager = DatastoreManager(self.client)
-        #self.datastore = self.manager.open_default_datastore()
-        hostname = hostname.lower()
-        print ModuleName, "Datastore ID: ", hostname
-        self.datastore = self.manager.open_or_create_datastore(hostname)
-        self.count = 0
+        access_token = os.getenv('CB_DROPBOX_TOKEN', 'NO_TOKEN')
+        print ModuleName, "Dropbox access token = ", access_token
+        try:
+            self.client = DropboxClient(access_token)
+        except:
+            print ModuleName, "Could not access Dropbox. Wrong access token?"
+        else:
+            self.manager = DatastoreManager(self.client)
+            hostname = hostname.lower()
+            print ModuleName, "Datastore ID: ", hostname
+            self.datastore = self.manager.open_or_create_datastore(hostname)
+            self.count = 0
 
     def appendData(self, device, type, timeStamp, data):
         devTable = self.datastore.get_table(device)
         date = Date(timeStamp)
         temp = devTable.insert(Date=date, Type=type, Data=data)
         #print ModuleName, "appendData = ", device, type, data
-        if self.count > 10:
+        if self.count > DROPBOX_COMMIT_COUNT:
             self.datastore.commit()
             self.count = 0
         else:
@@ -222,7 +229,6 @@ class Concentrator():
                 hostname = hostFile.read()
             if hostname.endswith('\n'):
                     hostname = hostname[:-1]
-            print ModuleName, "hostname = ", hostname
             self.dropboxStore = DropboxStore(hostname)
 
         reactor.run()
