@@ -29,7 +29,9 @@ from cbcommslib import CbClientProtocol
 from cbcommslib import CbClientFactory
 from cbcommslib import CbServerProtocol
 from cbcommslib import CbServerFactory
-import dropbox
+from dropbox.client import DropboxClient, DropboxOAuth2Flow, DropboxOAuth2FlowNoRedirect
+from dropbox.rest import ErrorResponse, RESTSocketError
+from dropbox.datastore import DatastoreError, DatastoreManager, Date, Bytes
 
 class DataStore():
     def __init__(self):
@@ -81,6 +83,28 @@ class DataStore():
     def enableOutput(self, enable):
         self.enabled = enable
         print ModuleName, "enableOutput: ", self.enabled
+
+class DropboxStore():
+    def __init__(self, hostname):
+        access_token = 'yd0PQdjPz0sAAAAAAAAAAWoWEA1yPLVJ5BfBy4I9NKta-yJrb-UJPPtXeh4Emkgt'
+        self.client = DropboxClient(access_token)
+        self.manager = DatastoreManager(self.client)
+        #self.datastore = self.manager.open_default_datastore()
+        hostname = hostname.lower()
+        print ModuleName, "Datastore ID: ", hostname
+        self.datastore = self.manager.open_or_create_datastore(hostname)
+        self.count = 0
+
+    def appendData(self, device, type, timeStamp, data):
+        devTable = self.datastore.get_table(device)
+        date = Date(timeStamp)
+        temp = devTable.insert(Date=date, Type=type, Data=data)
+        #print ModuleName, "appendData = ", device, type, data
+        if self.count > 10:
+            self.datastore.commit()
+            self.count = 0
+        else:
+            self.count += 1
 
 class DevicePage(Resource):
     isLeaf = True
@@ -194,9 +218,12 @@ class Concentrator():
 
         # Connect to Dropbox
         if self.conc_mode == 'client':
-            access_token = 'yd0PQdjPz0sAAAAAAAAAAWoWEA1yPLVJ5BfBy4I9NKta-yJrb-UJPPtXeh4Emkgt'
-            self.client = dropbox.client.DropboxClient(access_token)
-            print ModuleName, 'linked account: ', self.client.account_info()
+            with open('/etc/hostname', 'r') as hostFile:
+                hostname = hostFile.read()
+            if hostname.endswith('\n'):
+                    hostname = hostname[:-1]
+            print ModuleName, "hostname = ", hostname
+            self.dropboxStore = DropboxStore(hostname)
 
         reactor.run()
 
@@ -273,12 +300,6 @@ class Concentrator():
                 "resp": "config"}
         self.cbSendMsg(resp, appID)
 
-    def dropData(self):
-        f = open('../thisbridge/eew_app.csv', 'rb')
-        response = self.client.put_file('/eew_app.csv', f)
-        print ModuleName, 'uploaded: ', response
-        self.dataStore.getAllData()
-
     def processReq(self, req):
         """
         Processes requests from apps.
@@ -292,17 +313,20 @@ class Concentrator():
                 reactor.callLater(6, self.appInit, req["appID"])
         elif req["msg"] == "req":
             if req["verb"] == "post":
-                if req["channel"] == 1:
-                    if req["body"]["msg"] == "services":
-                        for s in req["body"]["services"]:
-                            self.dataStore.addDevice(s["id"])
-                            self.dataStore.setConfig(req["body"])
-                    elif req["body"]["msg"] == "data":
-                        if self.dataStore.deviceKnown(req["body"]["deviceID"]):
-                            self.dataStore.appendData(req["body"]["deviceID"], req["body"]["type"], \
-                                req["body"]["timeStamp"], req["body"]["data"])
-                if self.conc_mode == 'client' and self.dataStore.howBig() > 10:
-                    self.dropData()
+                if self.conc_mode == "server":
+                    if req["channel"] == 1:
+                        if req["body"]["msg"] == "services":
+                            for s in req["body"]["services"]:
+                                self.dataStore.addDevice(s["id"])
+                                self.dataStore.setConfig(req["body"])
+                        elif req["body"]["msg"] == "data":
+                            if self.dataStore.deviceKnown(req["body"]["deviceID"]):
+                                self.dataStore.appendData(req["body"]["deviceID"], req["body"]["type"], \
+                                    req["body"]["timeStamp"], req["body"]["data"])
+                else:  # client mode
+                    if req["body"]["msg"] == "data":
+                        self.dropboxStore.appendData(req['body']['deviceID'], req['body']['type'], \
+                                    req["body"]["timeStamp"], req["body"]["data"])
         else:
             pass
 
