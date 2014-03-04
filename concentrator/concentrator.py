@@ -107,7 +107,8 @@ class DropboxStore():
         idToName = config['idToName']
         t = self.datastore.get_table('config')
         for i in idToName:
-            t.get_or_insert(i, type='idtoname', device=i, name=idToName.get(i))
+            devName = idToName.get(i)
+            t.get_or_insert(i, type='idtoname', device=i, name=devName)
         self.datastore.commit()
         self.configured = True
 

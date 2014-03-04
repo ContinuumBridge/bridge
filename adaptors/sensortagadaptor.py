@@ -375,7 +375,7 @@ class Adaptor(CbAdaptor):
         """
         while not self.doStop:
             if self.sim == 0:
-                index = self.gatt.expect(['handle.*', pexpect.TIMEOUT, pexpect.EOF], timeout=20)
+                index = self.gatt.expect(['handle.*', pexpect.TIMEOUT, pexpect.EOF], timeout=15)
             else:
                 index = 0
             if index == 1:
