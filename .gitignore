@@ -5,6 +5,8 @@ manager/*.db
 manager/*.config
 *.py[cod]
 thisbridge/*
+*.csv
+*.swp
 
 # C extensions
 *.so

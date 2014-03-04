@@ -91,6 +91,7 @@ class DropboxStore():
     def __init__(self, hostname):
         access_token = os.getenv('CB_DROPBOX_TOKEN', 'NO_TOKEN')
         print ModuleName, "Dropbox access token = ", access_token
+        self.configured = False
         try:
             self.client = DropboxClient(access_token)
         except:
@@ -102,16 +103,25 @@ class DropboxStore():
             self.datastore = self.manager.open_or_create_datastore(hostname)
             self.count = 0
 
+    def setConfig(self, config):
+        idToName = config['idToName']
+        t = self.datastore.get_table('config')
+        for i in idToName:
+            t.get_or_insert(i, type='idtoname', device=i, name=idToName.get(i))
+        self.datastore.commit()
+        self.configured = True
+
     def appendData(self, device, type, timeStamp, data):
-        devTable = self.datastore.get_table(device)
-        date = Date(timeStamp)
-        temp = devTable.insert(Date=date, Type=type, Data=data)
-        #print ModuleName, "appendData = ", device, type, data
-        if self.count > DROPBOX_COMMIT_COUNT:
-            self.datastore.commit()
-            self.count = 0
-        else:
-            self.count += 1
+        if self.configured:
+            devTable = self.datastore.get_table(device)
+            date = Date(timeStamp)
+            t = devTable.insert(Date=date, Type=type, Data=data)
+            #print ModuleName, "appendData = ", device, type, data
+            if self.count > DROPBOX_COMMIT_COUNT:
+                self.datastore.commit()
+                self.count = 0
+            else:
+                self.count += 1
 
 class DevicePage(Resource):
     isLeaf = True
@@ -330,7 +340,10 @@ class Concentrator():
                                 self.dataStore.appendData(req["body"]["deviceID"], req["body"]["type"], \
                                     req["body"]["timeStamp"], req["body"]["data"])
                 else:  # client mode
-                    if req["body"]["msg"] == "data":
+                   if req["body"]["msg"] == "services":
+                       for s in req["body"]["services"]:
+                            self.dropboxStore.setConfig(req["body"])
+                   elif req["body"]["msg"] == "data":
                         self.dropboxStore.appendData(req['body']['deviceID'], req['body']['type'], \
                                     req["body"]["timeStamp"], req["body"]["data"])
         else:
