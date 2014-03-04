@@ -53,7 +53,7 @@ class MakeCVS():
             idToName[d.get('device')] = d.get('name')
         print "idToName: ", idToName
         for d in idToName:
-            fileName = d + ".cvs"
+            fileName = d + ".csv"
             self.f = open(fileName, "w", 0)
             t = self.ds.get_table(d)
             temps = t.query(Type='ir_temperature')
