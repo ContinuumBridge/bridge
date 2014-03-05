@@ -1,4 +1,0 @@
-Django
-django-tastypie==0.9.15
-docker-py
-South
