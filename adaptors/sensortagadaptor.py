@@ -133,7 +133,7 @@ class Adaptor(CbAdaptor):
                 print ModuleName, self.id, " No sensors being used. Tag not enabled."
             elif self.sim == 0:
                 print ModuleName, "Activating"
-                self.switchSensors()
+                status = self.switchSensors()
                 reactor.callInThread(self.getValues)
             self.state = "running"
         print ModuleName, "state = ", self.state
@@ -178,118 +178,64 @@ class Adaptor(CbAdaptor):
         if found:
             self.states("inUse")
 
+    def writeTag(self, handle, cmd):
+        line = 'char-write-req ' + handle + cmd
+        print ModuleName, self.id, "Gatt line: ", line
+        self.gatt.sendline(line)
+        index = self.gatt.expect(['successfully', pexpect.TIMEOUT, pexpect.EOF], timeout=1)
+        if index == 1 or index == 2:
+            print ModuleName, self.id, "gatt write problem"
+            self.tagOK = "not ok"
+
     def switchSensors(self):
         """ Call whenever an app updates its sensor configuration. Turns
             individual sensors in the Tag on or off.
         """
+        self.tagOK = "ok"
         #print ModuleName, "handles: ", self.handles["temp"]["data"], self.handles["accel"]["data"]
         if self.accelApps:
-            # Enable accelerometer
-            line = 'char-write-req ' + self.handles["accel"]["en"] + self.cmd["on"]
-            print ModuleName, "Gatt line: ", line
-            self.gatt.sendline(line)
-            self.gatt.expect('\[LE\]>')
-            line = 'char-write-req ' + self.handles["accel"]["notify"] + self.cmd["notify"]
-            print ModuleName, "Gatt line: ", line
-            self.gatt.sendline(line)
-            self.gatt.expect('\[LE\]>')
+            self.writeTag(self.handles["accel"]["en"], self.cmd["on"])
+            self.writeTag(self.handles["accel"]["notify"], self.cmd["notify"])
             # Period = 0x34 value x 10 ms (thought to be 0x0a)
             # Was running with 0x0A = 100 ms, now 0x22 = 500 ms
-            line = 'char-write-req ' + self.handles["accel"]["period"] + ' 22'
-            print ModuleName, "Gatt line: ", line
-            self.gatt.sendline(line)
-            self.gatt.expect('\[LE\]>')
+            self.writeTag(self.handles["accel"]["period"], ' 22')
         else:
-            # Disable accelerometer
-            line = 'char-write-req ' + self.handles["accel"]["en"] + self.cmd["off"]
-            print ModuleName, "Gatt line: ", line
-            self.gatt.sendline(line)
-            self.gatt.expect('\[LE\]>')
+            self.writeTag(self.handles["accel"]["en"], self.cmd["off"])
 
         if self.tempApps or self.irTempApps:
-            # Enable temperature sensors with notification
-            line = 'char-write-req ' + self.handles["temp"]["en"] + self.cmd["on"]
-            print ModuleName, "Gatt line: ", line
-            self.gatt.sendline(line)
-            #print ModuleName, "line = ", line
-            self.gatt.expect('\[LE\]>')
-            #self.gatt.sendline('char-write-req 0x26 0100')
-            line = 'char-write-req ' + self.handles["temp"]["notify"] + self.cmd["notify"]
-            print ModuleName, "Gatt line: ", line
-            self.gatt.sendline(line)
-            self.gatt.expect('\[LE\]>')
+            self.writeTag(self.handles["temp"]["en"], self.cmd["on"])
+            self.writeTag(self.handles["temp"]["notify"], self.cmd["notify"])
         else:
-            line = 'char-write-req ' + self.handles["temp"]["en"] + self.cmd["off"]
-            print ModuleName, "Gatt line: ", line
-            self.gatt.sendline(line)
-            self.gatt.expect('\[LE\]>')
+            self.writeTag(self.handles["temp"]["en"], self.cmd["off"])
 
         if self.humidApps:
-            # Enable humidity sensor with notification
-            line = 'char-write-req ' + self.handles["humid"]["en"] + self.cmd["on"]
-            print ModuleName, "Gatt line: ", line
-            self.gatt.sendline(line)
-            self.gatt.expect('\[LE\]>')
-            line = 'char-write-req ' + self.handles["humid"]["notify"] + self.cmd["notify"]
-            print ModuleName, "Gatt line: ", line
-            self.gatt.sendline(line)
-            self.gatt.expect('\[LE\]>')
+            self.writeTag(self.handles["humid"]["en"], self.cmd["on"])
+            self.writeTag(self.handles["humid"]["notify"], self.cmd["notify"])
         else:
-            line = 'char-write-req ' + self.handles["humid"]["en"] + self.cmd["off"]
-            print ModuleName, "Gatt line: ", line
-            self.gatt.sendline(line)
-            self.gatt.expect('\[LE\]>')
+            self.writeTag(self.handles["humid"]["en"], self.cmd["off"])
  
         if self.gyroApps:
-            # Enable gyro with notification
             # Write 0 to turn off gyroscope, 1 to enable X axis only, 2 to
             # enable Y axis only, 3 = X and Y, 4 = Z only, 5 = X and Z, 6 =
             # Y and Z, 7 = X, Y and Z
-            line = 'char-write-req ' + self.handles["gyro"]["en"] + self.cmd["gyro_on"]
-            print ModuleName, "Gatt line: ", line
-            self.gatt.sendline(line)
-            self.gatt.expect('\[LE\]>')
-            line = 'char-write-req ' + self.handles["gyro"]["notify"] + self.cmd["notify"]
-            print ModuleName, "Gatt line: ", line
-            self.gatt.sendline(line)
-            self.gatt.expect('\[LE\]>')
+            self.writeTag(self.handles["gyro"]["en"], self.cmd["gyro_on"])
+            self.writeTag(self.handles["gyro"]["notify"], self.cmd["notify"])
         else:
-            line = 'char-write-req ' + self.handles["gyro"]["en"] + self.cmd["off"]
-            print ModuleName, "Gatt line: ", line
-            self.gatt.sendline(line)
-            self.gatt.expect('\[LE\]>')
+            self.writeTag(self.handles["gyro"]["en"], self.cmd["off"])
 
         if self.magnetApps:
-            line = 'char-write-req ' + self.handles["magnet"]["en"] + self.cmd["on"]
-            print ModuleName, "Gatt line: ", line
-            self.gatt.sendline(line)
-            self.gatt.expect('\[LE\]>')
-            line = 'char-write-req ' + self.handles["magnet"]["notify"] + self.cmd["notify"]
-            print ModuleName, "Gatt line: ", line
-            self.gatt.sendline(line)
-            self.gatt.expect('\[LE\]>')
+            self.writeTag(self.handles["magnet"]["en"], self.cmd["on"])
+            self.writeTag(self.handles["magnet"]["notify"], self.cmd["notify"])
             # Change to notification from default 2s
-            line = 'char-write-req ' + self.handles["magnet"]["period"] + ' 66'
-            print ModuleName, "Gatt line: ", line
-            self.gatt.sendline(line)
-            self.gatt.expect('\[LE\]>')
+            self.writeTag(self.handles["magnet"]["period"], ' 66')
         else:
-            line = 'char-write-req ' + self.handles["magnet"]["en"] + self.cmd["off"]
-            print ModuleName, "Gatt line: ", line
-            self.gatt.sendline(line)
-            self.gatt.expect('\[LE\]>')
+            self.writeTag(self.handles["magnet"]["en"], self.cmd["off"])
 
         if self.buttonApps:
-            # Enable button-press notification
-            line = 'char-write-req ' + self.handles["buttons"]["notify"] + self.cmd["notify"]
-            print ModuleName, "Gatt line: ", line
-            self.gatt.sendline(line)
-            self.gatt.expect('\[LE\]>')
+            self.writeTag(self.handles["buttons"]["notify"], self.cmd["notify"])
         else:
-            line = 'char-write-req ' + self.handles["buttons"]["notify"] + self.cmd["stop_notify"]
-            print ModuleName, "Gatt line: ", line
-            self.gatt.sendline(line)
-            self.gatt.expect('\[LE\]>')
+            self.writeTag(self.handles["buttons"]["notify"], self.cmd["stop_notify"])
+        return self.tagOK
 
     def connectSensorTag(self):
         """
@@ -390,7 +336,7 @@ class Adaptor(CbAdaptor):
                     print ModuleName, self.id, " - ", self.friendly_name, \
                         " re-init status = ", status
                     # Must switch sensors on/off again after re-init
-                    self.switchSensors()
+                    status = self.switchSensors()
             elif index == 2:
                 if not self.doStop:
                     print ModuleName, "Gatt EOF detected"
@@ -608,9 +554,12 @@ class Adaptor(CbAdaptor):
                 if "buttons" not in req["services"]:
                     self.buttonApps.remove(req["id"])  
 
-            print ModuleName, "tempApps: ", self.tempApps
-            print ModuleName, "accelApps: ", self.accelApps
-            print ModuleName, "humidApps: ", self.humidApps
+            print ModuleName, self.id, "tempApps: ", self.tempApps
+            print ModuleName, self.id, "accelApps: ", self.accelApps
+            print ModuleName, self.id, "humidApps: ", self.humidApps
+            print ModuleName, self.id, "magnetApps: ", self.magnetApps
+            print ModuleName, self.id, "gyroApps: ", self.gyroApps
+            print ModuleName, self.id, "buttonApps: ", self.buttonApps
             self.checkAllProcessed(req["id"])
         else:
             pass

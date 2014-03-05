@@ -236,7 +236,7 @@ class Concentrator():
             self.uweListen = reactor.listenTCP(8881, Site(RootResource(self.dataStore)))
 
         if self.conc_mode == 'client':
-            self.dataStore.enableOutput(True)
+            self.dataStore.enableOutput(False)
 
         # Connect to Dropbox
         if self.conc_mode == 'client':

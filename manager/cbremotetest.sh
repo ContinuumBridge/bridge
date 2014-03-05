@@ -1,5 +1,7 @@
 #!/bin/bash
 # Runs cbsupervisor & outputs to shell rather than log file
+cd /home/bridge/thisbridge
+sudo rm skt-*
 cd /home/bridge/bridge/manager
 if [ -f ../../thisbridge/thisbridge.sh ]; then
     echo 'Starting bridge'
