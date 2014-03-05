@@ -16,7 +16,9 @@ function ControllerSocket(controllerURL, sessionID) {
     controllerSocket.connected = false;
 
     var socketAddress = controllerURL + "?sessionID=" + sessionID;
-    var socket = io.connect(socketAddress);
+    var socket = io.connect(socketAddress, {
+        'max reconnection attempts': 10000000
+    });
 
     var fromController = new Bacon.Bus();
     var toController = new Bacon.Bus();

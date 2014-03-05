@@ -11,7 +11,7 @@ var controllerAuth = require('./controller/controller_auth.js');
 var ControllerSocket = require('./controller/controller_socket.js');
 
 // Get some values from the environment
-var CONTROLLER_API = "http://" + getenv('CB_DJANGO_CONTROLLER_ADDR') + "/api/v1/";
+var CONTROLLER_API = "http://" + getenv('CB_DJANGO_CONTROLLER_ADDR') + "/api/bridge/v1/";
 console.log('CONTROLLER_API', CONTROLLER_API);
 var CONTROLLER_SOCKET = "http://" + getenv('CB_NODE_CONTROLLER_ADDR') + "/"; 
 console.log('CONTROLLER_SOCKET', CONTROLLER_SOCKET);
@@ -32,14 +32,15 @@ controllerAuth(CONTROLLER_API, BRIDGE_EMAIL, BRIDGE_PASSWORD).then(function(sess
         console.log('Controller >', message);
         bridgeConcentrator.toBridge.push(message);
 
+        /*
         var testMessage = {};
         testMessage.message = "wrapper";
         testMessage.channel = "APPID1";
         testMessage.body = "Test temperature reading";
         //testMessage.verb = "get";
         //testMessage.url = "api/v1/current_bridge/bridge";
-        
         controllerSocket.toController.push(JSON.stringify(testMessage));
+        */
     });
 
     /* TODO {"msg":"aggregator_status", "data":"ok"} */
