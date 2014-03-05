@@ -227,7 +227,7 @@ class Concentrator():
         self.managerConnect = reactor.connectUNIX(managerSocket, self.managerFactory, timeout=10)
 
         # Connection to websockets process
-        initMsg = {"msg": "status",
+        initMsg = {"message": "status",
                    "body": "ready"}
         self.concFactory = CbClientFactory(self.processServerMsg, initMsg)
         self.jsConnect = reactor.connectTCP("localhost", 5000, self.concFactory, timeout=10)

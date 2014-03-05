@@ -177,7 +177,7 @@ class ManageBridge:
         output = subprocess.check_output([exe, protocol, str(CB_SIM_LEVEL)])
         print ModuleName, "Discover output = ", output
         discOutput = json.loads(output)
-        self.discoveredDevices["msg"] = "req"
+        self.discoveredDevices["message"] = "request"
         self.discoveredDevices["verb"] = "post"
         self.discoveredDevices["uri"] = "/api/v1/device_discovery"
         self.discoveredDevices["body"] = []
@@ -302,7 +302,7 @@ class ManageBridge:
 
     def processControlMsg(self, msg):
         #print ModuleName, "Controller msg = ", msg
-        if msg["msg"] == "cmd":
+        if msg["message"] == "command":
             if msg["body"] == "start":
                 if self.configured:
                     print ModuleName, "starting adaptors and apps"
@@ -311,7 +311,7 @@ class ManageBridge:
                     print ModuleName, "Can't start adaptors & apps"
                     print ModuleName, "Please run discovery"
                     msg = {"cmd": "msg",
-                           "msg": {"msg": "status",
+                           "msg": {"message": "status",
                                    "channel": "bridge_manager",
                                    "body": "start_req_with_no_apps_installed"
                                   }
@@ -328,7 +328,7 @@ class ManageBridge:
                 resp = {"msg": "restart"}
                 self.cbSendSuperMsg(resp)
                 msg = {"cmd": "msg",
-                       "msg": {"msg": "status",
+                       "msg": {"message": "status",
                                "channel": "bridge_manager",
                                "body": "restarting"
                               }
@@ -339,7 +339,7 @@ class ManageBridge:
                 resp = {"msg": "reboot"}
                 self.cbSendSuperMsg(resp)
                 msg = {"cmd": "msg",
-                       "msg": {"msg": "status",
+                       "msg": {"message": "status",
                                "channel": "bridge_manager",
                                "body": "rebooting"
                               }
@@ -354,13 +354,13 @@ class ManageBridge:
                 self.upgradeBridge()
             elif msg["body"] == "update_config":
                 req = {"cmd": "msg",
-                       "msg": {"msg": "req",
+                       "msg": {"message": "request",
                                "channel": "bridge_manager",
-                               "req": "get",
+                               "request": "get",
                                "uri": "/api/v1/current_bridge/bridge"}
                       }
                 self.cbSendConcMsg(req)
-        elif msg["msg"] == "response":
+        elif msg["message"] == "response":
             self.updateConfig(msg)
             # Need to give concentrator new config if initial one was without apps
             if self.concNoApps:
@@ -441,7 +441,7 @@ class ManageBridge:
                 except:
                     print ModuleName, socket, " already removed"
         msg = {"cmd": "msg",
-               "msg": {"msg": "status",
+               "msg": {"message": "status",
                        "channel": "bridge_manager",
                        "body": "apps_stopped"
                       }

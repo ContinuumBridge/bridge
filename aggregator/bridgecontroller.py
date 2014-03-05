@@ -52,7 +52,7 @@ class BridgeControl:
                 self.stopProg = True
                 processed = True
             elif cmd == "discover":
-                msg  = {"msg": "cmd",
+                msg  = {"message": "command",
                         "body": "discover"}
                 print "Sending command to bridge: > ", msg
                 reactor.callFromThread(self.cbSendMsg, msg)
@@ -60,18 +60,18 @@ class BridgeControl:
             #elif cmd == "start" or cmd == "stop" or cmd == "stopapps" \
                          #or cmd == "stopall":
             elif cmd in ["start", "stop", "stopapps", "stopall"]:
-                msg  = {"msg": "cmd",
+                msg  = {"message": "command",
                         "body": cmd}
                 print "Sending command to bridge: > ", msg
                 reactor.callFromThread(self.cbSendMsg, msg)
             elif cmd in ["restart", "reboot"]:
-                msg  = {"msg": "cmd",
+                msg  = {"message": "command",
                         "body": cmd}
                 print "Sending command to bridge: > ", msg
                 reactor.callFromThread(self.cbSendMsg, msg)
                 reactor.callFromThread(self.reconnect)
             elif cmd == "update_config" or cmd == "update":
-                msg  = {"msg": "cmd",
+                msg  = {"message": "command",
                         "body": "update_config"}
                 print "Sending command to bridge: > ", msg
                 reactor.callFromThread(self.cbSendMsg, msg)
@@ -193,7 +193,7 @@ class BridgeControl:
             self.apps.append(app)
             #appNum = appNum + 1
     
-        self.config = {"msg": "response",
+        self.config = {"message": "response",
                        "uri": "/api/vi/current_bridge/bridge",
                        "body": {"id": 42,
                                 "bridgeManager": "cbmanager.py",
@@ -207,10 +207,10 @@ class BridgeControl:
         #self.cbSendMsg(self.config)
     
     def processResp(self, msg):
-        #print "Message received: ", msg
-        if msg["msg"] == "req":
-            if "req" in msg:
-                if msg["req"] == "get":
+        print "Message received: ", msg
+        if msg["message"] == "request":
+            if "request" in msg:
+                if msg["request"] == "get":
                     if msg["uri"] == "/api/v1/current_bridge/bridge":
                         print "Config requested > "
                         self.cbSendMsg(self.config)
@@ -229,7 +229,7 @@ class BridgeControl:
                     self.jsonFile.write(l)
             else:
                 print "Unrecognised req from bridge > "
-        elif msg["msg"] == "status":
+        elif msg["message"] == "status":
             if msg["body"] == "ready":
                 print "Bridge ready > "
                 #self.checkCmd()
