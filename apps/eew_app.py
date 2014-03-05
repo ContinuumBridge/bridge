@@ -180,7 +180,7 @@ class DataManager:
                         "deviceID": deviceID,
                         "type": "buttons",
                         "timeStamp": timeStamp,
-                        "data": buttons
+                        "data": [buttons["leftButton"], buttons["rightButton"]]
                        }
               }
         self.cbSendMsg(req, "conc")

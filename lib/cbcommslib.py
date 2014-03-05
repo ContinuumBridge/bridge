@@ -76,8 +76,8 @@ class CbAdaptor:
             self.doStop = True
             msg = {"id": self.id,
                    "status": "stopping"}
-            #Adaptor must check doStop more often than every 8 seconds
-            reactor.callLater(8, self.stopReactor)
+            #Adaptor must check stop in less than 20 seconds
+            reactor.callLater(20, self.stopReactor)
         elif cmd["cmd"] == "config":
             #Call in thread in case user code hangs
             reactor.callInThread(self.processConf, cmd["config"]) 

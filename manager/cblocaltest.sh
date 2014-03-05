@@ -1,6 +1,7 @@
 #!/bin/bash
 # Runs cbsupervisor with local bridge controller & outputs to shell rather than log file
 cd /home/bridge/bridge/manager
+sudo rm ../thisbridge/skt-*
 if [ -f ../thisbridge/thisbridge.sh ]; then
     echo 'Starting bridge'
     # Must source so that exports affect the parent script
