@@ -25,6 +25,9 @@ from cbcommslib import CbClientFactory
 from cbcommslib import CbServerProtocol
 from cbcommslib import CbServerFactory
 from cbconfig import *
+from dropbox.client import DropboxClient, DropboxOAuth2Flow, DropboxOAuth2FlowNoRedirect
+from dropbox.rest import ErrorResponse, RESTSocketError
+from dropbox.datastore import DatastoreError, DatastoreManager, Date, Bytes
 
 class ManageBridge:
 
@@ -284,6 +287,15 @@ class ManageBridge:
     def upgradeBridge(self):
         access_token = os.getenv('CB_DROPBOX_TOKEN', 'NO_TOKEN')
         print ModuleName, "Dropbox access token = ", access_token
+        self.client = DropboxClient(access_token)
+
+        f, metadata = self.client.get_file_and_metadata('/bridge.tar')
+        tarFile = CB_CONFIG_DIR + "bridge.tar"
+        out = open(tarile, 'wb')
+        out.write(f.read())
+        out.close()
+
+        subprocess.call(["tar xf", tarFile])
 
     def processSuper(self, msg):
         """ A watchdog. Replies with status=ok or a restart/reboot command. """
