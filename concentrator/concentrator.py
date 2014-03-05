@@ -89,14 +89,18 @@ class DataStore():
 
 class DropboxStore():
     def __init__(self, hostname):
+        self.configured = False
+        reactor.callInThread(self.connectDropbox, hostname)
+
+    def connectDropbox(self, hostname):
         access_token = os.getenv('CB_DROPBOX_TOKEN', 'NO_TOKEN')
         print ModuleName, "Dropbox access token = ", access_token
-        self.configured = False
-        try:
-            self.client = DropboxClient(access_token)
-        except:
-            print ModuleName, "Could not access Dropbox. Wrong access token?"
-        else:
+        #try:
+        self.client = DropboxClient(access_token)
+        #except:
+            #print ModuleName, "Could not access Dropbox. Wrong access token?"
+        #else:
+        if True:
             self.manager = DatastoreManager(self.client)
             hostname = hostname.lower()
             print ModuleName, "Datastore ID: ", hostname
@@ -241,7 +245,7 @@ class Concentrator():
             if hostname.endswith('\n'):
                     hostname = hostname[:-1]
             self.dropboxStore = DropboxStore(hostname)
-
+    
         reactor.run()
 
     def processConf(self, config):

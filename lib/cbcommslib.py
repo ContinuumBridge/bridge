@@ -51,8 +51,8 @@ class CbAdaptor:
 
     def processConf(self, config):
         """Config is based on what apps are available."""
-        print ModuleName, self.id, " configure: "
-        pprint(config)
+        #print ModuleName, self.id, " configure: "
+        #pprint(config)
         self.name = config["name"]
         self.friendly_name = config["friendly_name"]
         self.device = config["btAdpt"]
@@ -71,7 +71,7 @@ class CbAdaptor:
         self.configured = True
 
     def processManager(self, cmd):
-        print ModuleName, "Received from manager: ", cmd
+        #print ModuleName, "Received from manager: ", cmd
         if cmd["cmd"] == "stop":
             self.doStop = True
             msg = {"id": self.id,
@@ -141,8 +141,8 @@ class CbApp:
 
     def processConf(self, config):
         """Config is based on what adaptors are available."""
-        print ModuleName, self.id, " configure: "
-        pprint(config)
+        #print ModuleName, self.id, " configure: "
+        #pprint(config)
         # Connect to socket for each adaptor
         for adaptor in config["adts"]:
             iName = adaptor["id"]
@@ -178,8 +178,8 @@ class CbApp:
             self.doStop = True
             msg = {"id": self.id,
                    "status": "stopping"}
-            #Adaptor must check doStop more often than every 8 seconds
-            reactor.callLater(8, self.stopReactor)
+            #App must stop within 20 seconds
+            reactor.callLater(20, self.stopReactor)
         elif cmd["cmd"] == "config":
             #Call in thread in case user code hangs
             reactor.callInThread(self.processConf, cmd["config"]) 

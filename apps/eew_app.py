@@ -1,17 +1,11 @@
 #!/usr/bin/env python
-# uwe_app.py
+# eew_app.py
 # Copyright (C) ContinuumBridge Limited, 2014 - All Rights Reserved
 # Unauthorized copying of this file, via any medium is strictly prohibited
 # Proprietary and confidential
 # Written by Peter Claydon
 #
 ModuleName = "eew_app             " 
-
-import sys
-import os.path
-import time
-from pprint import pprint
-from cbcommslib import CbApp
 
 # Enable required sensors
 TEMP = True
@@ -29,6 +23,13 @@ HUMIDITY_MIN_CHANGE = 0.5
 ACCEL_MIN_CHANGE = 0.02
 GYRO_MIN_CHANGE = 0.5
 MAGNET_MIN_CHANGE = 0.5
+
+import sys
+import os.path
+import time
+from pprint import pprint
+from cbcommslib import CbApp
+from cbconfig import *
 
 class DataManager:
     """ Managers data storage for all sensors """
@@ -72,7 +73,7 @@ class DataManager:
                 self.cvsList.append(s)
                 self.cvsLine.append("")
         print ModuleName, "cvsList = ", self.cvsList        
-        fileName = "../thisbridge/eew_app.csv"
+        fileName = CB_CONFIG_DIR + "eew_app.csv"
         if os.path.isfile(fileName):
             self.f = open(fileName, "a+", 0)
         else:

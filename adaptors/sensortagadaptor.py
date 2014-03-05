@@ -392,7 +392,10 @@ class Adaptor(CbAdaptor):
                     # Must switch sensors on/off again after re-init
                     self.switchSensors()
             elif index == 2:
-                print ModuleName, "Gatt EOF detected"
+                if not self.doStop:
+                    print ModuleName, "Gatt EOF detected"
+                else:
+                    break
             else:
                 if self.sim == 0:
                     raw = self.gatt.after.split()

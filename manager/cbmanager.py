@@ -247,7 +247,6 @@ class ManageBridge:
                 for appDev in a["device_permissions"]:
                     uri = appDev["device_install"]
                     for d in self.devices: 
-                        print ModuleName, "uri = ", uri, " device uri = ", d["resource_uri"]
                         if d["resource_uri"] == uri:
                             socket = CB_SOCKET_DIR + "skt-" \
                                 + str(d["id"]) + "-" + str(a["app"]["id"])
@@ -282,6 +281,10 @@ class ManageBridge:
         status = self.readConfig()
         print ModuleName, status
 
+    def upgradeBridge(self):
+        access_token = os.getenv('CB_DROPBOX_TOKEN', 'NO_TOKEN')
+        print ModuleName, "Dropbox access token = ", access_token
+
     def processSuper(self, msg):
         """ A watchdog. Replies with status=ok or a restart/reboot command. """
         if msg["msg"] == "stopall":
@@ -298,7 +301,7 @@ class ManageBridge:
             self.cbSendSuperMsg(resp)
 
     def processControlMsg(self, msg):
-        print ModuleName, "Controller msg = ", msg
+        #print ModuleName, "Controller msg = ", msg
         if msg["msg"] == "cmd":
             if msg["body"] == "start":
                 if self.configured:
@@ -347,6 +350,8 @@ class ManageBridge:
                     self.stopApps()
             elif msg["body"] == "stop_manager" or msg["body"] == "stopall":
                 self.stopAll()
+            elif msg["body"] == "upgrade":
+                self.upgradeBridge()
             elif msg["body"] == "update_config":
                 req = {"cmd": "msg",
                        "msg": {"msg": "req",
@@ -370,7 +375,7 @@ class ManageBridge:
         if self.configured and self.running and not self.stopping:
             print ModuleName, "Processing stop. Stopping apps"
             self.stopApps()
-            reactor.callLater(10, self.stopConcentrator)
+            reactor.callLater(21, self.stopConcentrator)
         else:
             self.stopConcentrator()
  
@@ -413,7 +418,7 @@ class ManageBridge:
             print ModuleName, "Stopping ", a
             self.cbSendMsg(msg, a)
         self.running = False
-        reactor.callLater(8, self.killAppProcs)
+        reactor.callLater(20, self.killAppProcs)
 
     def killAppProcs(self):
         # Stop listing on sockets
@@ -453,7 +458,7 @@ class ManageBridge:
         self.cbSupervisorFactory.sendMsg(msg)
 
     def processClient(self, msg):
-        print ModuleName, "Received msg from client", msg
+        #print ModuleName, "Received msg from client", msg
         if msg["status"] == "control_msg":
             del msg["status"]
             self.processControlMsg(msg)
@@ -468,7 +473,7 @@ class ManageBridge:
                                             "sim": CB_SIM_LEVEL,
                                             "config": {"adts": a["device_permissions"],
                                                        "concentrator": conc}}
-                                print ModuleName, "Response = ", msg["id"], response
+                                #print ModuleName, "Response = ", msg["id"], response
                                 self.cbSendMsg(response, msg["id"])
                                 break
                         break
@@ -486,7 +491,7 @@ class ManageBridge:
                              "sim": CB_SIM_LEVEL
                             }
                         }
-                        print ModuleName, "Response = ", msg["id"], response
+                        #print ModuleName, "Response = ", msg["id"], response
                         self.cbSendMsg(response, msg["id"])
                         break
             elif msg["type"] == "conc":
