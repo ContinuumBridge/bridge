@@ -303,8 +303,6 @@ class ManageBridge:
         print ModuleName, "Files:", bridgeDir, bridgeSave, bridgeClone
         subprocess.call(["mv", bridgeDir, bridgeSave])
         subprocess.call(["mv", bridgeClone, bridgeDir])
-        resp = {"msg": "reboot"}
-        self.cbSendSuperMsg(resp)
         msg = {"cmd": "msg",
                "msg": {"message": "status",
                        "channel": "bridge_manager",
@@ -312,6 +310,8 @@ class ManageBridge:
                       }
               }
         self.cbSendConcMsg(msg)
+        resp = {"msg": "reboot"}
+        self.cbSendSuperMsg(resp)
 
     def processSuper(self, msg):
         """ A watchdog. Replies with status=ok or a restart/reboot command. """
