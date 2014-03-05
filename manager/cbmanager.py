@@ -289,9 +289,9 @@ class ManageBridge:
         print ModuleName, "Dropbox access token = ", access_token
         self.client = DropboxClient(access_token)
 
-        f, metadata = self.client.get_file_and_metadata('/bridge.tar')
-        tarFile = CB_CONFIG_DIR + "bridge.tar"
-        out = open(tarile, 'wb')
+        f, metadata = self.client.get_file_and_metadata('/bridge_clone.tar')
+        tarFile = CB_BRIDGE_ROOT + "../bridge_clone.tar"
+        out = open(tarFile, 'wb')
         out.write(f.read())
         out.close()
 
@@ -313,7 +313,7 @@ class ManageBridge:
             self.cbSendSuperMsg(resp)
 
     def processControlMsg(self, msg):
-        #print ModuleName, "Controller msg = ", msg
+        print ModuleName, "Controller msg = ", msg
         if msg["message"] == "command":
             if msg["body"] == "start":
                 if self.configured:
@@ -369,7 +369,7 @@ class ManageBridge:
                        "msg": {"message": "request",
                                "channel": "bridge_manager",
                                "request": "get",
-                               "uri": "/api/v1/current_bridge/bridge"}
+                               "url": "/api/bridge/v1/current_bridge/bridge"}
                       }
                 self.cbSendConcMsg(req)
         elif msg["message"] == "response":
