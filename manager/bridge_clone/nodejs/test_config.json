@@ -1,0 +1,158 @@
+{
+    "apps": [
+        {
+            "app": {
+                "created": "2014-01-09T16:22:37.246817",
+                "description": "This is a description of Test App 1",
+                "exe": "uwe_app.py",
+                "id": 1,
+                "modified": "2014-01-09T16:22:37.246835",
+                "name": "Test App 1",
+                "provider": "('Continuum Bridge',)",
+                "resource_uri": "/api/v1/app/1/",
+                "url": "('test.url.for.this.app.com',)",
+                "version": "('0.0.0',)"
+            },
+            "bridge": "",
+            "device_permissions": [
+                {
+                    "app_install": "/api/v1/app_install/1/",
+                    "device_install": "/api/v1/device_install/1/",
+                    "id": 1,
+                    "resource_uri": "/api/v1/app_device_permission/1/"
+                },
+                {
+                    "app_install": "/api/v1/app_install/1/",
+                    "device_install": "/api/v1/device_install/2/",
+                    "id": 3,
+                    "resource_uri": "/api/v1/app_device_permission/3/"
+                }
+            ],
+            "id": 1,
+            "resource_uri": "/api/v1/app_install/1/"
+        },
+        {
+            "app": {
+                "created": "2014-01-09T16:22:37.253785",
+                "description": "This is a description of Test App 2",
+                "exe": "uwe_app.py",
+                "id": 2,
+                "modified": "2014-01-09T16:22:37.253797",
+                "name": "Test App 2",
+                "provider": "('Continuum Bridge',)",
+                "resource_uri": "/api/v1/app/2/",
+                "url": "('test.url.for.this.app.com',)",
+                "version": "('0.0.0',)"
+            },
+            "bridge": "",
+            "device_permissions": [
+                {
+                    "app_install": "/api/v1/app_install/2/",
+                    "device_install": "/api/v1/device_install/1/",
+                    "id": 2,
+                    "resource_uri": "/api/v1/app_device_permission/2/"
+                },
+                {
+                    "app_install": "/api/v1/app_install/2/",
+                    "device_install": "/api/v1/device_install/2/",
+                    "id": 4,
+                    "resource_uri": "/api/v1/app_device_permission/4/"
+                }
+            ],
+            "id": 2,
+            "resource_uri": "/api/v1/app_install/2/"
+        }
+    ],
+    "controllers": [
+        {
+            "bridge": "",
+            "id": 1,
+            "resource_uri": "/api/v1/bridge_control/1/",
+            "user": {
+                "date_joined": "2014-01-09T16:22:36.791485",
+                "email": "mark.claydon@continuumbridge.com",
+                "first_name": "Mark",
+                "id": 1,
+                "last_login": "2014-01-09T16:22:36.791485",
+                "last_name": "Claydon",
+                "resource_uri": "/api/v1/user/1/"
+            }
+        }
+    ],
+    "devices": [
+        {
+            "adaptor_install": [
+                {
+                    "adaptor": {
+                        "created": "2014-01-09T16:22:37.365521",
+                        "description": "Description for Adaptor 2",
+                        "exe": "sensortagadaptor.py",
+                        "id": 2,
+                        "modified": "2014-01-09T16:22:37.365532",
+                        "name": "Adaptor 2",
+                        "protocol": "other",
+                        "provider": "Continuum Bridge",
+                        "resource_uri": "/api/v1/adaptor/2/",
+                        "url": "url.for.the.adaptor.com",
+                        "version": "0.0.1"
+                    },
+                    "device": "/api/v1/device/2/",
+                    "id": 2,
+                    "resource_uri": "/api/v1/adaptor_install/2/"
+                }
+            ],
+            "bridge": "",
+            "device": {
+                "created": "2014-01-09T16:22:37.292662",
+                "description": "This is a description for Test Device 2",
+                "id": 2,
+                "modified": "2014-01-09T16:22:37.292674",
+                "name": "Test Device 2",
+                "resource_uri": "/api/v1/device/2/"
+            },
+            "friendly_name": "",
+            "id": 2,
+            "mac_addr": "test_mac_address",
+            "resource_uri": "/api/v1/device_install/2/"
+        },
+        {
+            "adaptor_install": [
+                {
+                    "adaptor": {
+                        "created": "2014-01-09T16:22:37.359676",
+                        "description": "Description for Adaptor 1",
+                        "exe": "sensortagadaptor.py",
+                        "id": 1,
+                        "modified": "2014-01-09T16:22:37.359694",
+                        "name": "Adaptor 1",
+                        "protocol": "other",
+                        "provider": "Continuum Bridge",
+                        "resource_uri": "/api/v1/adaptor/1/",
+                        "url": "url.for.the.adaptor.com",
+                        "version": "0.0.1"
+                    },
+                    "device": "/api/v1/device/1/",
+                    "id": 1,
+                    "resource_uri": "/api/v1/adaptor_install/1/"
+                }
+            ],
+            "bridge": "",
+            "device": {
+                "created": "2014-01-09T16:22:37.287066",
+                "description": "This is a description for Test Device 1",
+                "id": 1,
+                "modified": "2014-01-09T16:22:37.287084",
+                "name": "Test Device 1",
+                "resource_uri": "/api/v1/device/1/"
+            },
+            "friendly_name": "",
+            "id": 1,
+            "mac_addr": "test_mac_address",
+            "resource_uri": "/api/v1/device_install/1/"
+        }
+    ],
+    "email": "28b45a59a875478ebcbdf327c18dbfb1@continuumbridge.com",
+    "id": 2,
+    "last_login": "2014-01-09T16:23:27.915053",
+    "resource_uri": "/api/v1/current_bridge/2/"
+}

@@ -10,7 +10,6 @@
 import os
 
 CB_BRIDGE_ROOT = os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..'))
-CB_HOME = os.path.abspath(os.path.join(os.path.dirname( __file__ ), '../..'))
 CB_SOCKET_DIR = CB_BRIDGE_ROOT + "/../thisbridge/"
 CB_CONFIG_DIR = CB_BRIDGE_ROOT + "/../thisbridge/"
 CB_SIM_LEVEL = os.getenv('CB_SIM_LEVEL', 0)

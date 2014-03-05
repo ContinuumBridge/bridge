@@ -290,28 +290,13 @@ class ManageBridge:
         self.client = DropboxClient(access_token)
 
         f, metadata = self.client.get_file_and_metadata('/bridge_clone.tar')
-        tarFile = CB_HOME + "/bridge_clone.tar"
+        tarFile = CB_BRIDGE_ROOT + "../bridge_clone.tar"
         out = open(tarFile, 'wb')
         out.write(f.read())
         out.close()
 
         subprocess.call(["tar", "xf", tarFile])
-        print ModuleName, "Extracted upgrade tar"
-        bridgeDir = CB_HOME + "/bridge"
-        bridgeSave = CB_HOME + "/bridge_save"
-        bridgeClone = CB_HOME + "/bridge_clone"
-        print ModuleName, "Files:", bridgeDir, bridgeSave, bridgeClone
-        subprocess.call(["mv", bridgeDir, bridgeSave])
-        subprocess.call(["mv", bridgeClone, bridgeDir])
-        resp = {"msg": "reboot"}
-        self.cbSendSuperMsg(resp)
-        msg = {"cmd": "msg",
-               "msg": {"message": "status",
-                       "channel": "bridge_manager",
-                        "body": "rebooting"
-                      }
-              }
-        self.cbSendConcMsg(msg)
+        #subprocess.call(["", tarFile])
 
     def processSuper(self, msg):
         """ A watchdog. Replies with status=ok or a restart/reboot command. """
