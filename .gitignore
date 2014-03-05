@@ -30,6 +30,13 @@ lib64
 # Installer logs
 pip-log.txt
 
+# Node log
+nodejs/log.js
+
+# Vim temporary files
+*.swp
+*.swo
+
 # Unit test / coverage reports
 .coverage
 .tox
