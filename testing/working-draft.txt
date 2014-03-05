@@ -1,3 +1,0 @@
-This is a file to test Dropbox.
-Hello from Raspberry Pi.
-This is the second version.
