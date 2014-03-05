@@ -290,12 +290,12 @@ class ManageBridge:
         self.client = DropboxClient(access_token)
 
         f, metadata = self.client.get_file_and_metadata('/bridge_clone.tar')
-        tarFile = CB_HOME + "/bridge_clone.tar"
+        tarFile = CB_HOME + "/bridge_clone.tgz"
         out = open(tarFile, 'wb')
         out.write(f.read())
         out.close()
 
-        subprocess.call(["tar", "xf", tarFile])
+        subprocess.call(["tar", "xfz", tarFile])
         print ModuleName, "Extracted upgrade tar"
         bridgeDir = CB_HOME + "/bridge"
         bridgeSave = CB_HOME + "/bridge_save"
