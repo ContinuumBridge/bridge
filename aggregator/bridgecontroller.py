@@ -64,8 +64,8 @@ class BridgeControl:
                         "body": cmd}
                 print "Sending command to bridge: > ", msg
                 reactor.callFromThread(self.cbSendMsg, msg)
-            elif cmd in ["restart", "reboot", "upgrade"]:
-                msg  = {"msg": "cmd",
+            elif cmd in ["restart", "reboot", "upgrade", "sendlog"]:
+                msg  = {"message": "command",
                         "body": cmd}
                 print "Sending command to bridge: > ", msg
                 reactor.callFromThread(self.cbSendMsg, msg)

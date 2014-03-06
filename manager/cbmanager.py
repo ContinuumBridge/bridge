@@ -315,6 +315,20 @@ class ManageBridge:
         resp = {"msg": "reboot"}
         self.cbSendSuperMsg(resp)
 
+    def sendLog(self):
+        access_token = os.getenv('CB_DROPBOX_TOKEN', 'NO_TOKEN')
+        print ModuleName, "Dropbox access token = ", access_token
+        self.client = DropboxClient(access_token)
+        with open('/etc/hostname', 'r') as hostFile:
+            hostname = hostFile.read()
+        if hostname.endswith('\n'):
+            hostname = hostname[:-1]
+        dropboxPlace = '/' + hostname +'.log'
+        logFile = CB_CONFIG_DIR + '/bridge.log'
+        print ModuleName, "Uploading ", logFile, "to", dropboxPlace
+        f = open(logFile, 'rb')
+        response = self.client.put_file(dropboxPlace, f)
+
     def processSuper(self, msg):
         """ A watchdog. Replies with status=ok or a restart/reboot command. """
         if msg["msg"] == "stopall":
@@ -382,6 +396,8 @@ class ManageBridge:
                 self.stopAll()
             elif msg["body"] == "upgrade":
                 self.upgradeBridge()
+            elif msg["body"] == "sendlog":
+                self.sendLog()
             elif msg["body"] == "update_config":
                 req = {"cmd": "msg",
                        "msg": {"message": "request",
