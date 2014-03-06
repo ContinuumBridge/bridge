@@ -289,7 +289,7 @@ class ManageBridge:
         print ModuleName, "Dropbox access token = ", access_token
         self.client = DropboxClient(access_token)
 
-        f, metadata = self.client.get_file_and_metadata('/bridge_clone.tar')
+        f, metadata = self.client.get_file_and_metadata('/bridge_clone.tgz')
         tarFile = CB_HOME + "/bridge_clone.tgz"
         out = open(tarFile, 'wb')
         out.write(f.read())
@@ -299,10 +299,12 @@ class ManageBridge:
         print ModuleName, "Extracted upgrade tar"
         bridgeDir = CB_HOME + "/bridge"
         bridgeSave = CB_HOME + "/bridge_save"
-        bridgeClone = CB_HOME + "/bridge_clone"
+        bridgeClone = "bridge_clone"
         print ModuleName, "Files:", bridgeDir, bridgeSave, bridgeClone
         subprocess.call(["mv", bridgeDir, bridgeSave])
+        print ModuleName, "Moved bridgeDir to bridgeSave"
         subprocess.call(["mv", bridgeClone, bridgeDir])
+        print ModuleName, "Moved bridgeClone to bridgeDir"
         msg = {"cmd": "msg",
                "msg": {"message": "status",
                        "channel": "bridge_manager",
