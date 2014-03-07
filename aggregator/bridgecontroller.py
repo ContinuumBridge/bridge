@@ -218,7 +218,7 @@ class BridgeControl:
                         print "Unrecognised GET > "
             elif "verb" in msg:
                 if msg["verb"] == "post":
-                    if msg["uri"] == "/api/v1/device_discovery":
+                    if msg["url"] == "/api/bridge/v1/device_discovery":
                         print "Discovered devices:"
                         pprint(msg)
                         self.processDiscovered(msg["body"])

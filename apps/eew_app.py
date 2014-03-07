@@ -10,7 +10,7 @@ ModuleName = "eew_app             "
 # Enable required sensors
 TEMP = True
 IRTEMP = True
-ACCEL = True
+ACCEL = False
 HUMIDITY = True
 GYRO = False
 MAGNET = False
