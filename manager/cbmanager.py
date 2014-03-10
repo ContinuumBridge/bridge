@@ -177,12 +177,12 @@ class ManageBridge:
         self.discoveredDevices = {}
         exe = CB_BRIDGE_ROOT + "/manager/discovery.py"
         protocol = "btle"
-        output = subprocess.check_output([exe, protocol, str(CB_SIM_LEVEL)])
+        output = subprocess.check_output([exe, protocol, str(CB_SIM_LEVEL), CB_CONFIG_DIR])
         print ModuleName, "Discover output = ", output
         discOutput = json.loads(output)
         self.discoveredDevices["message"] = "request"
         self.discoveredDevices["verb"] = "post"
-        self.discoveredDevices["uri"] = "/api/v1/device_discovery"
+        self.discoveredDevices["url"] = "/api/bridge/v1/device_discovery"
         self.discoveredDevices["body"] = []
         if self.configured:
             for d in discOutput["body"]:

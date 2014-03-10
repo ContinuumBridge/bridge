@@ -211,7 +211,7 @@ class BridgeControl:
         if msg["message"] == "request":
             if "request" in msg:
                 if msg["request"] == "get":
-                    if msg["uri"] == "/api/v1/current_bridge/bridge":
+                    if msg["url"] == "/api/bridge/v1/current_bridge/bridge":
                         print "Config requested > "
                         self.cbSendMsg(self.config)
                     else:
