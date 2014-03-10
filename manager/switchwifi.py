@@ -100,7 +100,7 @@ class SwitchWiFi:
                 call(["rm", "/etc/default/hostapd"])
             except:
                 print ModuleName, "Unable to remove /etc/default.hostapd. Already in client mode?"
-            interfacesFile = self.bridgeRoot + "/bridgeconfig/interfaces.client"
+            interfacesFile = self.bridgeRoot + "../bridgeconfig/interfaces.client"
             call(["cp", interfacesFile, "/etc/network/interfaces"])
             wpa_config_file = self.bridgeRoot + "/thisbridge/wpa_supplicant.conf"
             call(["cp", wpa_config_file, "/etc/wpa_supplicant/wpa_supplicant.conf"])
