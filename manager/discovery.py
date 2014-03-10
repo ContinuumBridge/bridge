@@ -70,6 +70,7 @@ if __name__ == '__main__':
                 if len(discoveredAddresses) == 0:
                     discoveredAddresses.append(addr)
                     names.append("SensorTag")
+                    protocols.append("btle")
                     manufacturers.append("Texas Instruments")
                 else:
                     for a in discoveredAddresses:
@@ -78,6 +79,7 @@ if __name__ == '__main__':
                     if found == False:
                         discoveredAddresses.append(addr)
                         names.append("SensorTag")
+                        protocols.append("btle")
                         manufacturers.append("Texas Instruments")
             except:
                 sys.stderr.write(ModuleName + "lescan skip \n")
