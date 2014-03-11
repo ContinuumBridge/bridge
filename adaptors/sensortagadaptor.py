@@ -5,13 +5,15 @@
 # Proprietary and confidential
 # Written by Peter Claydon
 #
-ModuleName = "SensorTag           "
+ModuleName = "SensorTag"
 
 import pexpect
 import sys
 import time
 import os
+import logging
 from cbcommslib import CbAdaptor
+from cbconfig import *
 #from threading import Thread
 from twisted.internet import threads
 from twisted.internet import reactor
@@ -55,6 +57,7 @@ class SimValues():
 
 class Adaptor(CbAdaptor):
     def __init__(self, argv):
+        logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(message)s')
         #CbAdaptor methods processReq & cbAdtConfig MUST be subclassed
         CbAdaptor.processReq = self.processReq
         CbAdaptor.cbAdtConfigure = self.configure
@@ -130,42 +133,37 @@ class Adaptor(CbAdaptor):
             if not(self.accelApps or self.tempApps or self.irTemoApps or self.humidApps \
                     or self.gyroAoos or self.buttonApps or self.magnetApps):
                 # No sensors are being used
-                print ModuleName, self.id, " No sensors being used. Tag not enabled."
+                logging.info("%s %s No sensors being used. Tag not enabled", ModuleName, self.id)
             elif self.sim == 0:
-                print ModuleName, "Activating"
+                logging.debug("%s %s Activating", ModuleName, self.id)
                 status = self.switchSensors()
                 reactor.callInThread(self.getValues)
             self.state = "running"
-        print ModuleName, "state = ", self.state
+        logging.debug("%s %s state = %s", ModuleName, self.id, self.state)
 
     def initSensorTag(self):
-        print ModuleName, "initSensorTag", self.id, " - ", self.friendly_name
+        logging.info("%s %s %s Init", ModuleName, self.id, self.friendly_name)
         # Ensure that the Bluetooth interface is up
         try:
             os.system("sudo hciconfig hci0 up")
         except:
-            print ModuleName, "Unable to bring up hci0 interface"
+            logging.warning("%s %s %s Unable to bring up hci0", ModuleName, self.id, self.friendly_name)
         try:
             cmd = 'gatttool -i ' + self.device + ' -b ' + self.addr + \
                   ' --interactive'
-            print ModuleName, "cmd = ", cmd
+            logging.debug("%s %s %s cmd: %s", ModuleName, self.id, self.friendly_name, cmd)
             self.gatt = pexpect.spawn(cmd)
         except:
-            print ModuleName, "dead"
+            logging.error("%s %s %s Dead!", ModuleName, self.id, self.friendly_name)
             self.connected = False
             return "noConnect"
         self.gatt.expect('\[LE\]>')
         self.gatt.sendline('connect')
-        #self.gatt.expect('\[LE\]>', timeout=5)
         index = self.gatt.expect(['successful', pexpect.TIMEOUT], timeout=20)
-        print ModuleName, "index = ", index
         if index == 1:
-            print ModuleName, "Connection to device timed out for", self.id, \
-                " - ", self.friendly_name
             self.gatt.kill(9)
             return "timeout"
         else:
-            print ModuleName, self.id, " - ", self.friendly_name, " connected"
             self.connected = True
             return "ok"
 
@@ -180,11 +178,10 @@ class Adaptor(CbAdaptor):
 
     def writeTag(self, handle, cmd):
         line = 'char-write-req ' + handle + cmd
-        print ModuleName, self.id, "Gatt line: ", line
+        logging.debug("%s %s %s gatt cmd: %s", ModuleName, self.id, self.friendly_name, line)
         self.gatt.sendline(line)
         index = self.gatt.expect(['successfully', pexpect.TIMEOUT, pexpect.EOF], timeout=1)
         if index == 1 or index == 2:
-            print ModuleName, self.id, "gatt write problem"
             self.tagOK = "not ok"
 
     def switchSensors(self):
@@ -192,7 +189,6 @@ class Adaptor(CbAdaptor):
             individual sensors in the Tag on or off.
         """
         self.tagOK = "ok"
-        #print ModuleName, "handles: ", self.handles["temp"]["data"], self.handles["accel"]["data"]
         if self.accelApps:
             self.writeTag(self.handles["accel"]["en"], self.cmd["on"])
             self.writeTag(self.handles["accel"]["notify"], self.cmd["notify"])
@@ -251,11 +247,9 @@ class Adaptor(CbAdaptor):
         while self.connected == False and not self.doStop and self.sim == 0:
             tagStatus = self.initSensorTag()    
             if tagStatus != "ok":
-                print ModuleName, "ERROR. ", self.id, " - ", \
-                    self.friendly_name, " failed to initialise"
+                logging.error("%s %s %s Failed to initialise", ModuleName, self.id, self.friendly_name)
         if not self.doStop:
-            print ModuleName, self.id, " - ", self.friendly_name, \
-                "successfully initialised"
+            logging.info("%s %s %s Initialised", ModuleName, self.id, self.friendly_name)
             self.states("connected")
  
     def s16tofloat(self, s16):
@@ -290,7 +284,6 @@ class Adaptor(CbAdaptor):
         fObj = (objT - Vos) + c2 * pow((objT - Vos), 2)
         objT = pow(pow(Tdie2,4) + (fObj/S), .25)
         objT -= 273.15
-        #print ModuleName, "objT = ", objT, " ambT = ", ambT
         return objT, ambT
 
     def calcHumidity(self, raw):
@@ -328,18 +321,16 @@ class Adaptor(CbAdaptor):
                 # A timeout error. Attempt to restart the SensorTag
                 status = ""
                 while status != "ok" and not self.doStop:
-                    print ModuleName, self.id, " - ", self.friendly_name, \
-                        " gatt timeout"
+                    logging.warning("%s %s %s gatt timeout", ModuleName, self.id, self.friendly_name)
                     self.gatt.kill(9)
                     time.sleep(1)
                     status = self.initSensorTag()   
-                    print ModuleName, self.id, " - ", self.friendly_name, \
-                        " re-init status = ", status
+                    logging.info("%s %s %s re-init status: %s", ModuleName, self.id, self.friendly_name, status)
                     # Must switch sensors on/off again after re-init
                     status = self.switchSensors()
             elif index == 2:
                 if not self.doStop:
-                    print ModuleName, "Gatt EOF detected"
+                    logging.debug("%s %s %s gatt EO in getValues", ModuleName, self.id, self.friendly_name)
                 else:
                     break
             else:
@@ -347,14 +338,12 @@ class Adaptor(CbAdaptor):
                     raw = self.gatt.after.split()
                 else:
                     raw = self.simValues.getSimValues()
-                #print ModuleName, "raw from SensorTag = ", raw
                 handles = True
                 startI = 2
                 while handles:
                     type = raw[startI]
                     if type.startswith(self.handles["accel"]["data"]): 
                         # Accelerometer descriptor
-                        #print ModuleName, "raw accel = ", raw 
                         accel = {}
                         accel["x"] = self.s8tofloat(raw[startI+2])/63
                         accel["y"] = self.s8tofloat(raw[startI+3])/63
@@ -362,7 +351,6 @@ class Adaptor(CbAdaptor):
                         self.sendAccel(accel)
                     elif type.startswith(self.handles["buttons"]["data"]):
                         # Button press decriptor
-                        #print ModuleName, "button press = ", raw[1]
                         buttons = {"leftButton": (int(raw[startI+2]) & 2) >> 1,
                                    "rightButton": int(raw[startI+2]) & 1}
                         self.sendButtons(buttons)
@@ -379,14 +367,12 @@ class Adaptor(CbAdaptor):
                         gyro["x"] = self.calcGyro(raw[startI+2:startI+4])
                         gyro["y"] = self.calcGyro(raw[startI+4:startI+6])
                         gyro["z"] = self.calcGyro(raw[startI+6:startI+8])
-                        #print ModuleName, "gyro = ", gyro
                         self.sendGyro(gyro)
                     elif type.startswith("0x0040"):
                         mag = {}
                         mag["x"] = self.calcMag(raw[startI+2:startI+4])
                         mag["y"] = self.calcMag(raw[startI+4:startI+6])
                         mag["z"] = self.calcMag(raw[startI+6:startI+8])
-                        #print ModuleName, "mag = ", mag
                         self.sendMagnet(mag)
                     else:
                        pass
@@ -395,18 +381,15 @@ class Adaptor(CbAdaptor):
                     raw.remove("handle")
                     if "handle" in raw:
                         handle = raw.index("handle")
-                        #print ModuleName, "handle = ", handle
                         startI = handle + 2
                     else:
                         handles = False
         try:
             if self.sim == 0:
                 self.gatt.kill(9)
-                print ModuleName, self.id, " - ", self.friendly_name, \
-                    " gatt process killed"
+                logging.debug("%s %s %s gatt process killed", ModuleName, self.id, self.friendly_name)
         except:
-            sys.stderr.write(ModuleName + "Error: could not kill pexpect for" \
-                + self.id + " - " + self.friendly_name + "\n")
+            logging.error("%s %s %s Could not kill gatt process", ModuleName, self.id, self.friendly_name)
 
     def sendAccel(self, accel):
         msg = {"id": self.id,
@@ -470,7 +453,7 @@ class Adaptor(CbAdaptor):
         Called in a thread and so it is OK if it blocks.
         Called separately for every app that can make requests.
         """
-        print ModuleName, "processReq, req = ", req
+        logging.debug("%s %s %s processReq, req = %s", ModuleName, self.id, self.friendly_name, req)
         tagStatus = "ok"
         if req["req"] == "init":
             resp = {"name": self.name,
@@ -554,12 +537,12 @@ class Adaptor(CbAdaptor):
                 if "buttons" not in req["services"]:
                     self.buttonApps.remove(req["id"])  
 
-            print ModuleName, self.id, "tempApps: ", self.tempApps
-            print ModuleName, self.id, "accelApps: ", self.accelApps
-            print ModuleName, self.id, "humidApps: ", self.humidApps
-            print ModuleName, self.id, "magnetApps: ", self.magnetApps
-            print ModuleName, self.id, "gyroApps: ", self.gyroApps
-            print ModuleName, self.id, "buttonApps: ", self.buttonApps
+            logging.info("%s %s %s tempApps: %s", ModuleName, self.id, self.friendly_name, self.tempApps)
+            logging.info("%s %s %s accelApps: %s", ModuleName, self.id, self.friendly_name, self.accelApps)
+            logging.info("%s %s %s humidApps: %s", ModuleName, self.id, self.friendly_name, self.humidApps)
+            logging.info("%s %s %s magnetApps: %s", ModuleName, self.id, self.friendly_name, self.magnetApps)
+            logging.info("%s %s %s gyroApps: %s", ModuleName, self.id, self.friendly_name, self.gyroApps)
+            logging.info("%s %s %s buttonApps: %s", ModuleName, self.id, self.friendly_name, self.buttonApps)
             self.checkAllProcessed(req["id"])
         else:
             pass

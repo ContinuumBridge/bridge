@@ -5,13 +5,12 @@
 # Proprietary and confidential
 # Written by Peter Claydon
 #
-ModuleName = "WiFiSetup           "
+ModuleName = "WiFiSetup"
 
 import sys
 import time
 import os
 import json
-from pprint import pprint
 from subprocess import call
 import pexpect
 from switchwifi import SwitchWiFi
@@ -28,17 +27,14 @@ from twisted.web.resource import Resource
 from twisted.web.server import Site
 from twisted.internet.task import deferLater
 from twisted.web.server import NOT_DONE_YET
-#from cbcommslib import CbClientProtocol
-#from cbcommslib import CbClientFactory
-#from cbcommslib import CbServerProtocol
-#from cbcommslib import CbServerFactory
+from cbconfig import *
+import logging
 
 class WiFiSetup():
 
     def __init__(self):
-        print ModuleName
-        self.bridgeRoot = os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..'))
-        print ModuleName, "CB_BRIDGE_ROOT = ", self.bridgeRoot
+        logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(message)s')
+        logging.info("%s Hello", ModuleName)
 
     def clientConnected(self):
         try:
@@ -46,11 +42,11 @@ class WiFiSetup():
             cmd = 'ping continuumbridge.com'
             p = pexpect.spawn(cmd)
         except:
-            print ModuleName, "Can't spawn ping"
+            logging.error("%s Cannot spawn ping", ModuleName)
             self.connected = False
         index = p.expect(['time', pexpect.TIMEOUT], timeout=10)
         if index == 1:
-            print ModuleName, "Client connection timed out. Changing to server"
+            logging.warning("%s CClient connection timed out. Changing to server", ModuleName)
             p.kill(9)
             return False
         else:
@@ -58,24 +54,24 @@ class WiFiSetup():
             return True
  
     def getCredentials(self):
-        exe = self.bridgeRoot + "/manager/wificonfig.py"
-        print ModuleName, "getCredentials exe = ", exe
+        exe = CB_BRIDGE_ROOT + "/manager/wificonfig.py"
+        logging.info("%s getCredentials exe = ", ModuleName, exe)
         try:
             p = pexpect.spawn(exe)
         except:
-            print ModuleName, "Can't run wificonfig"
+            logging.error("%s Cannot run wificonfig.py", ModuleName)
             self.connected = False
         index = p.expect(['Credentials.*', pexpect.TIMEOUT], timeout=300)
         p.kill(9)
         if index == 1:
-            print ModuleName, "SSID and WPA key not supplied before timeout"
+            logging.warning("%s SSID and WPA key not supplied before timeout", ModuleName)
             return False
         else:
             raw = p.after.split()
-            print ModuleName, "Credentials = ", raw
+            logging.debug("%s Credentials = %s", ModuleName, raw)
             self.ssid = raw[2]
             self.wpa_key = raw[3]
-            print ModuleName, "ssid = ", self.ssid, "wpa = ", self.wpa_key
+            logging.info("%s SSID = %s, WPA = %s", ModuleName, self.ssid, self.wpa_key)
             return True
 
     def getConnected(self):
@@ -92,7 +88,7 @@ class WiFiSetup():
         #    return True
         #else:
         if True:
-            print ModuleName, "Can't connect. Switching to server mode"
+            logging.info("%s Cannot connect. Switching to server mode", ModuleName)
             s.switch("server")
             if self.getCredentials():
                 try:
@@ -111,12 +107,12 @@ class WiFiSetup():
                 o.close()
                 s.switch("client")
                 if self.clientConnected():
-                    print ModuleName, "Client connected"
+                    logging.info("%s Client connected", ModuleName)
                     return True
                 else:
                     return False
             else:
-                print ModuleName, "Did not get WiFi SSID & WPA from a human."
+                logging.info("%s Did not get WiFi SSID and WPA from a human", ModuleName)
                 return False
     
 if __name__ == '__main__':

@@ -9,17 +9,20 @@
 """ A very simple discovery program for BTLE devices.
     All it does it look for addresses and append them to a list. """
 
-ModuleName = "Discovery            "
+ModuleName = "Discovery"
 
 import sys
 import time
 import os
 import pexpect
 import json
+import logging
+from cbconfig import *
 
 if __name__ == '__main__':
+    logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(message)s')
     if len(sys.argv) < 4:
-        print ModuleName, "Usage: discover <protocol> <sim> <CB_CONFIG_DIR>"
+        logging.error('%s Usage: discover <protocol> <sim> <CB_CONFIG_DIR>', ModuleName)
         exit(1)
     protocol = sys.argv[1]
     sim = sys.argv[2]
@@ -39,7 +42,7 @@ if __name__ == '__main__':
         try:
             os.system("sudo hciconfig hci0 up")
         except:
-            #print ModuleName, "Unable to bring up hci0 interface"
+            logging.error('%s Unable to bring up bci0 interface', ModuleName)
             d = {"status": "error"}        
             print json.dumps(d)
             sys.exit()
@@ -47,7 +50,7 @@ if __name__ == '__main__':
             cmd = "sudo hcitool lescan"
             p = pexpect.spawn(cmd)
         except:
-            sys.stderr.write(ModuleName + "Error: lescan failed to spawn\n")
+            logging.error('%s lescan failed to spawn', ModuleName)
             d = {"status": "error"}        
             print json.dumps(d)
             sys.exit()
@@ -55,7 +58,7 @@ if __name__ == '__main__':
             p.expect('.*', timeout=10)
             p.expect('.*', timeout=10)
         except:
-            sys.stderr.write(ModuleName + "Error. Nothing returned from pexpect\n")
+            logging.error('%s Nothing returned from pexpect', ModuleName)
             d = {"status": "error"}        
             print json.dumps(d)
             sys.exit()
@@ -82,11 +85,11 @@ if __name__ == '__main__':
                         protocols.append("btle")
                         manufacturers.append("Texas Instruments")
             except:
-                sys.stderr.write(ModuleName + "lescan skip \n")
+                logging.debug('%s lescan skip', ModuleName)
         try:
             p.sendcontrol("c")
         except:
-            sys.stderr.write(ModuleName + "Error: Could not kill lescan process\n")
+            logging.debug('%s Could not kill lescan process', ModuleName)
     else: 
         # Simulation without real devices - just supply some sample data
         names = ["SensorTag", "SensorTag", "SensorTag"]

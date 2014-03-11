@@ -5,7 +5,7 @@
 # Proprietary and confidential
 # Written by Peter Claydon
 #
-ModuleName = "Concentrator        "
+ModuleName = "Concentrator"
 
 # Number of samples stored locally before a commit to Dropbox
 DROPBOX_COMMIT_COUNT = 10
@@ -14,7 +14,7 @@ import sys
 import time
 import os
 import json
-from pprint import pprint
+import logging
 from twisted.internet.protocol import Protocol, Factory
 from twisted.internet.protocol import ReconnectingClientFactory
 from twisted.protocols.basic import LineReceiver
@@ -32,6 +32,7 @@ from cbcommslib import CbClientProtocol
 from cbcommslib import CbClientFactory
 from cbcommslib import CbServerProtocol
 from cbcommslib import CbServerFactory
+from cbconfig import *
 from dropbox.client import DropboxClient, DropboxOAuth2Flow, DropboxOAuth2FlowNoRedirect
 from dropbox.rest import ErrorResponse, RESTSocketError
 from dropbox.datastore import DatastoreError, DatastoreManager, Date, Bytes
@@ -57,7 +58,6 @@ class DataStore():
                                          "data": data
                                        })
             self.count += 1
-            #print ModuleName, "appendData = ", device, type, data
 
     def addDevice(self, d):
         self.appData[d] = []
@@ -85,7 +85,7 @@ class DataStore():
 
     def enableOutput(self, enable):
         self.enabled = enable
-        print ModuleName, "enableOutput: ", self.enabled
+        logging.info("%s enabledOutput: %s", ModuleName, self.enabled)
 
 class DropboxStore():
     def __init__(self, hostname):
@@ -94,16 +94,15 @@ class DropboxStore():
 
     def connectDropbox(self, hostname):
         access_token = os.getenv('CB_DROPBOX_TOKEN', 'NO_TOKEN')
-        print ModuleName, "Dropbox access token = ", access_token
-        #try:
-        self.client = DropboxClient(access_token)
-        #except:
-            #print ModuleName, "Could not access Dropbox. Wrong access token?"
-        #else:
-        if True:
+        logging.info("%s Dropbox access token: %s", ModuleName, access_token)
+        try:
+            self.client = DropboxClient(access_token)
+        except:
+            logging.error("%s Could not access Dropbox. Wrong access token?", ModuleName)
+        else:
             self.manager = DatastoreManager(self.client)
             hostname = hostname.lower()
-            print ModuleName, "Datastore ID: ", hostname
+            logging.info("%s Datastore ID: %s", ModuleName, hostname)
             self.datastore = self.manager.open_or_create_datastore(hostname)
             self.count = 0
 
@@ -121,7 +120,6 @@ class DropboxStore():
             devTable = self.datastore.get_table(device)
             date = Date(timeStamp)
             t = devTable.insert(Date=date, Type=type, Data=data)
-            #print ModuleName, "appendData = ", device, type, data
             if self.count > DROPBOX_COMMIT_COUNT:
                 self.datastore.commit()
                 self.count = 0
@@ -187,7 +185,6 @@ class ConfigPage(Resource):
     def render_POST(self, request):
         request.setHeader('Content-Type', 'application/json')
         req = json.loads(request.content.getvalue())
-        #print ModuleName, "POST. req = ", req
         try:
             self.dataStore.enableOutput(req["enable"])
             response = {"resp": "ok"}
@@ -205,17 +202,18 @@ class RootResource(Resource):
 
 class Concentrator():
     def __init__(self, argv):
+        logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(message)s')
         self.status = "ok"
         self.doStop = False
         self.conc_mode = os.getenv('CB_CONCENTRATOR', 'client')
-        print ModuleName, "CB_CONCENTRATOR = ", self.conc_mode
+        logging.info("%s CB_CONCENTRATOR = %s", ModuleName, self.conc_mode)
 
         if len(argv) < 3:
-            print "cbAdaptor improper number of arguments"
+            logging.error("%s Improper number of arguments", ModuleName)
             exit(1)
         managerSocket = argv[1]
         self.id = argv[2]
-        print ModuleName, "Hello from ", self.id
+        logging.info("%s Hello", ModuleName)
 
         self.dataStore = DataStore()
 
@@ -250,13 +248,12 @@ class Concentrator():
 
     def processConf(self, config):
         """Config is based on what apps are available."""
-        print ModuleName, "processConf: ", config
+        logging.info("%s processConf: %s", ModuleName, config)
         if config != "no_apps":
             self.cbFactory = {}
             self.appInstances = []
             for app in config:
                 iName = app["id"]
-                #print ModuleName, "app: ", iName, " socket: ", appConcSoc
                 if iName not in self.appInstances:
                     # Allows for reconfig on the fly
                     appConcSoc = app["appConcSoc"]
@@ -265,7 +262,7 @@ class Concentrator():
                     reactor.listenUNIX(appConcSoc, self.cbFactory[iName])
 
     def processServerMsg(self, msg):
-        print ModuleName, "Received from controller: ", msg
+        logging.info("%s Received from controller: %s", ModuleName, msg)
         msg["status"] = "control_msg"
         self.cbSendManagerMsg(msg)
 
@@ -273,7 +270,7 @@ class Concentrator():
         self.concFactory.sendMsg(msg)
 
     def processManager(self, cmd):
-        #print ModuleName, "Received from manager: ", cmd
+        logging.debug("%s Received from manager: %s", ModuleName, cmd)
         if cmd["cmd"] == "msg":
             self.processManagerMsg(cmd["msg"])
             msg = {"id": self.id,
@@ -307,7 +304,7 @@ class Concentrator():
 
     def goodbye(self, status):
         reactor.stop()
-        print ModuleName, "Bye from ", self.id, " Status: ", status
+        logging.info("%s Bye. Status: %s", ModuleName, status)
 
     def cbSendMsg(self, msg, iName):
         self.cbFactory[iName].sendMsg(msg)
@@ -327,9 +324,8 @@ class Concentrator():
         Called in a thread and so it is OK if it blocks.
         Called separately for every app that can make requests.
         """
-        #print ModuleName, "processReq, Req = ", req
         if req["msg"] == "init":
-            print ModuleName, "init from app ", req["appID"]
+            logging.info("%s Init from app %s", ModuleName, req['appID'])
             if req["appID"] == "app1":
                 reactor.callLater(6, self.appInit, req["appID"])
         elif req["msg"] == "req":

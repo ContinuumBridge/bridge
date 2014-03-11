@@ -5,7 +5,7 @@
 # Proprietary and confidential
 # Written by Peter Claydon
 #
-ModuleName = "eew_app             " 
+ModuleName = "eew_app" 
 
 # Enable required sensors
 TEMP = True
@@ -27,7 +27,7 @@ MAGNET_MIN_CHANGE = 0.5
 import sys
 import os.path
 import time
-from pprint import pprint
+import logging
 from cbcommslib import CbApp
 from cbconfig import *
 
@@ -60,7 +60,6 @@ class DataManager:
         self.idToName = idToName
         for i in self.idToName:
             self.index.append(i)
-        print ModuleName, "self.index = ", self.index
         services = ["temperature", 
                     "ir_temperature", 
                     "accel x", "accel y", "accel z",
@@ -72,12 +71,10 @@ class DataManager:
             for s in services:
                 self.cvsList.append(s)
                 self.cvsLine.append("")
-        print ModuleName, "cvsList = ", self.cvsList        
         fileName = CB_CONFIG_DIR + "eew_app.csv"
         if os.path.isfile(fileName):
             self.f = open(fileName, "a+", 0)
         else:
-            print ModuleName, "Opening new file"
             self.f = open(fileName, "a+", 0)
             for d in self.idToName:
                 self.f.write(d + ", " + self.idToName[d] + "\n")
@@ -89,10 +86,8 @@ class DataManager:
     def storeAccel(self, deviceID, timeStamp, a):
         self.writeCVS(timeStamp)
         index = self.index.index(deviceID)
-        #print ModuleName, "index = ", index
         for i in range(3):
             self.cvsLine[index*self.numberServices + 2 + i] = str("%2.3f" %a[i])
-        #print ModuleName, "time: ", self.niceTime(timeStamp), " accel: ", a
         req = {
                "msg": "req",
                "verb": "post",
@@ -343,6 +338,7 @@ class Humid():
 
 class App(CbApp):
     def __init__(self, argv):
+        logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(message)s')
         # The following 3 declarations must be made
         self.appClass = "monitor"
         CbApp.processResp = self.processResp
@@ -363,7 +359,7 @@ class App(CbApp):
         CbApp.__init__(self, argv)
 
     def processConcResp(self, resp):
-        print ModuleName, "resp from conc = ", resp
+        logging.debug("%s resp from conc: %s", ModuleName, resp)
         if resp["resp"] == "config":
             msg = {
                "msg": "req",
@@ -388,7 +384,7 @@ class App(CbApp):
         This method is called in a thread by cbcommslib so it will not cause
         problems if it takes some time to complete (other than to itself).
         """
-        #print ModuleName, "resp = ", resp
+        logging.debug("%s resp: %s", ModuleName, resp)
         if resp["content"] == "acceleration":
             for a in self.accel:
                 if a.id == resp["id"]: 
@@ -477,7 +473,6 @@ class App(CbApp):
 
     def configure(self, config):
         """ Config is based on what sensors are available """
-        print ModuleName, "Configure app", self.id
         self.dm.appID = self.id
         self.dm.appNum = int(self.id[3:])
         for adaptor in config["adts"]:
@@ -486,7 +481,7 @@ class App(CbApp):
                 # Because configure may be re-called if devices are added
                 name = adaptor["name"]
                 friendly_name = adaptor["friendly_name"]
-                print ModuleName, "configure app, adaptor name = ", name
+                logging.debug("%s Configure app. Adaptor name: %s", ModuleName, name)
                 self.idToName[adtID] = friendly_name
                 self.devices.append(adtID)
         self.dm.initFile(self.idToName)

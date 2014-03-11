@@ -5,7 +5,6 @@
 # Proprietary and confidential
 # Written by Peter Claydon
 #
-#ModuleName = "Bridge Manager      "
 ModuleName = "Manager"
 id = "manager"
 
@@ -49,7 +48,7 @@ class ManageBridge:
         self.cbFactory = {} 
         self.appListen = {}
         status = self.readConfig()
-        print ModuleName, status
+        logging.info('%s Status: %s', ModuleName, status)
         self.initBridge()
 
     def initBridge(self):
@@ -199,8 +198,8 @@ class ManageBridge:
         else:
             for d in discOutput["body"]:
                 self.discoveredDevices["body"].append(d)  
-        print ModuleName, "Discovered devices:"
-        print ModuleName, self.discoveredDevices
+        logging.info('%s Discovered devices:', ModuleName)
+        logging.info('%s %s', ModuleName, self.discoveredDevices)
         msg = {"cmd": "msg",
                "msg": self.discoveredDevices}
         reactor.callFromThread(self.cbSendConcMsg, msg)
@@ -220,10 +219,9 @@ class ManageBridge:
             with open(configFile, 'r') as configFile:
                 config = json.load(configFile)
                 configRead = True
-                print ModuleName, "readConfig"
-                #pprint(config)
+                logging.info('%s Read config', ModuleName)
         except:
-            print ModuleName, "Warning. No config file exists"
+            logging.warning('%s No config file exists', ModuleName)
             self.configured = False
         if configRead:
             try:
@@ -231,7 +229,7 @@ class ManageBridge:
                 self.devices = config["body"]["devices"]
                 self.configured = True
             except:
-                print ModuleName, "bridge.config appears to be corrupt. Ignoring."
+                logging.error('%s bridge.config appears to be corrupt. Ignoring', ModuleName)
 
         if self.configured:
             # Process config to determine routing:
@@ -268,27 +266,27 @@ class ManageBridge:
                             appDev["adtSoc"] = socket
                             break
         if self.configured:
-            print ModuleName, "Config information processed:"
-            print ModuleName, "Apps:"
-            pprint(self.apps)
-            print ""
-            print ModuleName, "Devices:"
-            pprint(self.devices)
-            print ""
+            logging.info('%s Config information processed', ModuleName)
+            logging.info('%s Apps:', ModuleName)
+            logging.info('%s %s', ModuleName, str(self.apps))
+            logging.info('%s', ModuleName)
+            logging.info('%s Devices:', ModuleName)
+            logging.info('%s %s', ModuleName, str(self.devices))
+            logging.info('%s', ModuleName)
         return "Configured"
     
     def updateConfig(self, msg):
-        #print ModuleName, "Config received from controller:"
-        #pprint(msg)
+        logging.debug('%s Config received from controller:', ModuleName)
+        logging.debug('%s %s', ModuleName, str(msg))
         configFile = CB_CONFIG_DIR + "/bridge.config"
         with open(configFile, 'w') as configFile:
             json.dump(msg, configFile)
         status = self.readConfig()
-        print ModuleName, status
+        logging.info('%s %s', ModuleName, status)
 
     def upgradeBridge(self):
         access_token = os.getenv('CB_DROPBOX_TOKEN', 'NO_TOKEN')
-        print ModuleName, "Dropbox access token = ", access_token
+        logging.info('%s Dropbox access token = %s', ModuleName, access_token)
         self.client = DropboxClient(access_token)
 
         f, metadata = self.client.get_file_and_metadata('/bridge_clone.tgz')
@@ -298,15 +296,15 @@ class ManageBridge:
         out.close()
 
         subprocess.call(["tar", "xfz", tarFile])
-        print ModuleName, "Extracted upgrade tar"
+        logging.info('%s Extracted upgrade tar', ModuleName)
         bridgeDir = CB_HOME + "/bridge"
         bridgeSave = CB_HOME + "/bridge_save"
         bridgeClone = "bridge_clone"
-        print ModuleName, "Files:", bridgeDir, bridgeSave, bridgeClone
+        logging.info('%s Files: %s %s %s', bridgeDir, bridgeSave, bridgeClone)
         subprocess.call(["mv", bridgeDir, bridgeSave])
-        print ModuleName, "Moved bridgeDir to bridgeSave"
+        logging.info('%s Moved bridggeDir to bridgeSave', ModuleName)
         subprocess.call(["mv", bridgeClone, bridgeDir])
-        print ModuleName, "Moved bridgeClone to bridgeDir"
+        logging.info('%s Moved bridgeClone to bridgeDir', ModuleName)
         msg = {"cmd": "msg",
                "msg": {"message": "status",
                        "channel": "bridge_manager",
@@ -319,7 +317,7 @@ class ManageBridge:
 
     def sendLog(self):
         access_token = os.getenv('CB_DROPBOX_TOKEN', 'NO_TOKEN')
-        print ModuleName, "Dropbox access token = ", access_token
+        logging.info('%s Dropbox access token %s', ModuleName, access_token)
         self.client = DropboxClient(access_token)
         with open('/etc/hostname', 'r') as hostFile:
             hostname = hostFile.read()
@@ -327,7 +325,7 @@ class ManageBridge:
             hostname = hostname[:-1]
         dropboxPlace = '/' + hostname +'.log'
         logFile = CB_CONFIG_DIR + '/bridge.log'
-        print ModuleName, "Uploading ", logFile, "to", dropboxPlace
+        logging.info('%s Uploading %s to %s', ModuleName, logFile, dropboxPlace)
         f = open(logFile, 'rb')
         response = self.client.put_file(dropboxPlace, f)
 
@@ -347,15 +345,14 @@ class ManageBridge:
             self.cbSendSuperMsg(resp)
 
     def processControlMsg(self, msg):
-        print ModuleName, "Controller msg = ", msg
+        logging.info('%s Controller msg = %s', ModuleName,  msg)
         if msg["message"] == "command":
             if msg["body"] == "start":
                 if self.configured:
-                    print ModuleName, "starting adaptors and apps"
+                    logging.info('%s Starting adaptors and apps', ModuleName)
                     self.startAll()
                 else:
-                    print ModuleName, "Can't start adaptors & apps"
-                    print ModuleName, "Please run discovery"
+                    logging.warning('%s Cannot start adaptors and apps. Please run discovery', ModuleName)
                     msg = {"cmd": "msg",
                            "msg": {"message": "status",
                                    "channel": "bridge_manager",
@@ -370,7 +367,7 @@ class ManageBridge:
                 else:
                     self.discover()
             elif msg["body"] == "restart":
-                print ModuleName, "Received restart command"
+                logging.info('%s Received restart command', ModuleName)
                 resp = {"msg": "restart"}
                 self.cbSendSuperMsg(resp)
                 msg = {"cmd": "msg",
@@ -381,7 +378,7 @@ class ManageBridge:
                       }
                 self.cbSendConcMsg(msg)
             elif msg["body"] == "reboot":
-                print ModuleName, "Received reboot command"
+                logging.info('%s Received reboot command', ModuleName)
                 resp = {"msg": "reboot"}
                 self.cbSendSuperMsg(resp)
                 msg = {"cmd": "msg",
@@ -417,11 +414,11 @@ class ManageBridge:
                 self.processClient(req)
                 self.concNoApps = False
         else:
-            print ModuleName, "Received from server: ", msg
+            logging.info('%s Received from server: %s', ModuleName, msg)
 
     def stopAll(self):
         if self.configured and self.running and not self.stopping:
-            print ModuleName, "Processing stop. Stopping apps"
+            logging.info('%s Processing stop. Stopping apps', ModuleName)
             self.stopApps()
             reactor.callLater(21, self.stopConcentrator)
         else:
@@ -429,7 +426,7 @@ class ManageBridge:
  
     def stopConcentrator(self):
         """ Kills concentrator & nodejs processes, removes sockets & kills itself """
-        print ModuleName, "Stopping concentrator"
+        logging.info('%s Stopping concentrator', ModuleName)
         msg = {"cmd": "stop"}
         self.cbSendConcMsg(msg)
         # Give concentrator a change to stop before killing it and its sockets
@@ -440,30 +437,30 @@ class ManageBridge:
         try:
             self.concProc.kill()
         except:
-            print ModuleName, "No concentrator process to kill"
+            logging.debug('%s No concentrator process to kill', ModuleName)
         try:
             self.nodejsProc.kill()
         except:
-            print ModuleName, "No node.js process to kill"
+            logging.debug('%s No node  process to kill', ModuleName)
         for soc in self.concConfig:
             socket = soc["appConcSoc"]
             try:
                 os.remove(socket) 
-                print ModuleName, socket, " removed"
+                logging.debug('%s Socket %s renoved', ModuleName, socket)
             except:
-                print ModuleName, socket, " already removed"
-        print ModuleName, "Stopping reactor"
+                logging.debug('%s Socket %s alredy renoved', ModuleName, socket)
+        logging.info('%s Stopping reactor', ModuleName)
         reactor.stop()
         sys.exit
 
     def stopApps(self):
         """ Asks apps & adaptors to clean up nicely and die. """
-        print ModuleName, "Stopping apps and adaptors"
+        logging.info('%s Stopping apps and adaptors', ModuleName)
         self.stopping = True
         mgrSocs = self.listMgrSocs()
         for a in mgrSocs:
             msg = {"cmd": "stop"}
-            print ModuleName, "Stopping ", a
+            logging.info('%s Stopping %s', ModuleName, a)
             self.cbSendMsg(msg, a)
         self.running = False
         reactor.callLater(20, self.killAppProcs)
@@ -472,22 +469,22 @@ class ManageBridge:
         # Stop listing on sockets
         mgrSocs = self.listMgrSocs()
         for a in mgrSocs:
-           print ModuleName, "Stop listening on ", a
+           logging.debug('%s Stop listening on %s', ModuleName, a)
            self.appListen[a].stopListening()
         # In case apps & adaptors have not shut down, kill their processes.
         for p in self.appProcs:
             try:
                 p.kill()
             except:
-                print ModuleName, "No process to kill"
+                logging.debug('%s No process to kill', ModuleName)
         for a in self.apps:
             for appDev in a["device_permissions"]:
                 socket = appDev["adtSoc"]
                 try:
                     os.remove(socket) 
-                    print ModuleName, socket, " removed"
+                    logging.debug('%s Socket %s removed', ModuleName, socket)
                 except:
-                    print ModuleName, socket, " already removed"
+                    logging.debug('%s Socket %s already removed', ModuleName, socket)
         msg = {"cmd": "msg",
                "msg": {"message": "status",
                        "channel": "bridge_manager",
@@ -506,7 +503,7 @@ class ManageBridge:
         self.cbSupervisorFactory.sendMsg(msg)
 
     def processClient(self, msg):
-        #print ModuleName, "Received msg from client", msg
+        logging.debug('%s Received message from client: %s', ModuleName, msg)
         if msg["status"] == "control_msg":
             del msg["status"]
             self.processControlMsg(msg)
@@ -521,7 +518,7 @@ class ManageBridge:
                                             "sim": CB_SIM_LEVEL,
                                             "config": {"adts": a["device_permissions"],
                                                        "concentrator": conc}}
-                                #print ModuleName, "Response = ", msg["id"], response
+                                logging.debug('%s Response: %s %s', ModuleName, msg['id'], response)
                                 self.cbSendMsg(response, msg["id"])
                                 break
                         break
@@ -539,7 +536,7 @@ class ManageBridge:
                              "sim": CB_SIM_LEVEL
                             }
                         }
-                        #print ModuleName, "Response = ", msg["id"], response
+                        logging.debug('%s Response: %s %s', ModuleName, msg['id'], response)
                         self.cbSendMsg(response, msg["id"])
                         break
             elif msg["type"] == "conc":
@@ -556,11 +553,10 @@ class ManageBridge:
                     response = {"cmd": "config",
                                 "config": "no_apps"
                                }
-                print ModuleName, "Sending config to conc:", response
+                logging.debug('%s Sending config to conc:  %s', ModuleName, response)
                 self.cbSendConcMsg(response)
             else:
-                print ModuleName, "Config req from unknown instance: ", \
-                    msg["id"]
+                logging.warning('%s Config req from unknown instance: %s', ModuleName, msg['id'])
                 response = {"cmd": "error"}
                 self.cbSendMsg(response, msg["id"])
 

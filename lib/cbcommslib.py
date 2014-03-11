@@ -5,13 +5,14 @@
 # Proprietary and confidential
 # Written by Peter Claydon
 #
-ModuleName = "cbLib               " 
+ModuleName = "cbLib" 
 
 import sys
 import os.path
 import time
 import json
-from pprint import pprint
+import logging
+from cbconfig import *
 from twisted.internet.protocol import Protocol, Factory
 from twisted.internet.protocol import ClientFactory
 from twisted.internet.protocol import ReconnectingClientFactory
@@ -26,17 +27,18 @@ class CbAdaptor:
     ModuleName = "CbAdaptor           " 
 
     def __init__(self, argv):
+        logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(message)s')
         self.doStop = False
         self.configured = False
         self.cbFactory = {}
         self.appInstances = []
 
         if len(argv) < 3:
-            print "CbAdaptor improper number of arguments"
+            logging.error("%s cbAdaptor improper number of arguments", ModuleName)
             exit(1)
         managerSocket = argv[1]
         self.id = argv[2]
-        print ModuleName, "Hello from ", self.id
+        logging.info("%s Hello from %s", ModuleName, self.id)
 
         initMsg = {"id": self.id,
                    "type": "adt",
@@ -47,12 +49,11 @@ class CbAdaptor:
 
     def cbAdtConfigure(self, config):
         """The app should overwrite this and do all configuration in it."""
-        print ModuleName, "The wrong cbAdtConfigure"
+        logging.warning("%s %s The wrong cbAdtConfigure method", ModuleName, self.id)
 
     def processConf(self, config):
         """Config is based on what apps are available."""
-        #print ModuleName, self.id, " configure: "
-        #pprint(config)
+        logging.debug("%s %s Configuration: %s ", ModuleName, self.id, config)
         self.name = config["name"]
         self.friendly_name = config["friendly_name"]
         self.device = config["btAdpt"]
@@ -71,7 +72,7 @@ class CbAdaptor:
         self.configured = True
 
     def processManager(self, cmd):
-        #print ModuleName, "Received from manager: ", cmd
+        logging.debug("%s %s Received from manager: %s ", ModuleName, self.id, cmd)
         if cmd["cmd"] == "stop":
             self.doStop = True
             msg = {"id": self.id,
@@ -95,8 +96,8 @@ class CbAdaptor:
         try:
             reactor.stop()
         except:
-             print ModuleName, self.id, " stop: reactor was not running"
-        print ModuleName, "Bye from ", self.id
+            logging.debug("%s %s stopReactor. Reactor was not running", ModuleName, self.id)
+        logging.debug("%s Bye from %s", ModuleName, self.id)
         sys.exit
 
     def cbSendMsg(self, msg, iName):
@@ -107,6 +108,7 @@ class CbApp:
     ModuleName = "cbApp               " 
 
     def __init__(self, argv):
+        logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(message)s')
         self.cbFactory = {}
         self.adtInstances = []
         self.doStop = False
@@ -114,11 +116,11 @@ class CbApp:
         self.configured = False
 
         if len(argv) < 3:
-            print "cbApp improper number of arguments"
+            logging.error("%s cbApp improper number of arguments", ModuleName)
             exit(1)
         managerSocket = argv[1]
         self.id = argv[2]
-        print ModuleName, "Hello from ", self.id
+        logging.info("%s Hellp from %s", ModuleName, self.id)
 
         initMsg = {"id": self.id,
                    "type": "app",
@@ -129,20 +131,19 @@ class CbApp:
 
     def processResp(self, resp):
         """This should be overridden by the actual app."""
-        print ModuleName, self.id, " should subclass processResp"
+        logging.warning("%s %s should subclass processResp method", ModuleName, self.id)
 
     def processConcResp(self, resp):
         """This should be overridden by the actual app."""
-        print ModuleName, self.id, "should subclass processConcResp"
+        logging.warning("%s %s should subclass processConcResp method", ModuleName, self.id)
 
     def cbAppConfigure(self, config):
         """The app should overwrite this and do all configuration in it."""
-        print ModuleName, self.id, " should subclass cbAppConfigure"
+        logging.warning("%s %s should subclass cbAppConfigure method", ModuleName, self.id)
 
     def processConf(self, config):
         """Config is based on what adaptors are available."""
-        #print ModuleName, self.id, " configure: "
-        #pprint(config)
+        logging.debug("%s %s Config: %s", ModuleName, self.id, config)
         # Connect to socket for each adaptor
         for adaptor in config["adts"]:
             iName = adaptor["id"]
@@ -173,7 +174,7 @@ class CbApp:
             self.configured = True
 
     def processManager(self, cmd):
-        #print ModuleName, "Received from manager: ", cmd
+        logging.debug("%s %s Received from manager: %s", ModuleName, self.id, cmd)
         if cmd["cmd"] == "stop":
             self.doStop = True
             msg = {"id": self.id,
@@ -197,8 +198,8 @@ class CbApp:
         try:
             reactor.stop()
         except:
-             print ModuleName, self.id, " stop: reactor was not running"
-        print ModuleName, "Bye from ", self.id
+            logging.warning("%s %s stopReactor when reactor not running", ModuleName, self.id)
+        logging.info("%s Bye from %s", ModuleName, self.id)
         sys.exit
 
     def cbSendMsg(self, msg, iName):
