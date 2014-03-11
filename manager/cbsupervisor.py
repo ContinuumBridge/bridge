@@ -5,7 +5,7 @@
 # Proprietary and confidential
 # Written by Peter Claydon
 #
-ModuleName = "Supervisor          "
+ModuleName = "Supervisor"
 
 import sys
 import time
@@ -21,6 +21,10 @@ from cbconfig import *
 
 class Supervisor:
     def __init__(self):
+        logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(message)s')
+        logging.info("%s *************************************", ModuleName)
+        logging.info("%s Restart", ModuleName)
+        logging.info("%s *************************************", ModuleName)
         self.watchDogInterval = 30 # Number of secs between bridge manager checks
         self.connectionCheckInterval = 60 # Check internet connection this often
         self.reconnectCount = 0  
@@ -36,7 +40,7 @@ class Supervisor:
         try:
             os.remove(s)
         except:
-            print ModuleName, "Socket was not present: ", s
+            logging.debug("%s Socket was not present %s", ModuleName, s)
         if not restart:
             self.cbManagerFactory = CbServerFactory(self.processManager)
         self.mgrPort = reactor.listenUNIX(s, self.cbManagerFactory, backlog=4)
@@ -45,26 +49,26 @@ class Supervisor:
         exe = CB_BRIDGE_ROOT + "/manager/cbmanager.py"
         try:
             self.managerProc = Popen([exe])
-            print ModuleName, "Started bridge manager"
+            logging.info("%s Starting bridge manager", ModuleName)
             self.starting = False
             reactor.callLater(2*self.watchDogInterval, self.checkManager, time.time())
         except:
-            print ModuleName, "Bridge manager failed to start:", exe
+            logging.error("%s Bridge manager failed to start: %s", ModuleName, exe)
         
         if not restart:
             # Only check connections when not in simulation mode
             try:
                 reactor.callLater(0.5, self.checkConnection)
             except:
-                print ModuleName, "Unable to call checkConnection"
+                logging.error("%s iUnable to call checkConnection", ModuleName)
             reactor.run()
 
     def cbSendManagerMsg(self, msg):
-        #print ModuleName, "Sending msg to manager: ", msg
+        logging.debug("%s Sending msg to manager: %s", ModuleName, msg)
         self.cbManagerFactory.sendMsg(msg)
 
     def processManager(self, msg):
-        #print ModuleName, "processManager received: ", msg
+        logging.debug("%s processManager received: %s", ModuleName, msg)
         self.timeStamp = time.time()
         if msg["msg"] == "restart":
             msg = {"msg": "stopall"
@@ -86,7 +90,7 @@ class Supervisor:
                       }
                 self.cbSendManagerMsg(msg)
             else:
-                print ModuleName, "Manager appears to be dead. Trying to restart nicely"
+                logging.warning("%s Manager appears to be dead. Trying to restart nicely", ModuleName)
                 msg = {"msg": "stopall"
                       }
                 try:
@@ -114,7 +118,7 @@ class Supervisor:
         self.d1.addCallback(self.connectionChecked)
 
     def connectionChecked(self, connected):
-        print ModuleName, "Checked LAN connection, ", connected
+        logging.info("%s Checked LAN connection %s", ModuleName, connected)
         if connected:
             reactor.callLater(self.connectionCheckInterval, self.checkConnection)
         else:
@@ -140,7 +144,7 @@ class Supervisor:
                   }
             self.cbSendManagerMsg(msg)
         except:
-            print ModuleName, "Can't tell manager to stop, just rebooting."
+            logging.info("%s Cannot tell manager to stop, just rebooting", ModuleName)
         # Tidy up
         try:
             self.d1.cancel
@@ -157,9 +161,9 @@ class Supervisor:
             try:
                 call(["reboot"])
             except:
-                print ModuleName, "Unable to reboot, probably because bridge not run as root."
+                logging.info("%s Unable to reboot, probably because bridge not run as root", ModuleName)
         else:
-            print ModuleName, "Would have rebooted if not in sim mode."
+            logging.info("%s Would have rebooted if not in sum mode", ModuleName)
 
 if __name__ == '__main__':
     s = Supervisor()

@@ -8,6 +8,7 @@
 # Contains environment for a bridge
 
 import os
+import logging
 
 CB_BRIDGE_ROOT = os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..'))
 CB_HOME = os.path.abspath(os.path.join(os.path.dirname( __file__ ), '../..'))
@@ -18,7 +19,5 @@ CB_NO_CLOUD = os.getenv('CB_NO_CLOUD', False)
 CB_CONTROLLER_ADDR = os.getenv('CB_CONTROLLER_ADDR', '54.194.28.63')
 CB_BRIDGE_EMAIL = os.getenv('CB_BRIDGE_EMAIL', 'noanemail')
 CB_BRIDGE_PASSWORD = os.getenv('CB_BRIDGE_PASSWORD', 'notapassword')
-
-print "CB_SIM_LEVEL = ", CB_SIM_LEVEL
-print "CB_NO_CLOUD = ", CB_NO_CLOUD
-print "CB_CONTROLLER_ADDR = ", CB_CONTROLLER_ADDR
+CB_LOGGING_LEVEL = getattr(logging, 'DEBUG')
+CB_LOGFILE = CB_CONFIG_DIR + 'bridge.log'

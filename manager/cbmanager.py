@@ -5,12 +5,14 @@
 # Proprietary and confidential
 # Written by Peter Claydon
 #
-ModuleName = "Bridge Manager      "
+#ModuleName = "Bridge Manager      "
+ModuleName = "Manager"
 id = "manager"
 
 import sys
 import time
 import os
+import logging
 import subprocess
 import json
 from twisted.internet import threads
@@ -34,7 +36,8 @@ class ManageBridge:
     def __init__(self):
         """ apps and adts data structures are stored in a local file.
         """
-        print ModuleName, "CB_NO_CLOUD = ", CB_NO_CLOUD
+        logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(message)s')
+        logging.info("%s CB_NO_CLOUD = %s", ModuleName, CB_NO_CLOUD)
         self.discovered = False
         self.configured = False
         self.reqSync = False
@@ -51,17 +54,16 @@ class ManageBridge:
 
     def initBridge(self):
         if CB_NO_CLOUD != "True":
-            print ModuleName, "Bridge Manager Starting JS Concentrator"
+            logging.info('%s Starting node', ModuleName)
             exe = "/opt/node/bin/node"
             path = CB_BRIDGE_ROOT + "/nodejs/index.js"
             try:
                 self.nodejsProc = subprocess.Popen([exe, path,  CB_CONTROLLER_ADDR, \
                                                     CB_BRIDGE_EMAIL, CB_BRIDGE_PASSWORD])
-                print ModuleName, "Started node.js"
             except:
-                print ModuleName, "node.js failed to start. exe = ", exe
+                logging.error('%s node failed to start. exe = %s', ModuleName, exe)
         else:
-            print ModuleName, "Running without Cloud Server"
+            logging.info('%s Running without Cloud Server', ModuleName)
         # Give time for node interface to start
         time.sleep(2)
 
@@ -84,13 +86,13 @@ class ManageBridge:
         try:
             os.remove(s)
         except:
-            print ModuleName, "Conc socket was not present: ", s
+            logging.debug('%s Conc socket was not present: %s', ModuleName, s)
         try:
             self.cbConcFactory = CbServerFactory(self.processClient)
             self.concListen = reactor.listenUNIX(s, self.cbConcFactory, backlog=4)
-            print ModuleName, "Opened manager socket ", s
+            logging.debug('%s Opened manager socket: %s', ModuleName, s)
         except:
-            print ModuleName, "Socket already exits: ", s
+            logging.debug('%s Socket already exists: %s', ModuleName, s)
 
         # Now start the concentrator in a subprocess
         exe = self.concPath
@@ -98,21 +100,21 @@ class ManageBridge:
         mgrSoc = CB_SOCKET_DIR + "skt-mgr-conc"
         try:
             self.concProc = subprocess.Popen([exe, mgrSoc, id])
-            print ModuleName, "Started concentrator"
+            logging.debug('%s Started concentrator', ModuleName)
         except:
-            print ModuleName, "Concentrator failed to start"
+            logging.debug('%s Failed to start concentrator', ModuleName)
 
         # Initiate comms with supervisor, which started the manager in the first place
         s = CB_SOCKET_DIR + "skt-super-mgr"
         initMsg = {"id": "manager",
                    "msg": "status",
                    "status": "ok"} 
-        #try:
-        self.cbSupervisorFactory = CbClientFactory(self.processSuper, initMsg)
-        reactor.connectUNIX(s, self.cbSupervisorFactory, timeout=10)
-        print ModuleName, "Opened supervisor socket ", s
-        #except:
-            #print ModuleName, "Cannot open supervisor socket ", s
+        try:
+            self.cbSupervisorFactory = CbClientFactory(self.processSuper, initMsg)
+            reactor.connectUNIX(s, self.cbSupervisorFactory, timeout=10)
+            logging.info('%s Opened supervisor socket %s', ModuleName, s)
+        except:
+            logging.error('%s Cannot open supervisor socket %s', ModuleName, s)
 
     def startApps(self):
         for a in self.apps:
@@ -122,14 +124,14 @@ class ManageBridge:
                 mgrSoc = a["app"]["mgrSoc"]
                 p = subprocess.Popen([exe, mgrSoc, id])
                 self.appProcs.append(p)
-                print ModuleName, id, " started"
+                logging.info('%s App %s started', ModuleName, id)
             except:
-                print ModuleName, id, " failed to start"
+                logging.error('%s App %s failed to start', ModuleName, id)
         # Give time for everything to start before we consider ourselves running
         reactor.callLater(10, self.setRunning)
 
     def setRunning(self):
-        print ModuleName, "Bridge running"
+        logging.info('%s Bridge running', ModuleName)
         self.running = True
 
     def startAll(self):
@@ -149,9 +151,9 @@ class ManageBridge:
             try:
                 self.cbFactory[s] = CbServerFactory(self.processClient)
                 self.appListen[s] = reactor.listenUNIX(mgrSocs[s], self.cbFactory[s], backlog=4)
-                print ModuleName, "Opened manager socket ", s,  mgrSocs[s]
+                logging.info('%s Opened manager socket %s %s', ModuleName, s, mgrSocs[s])
             except:
-                print ModuleName, "Manager socket already exits: ", s, mgrSocs[s]
+                logging.error('%s Manager socket already exists %s %s', ModuleName, s, mgrSocs[s])
 
         # Start adaptors
         for d in self.devices:
@@ -162,12 +164,12 @@ class ManageBridge:
             try:
                 p = subprocess.Popen([exe, mgrSoc, id])
                 self.appProcs.append(p)
-                print ModuleName, "Started adaptor ", fName, " ID: ", id
+                logging.info('%s Started adaptor %s ID: %s', ModuleName, fName, id)
                 # Give time for adaptor to start before starting the next one
                 time.sleep(2)
             except:
-                print ModuleName, "Adaptor ", fName, " failed to start"
-                print ModuleName, "Params: ", exe, id, mgrSoc
+                logging.error('%s Adaptor %s failed to start', ModuleName, fName)
+                logging.error('%s Params: %s %s %s', ModuleName, exe, id, mgrSoc)
                 time.sleep(2)
 
         # Give time for all adaptors to start before starting apps
@@ -178,7 +180,7 @@ class ManageBridge:
         exe = CB_BRIDGE_ROOT + "/manager/discovery.py"
         protocol = "btle"
         output = subprocess.check_output([exe, protocol, str(CB_SIM_LEVEL), CB_CONFIG_DIR])
-        print ModuleName, "Discover output = ", output
+        logging.info('%s Discovery output: %s', ModuleName, output)
         discOutput = json.loads(output)
         self.discoveredDevices["message"] = "request"
         self.discoveredDevices["verb"] = "post"
