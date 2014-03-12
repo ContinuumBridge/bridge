@@ -69,11 +69,12 @@ class Supervisor:
 
     def processManager(self, msg):
         logging.debug("%s processManager received: %s", ModuleName, msg)
+        # Regardless of message content, timeStamp is the time when we last heard from the manager
         self.timeStamp = time.time()
         if msg["msg"] == "restart":
-            msg = {"msg": "stopall"
-                  }
-            self.cbSendManagerMsg(msg)
+            resp = {"msg": "stopall"
+                   }
+            self.cbSendManagerMsg(resp)
             self.starting = True
             reactor.callLater(self.watchDogInterval, self.startManager, True)
         elif msg["msg"] == "reboot":
@@ -118,7 +119,7 @@ class Supervisor:
         self.d1.addCallback(self.connectionChecked)
 
     def connectionChecked(self, connected):
-        logging.info("%s Checked LAN connection %s", ModuleName, connected)
+        logging.debug("%s Checked LAN connection %s", ModuleName, connected)
         if connected:
             reactor.callLater(self.connectionCheckInterval, self.checkConnection)
         else:
@@ -150,8 +151,7 @@ class Supervisor:
             self.d1.cancel
             self.d2.cancel
         except:
-            # just being lazy and masking errors
-            pass
+            logging.info("%s Could not cancel deferds. Proceeding to reboot", ModuleName)
         self.mgrPort.stopListening()
         reactor.callLater(self.watchDogInterval, self.reboot)
 

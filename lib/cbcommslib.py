@@ -120,7 +120,7 @@ class CbApp:
             exit(1)
         managerSocket = argv[1]
         self.id = argv[2]
-        logging.info("%s Hellp from %s", ModuleName, self.id)
+        logging.info("%s Hello from %s", ModuleName, self.id)
 
         initMsg = {"id": self.id,
                    "type": "app",
