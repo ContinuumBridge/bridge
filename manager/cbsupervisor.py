@@ -163,7 +163,7 @@ class Supervisor:
             except:
                 logging.info("%s Unable to reboot, probably because bridge not run as root", ModuleName)
         else:
-            logging.info("%s Would have rebooted if not in sum mode", ModuleName)
+            logging.info("%s Would have rebooted if not in sim mode", ModuleName)
 
 if __name__ == '__main__':
     s = Supervisor()
