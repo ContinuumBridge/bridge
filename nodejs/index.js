@@ -15,6 +15,7 @@ var bridgeConcentrator = new BridgeConcentrator(5000);
 var controllerSocket = new ControllerSocket();
 
 controllerSocket.on('giveUp', function() {
+    logger.log('debug', 'calling connectToController after giveUp');
     connectToController();
 });
 
@@ -43,8 +44,8 @@ connectToController = function() {
 
         logger.error(error);
         logger.info('Retrying..');
-        // Authorise again after 2 seconds
-        setTimeout(connectToController, 2000);
+        // Authorise again after 8 seconds
+        setTimeout(connectToController, 8000);
     });
 };
 
