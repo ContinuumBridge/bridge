@@ -4,6 +4,7 @@ require('./env');
 var BridgeConcentrator = require('./bridge/bridge_socket.js')
     ,ControllerSocket = require('./controller/controller_socket.js')
     ,controllerAuth = require('./controller/controller_auth.js')
+    ,Heartbeat = require('./heartbeat.js')
     ;
 
 var logger = require('./logger');
@@ -14,10 +15,8 @@ var bridgeConcentrator = new BridgeConcentrator(5000);
 
 var controllerSocket = new ControllerSocket();
 
-controllerSocket.on('giveUp', function() {
-    logger.log('debug', 'calling connectToController after giveUp');
-    connectToController();
-});
+var heartbeat = new Heartbeat(controllerSocket, bridgeConcentrator);
+heartbeat.start();
 
 controllerSocket.fromController.onValue(function(jsonMessage) {
 
@@ -50,3 +49,10 @@ connectToController = function() {
 };
 
 connectToController();
+
+// Restart connection process on 'giveUp'
+controllerSocket.on('giveUp', function() {
+    logger.log('debug', 'calling connectToController after giveUp');
+    connectToController();
+});
+

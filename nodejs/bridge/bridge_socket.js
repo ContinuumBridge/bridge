@@ -4,7 +4,9 @@ var net = require('net')
     ,Bacon = require('baconjs').Bacon
     ;
 
-var logger = require('../logger');
+var logger = require('../logger')
+    ,MessageUtils = require('../message_utils')
+    ;
 
 /* Bridge socket manager */
 
@@ -27,8 +29,17 @@ function BridgeConcentrator(port) {
 
         toBridge.onValue(function(message) {
 
-            logger.info('Controller => Bridge', message);
-            socket.write(message + '\r\n');
+            var message = MessageUtils.stripFields(message);
+            MessageUtils.stringify(message).then(function(jsonMessage) {
+                if (message.source == 'conduit') {
+                    logger.debug(message.source + ' => bridge', jsonMessage);
+                } else {
+                    logger.info(message.source + ' => bridge', jsonMessage);
+                }
+                socket.write(jsonMessage + '\r\n');
+            }, function(error) {
+                logger.error(error);
+            });
         });
 
         socket.on('data', function(data) {

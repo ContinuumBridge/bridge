@@ -22,13 +22,13 @@
     <favorites_list name="bridge" />
   </component>
   <component name="FileEditorManager">
-    <splitter split-orientation="vertical" split-proportion="0.4546584">
+    <splitter split-orientation="vertical" split-proportion="0.4537037">
       <split-first>
         <leaf>
-          <file leaf-file-name="index.js" pinned="false" current="true" current-in-tab="true">
-            <entry file="file://$PROJECT_DIR$/nodejs/index.js">
+          <file leaf-file-name="heartbeat.js" pinned="false" current="false" current-in-tab="false">
+            <entry file="file://$PROJECT_DIR$/nodejs/heartbeat.js">
               <provider selected="true" editor-type-id="text-editor">
-                <state line="51" column="21" selection-start="1531" selection-end="1531" vertical-scroll-proportion="0.8011869" vertical-offset="495" max-vertical-offset="870">
+                <state line="20" column="47" selection-start="585" selection-end="585" vertical-scroll-proportion="0.0" vertical-offset="159" max-vertical-offset="495">
                   <folding />
                 </state>
               </provider>
@@ -79,6 +79,15 @@
               </provider>
             </entry>
           </file>
+          <file leaf-file-name="message_utils.js" pinned="false" current="true" current-in-tab="true">
+            <entry file="file://$PROJECT_DIR$/nodejs/message_utils.js">
+              <provider selected="true" editor-type-id="text-editor">
+                <state line="24" column="31" selection-start="520" selection-end="520" vertical-scroll-proportion="1.0714285" vertical-offset="0" max-vertical-offset="765">
+                  <folding />
+                </state>
+              </provider>
+            </entry>
+          </file>
         </leaf>
       </split-first>
       <split-second>
@@ -86,25 +95,34 @@
           <file leaf-file-name="env.js" pinned="false" current="false" current-in-tab="false">
             <entry file="file://$PROJECT_DIR$/nodejs/env.js">
               <provider selected="true" editor-type-id="text-editor">
-                <state line="20" column="0" selection-start="759" selection-end="759" vertical-scroll-proportion="0.0" vertical-offset="68" max-vertical-offset="405">
+                <state line="20" column="0" selection-start="759" selection-end="759" vertical-scroll-proportion="0.0" vertical-offset="0" max-vertical-offset="405">
                   <folding />
                 </state>
               </provider>
             </entry>
           </file>
-          <file leaf-file-name="bridge_socket.js" pinned="false" current="false" current-in-tab="false">
+          <file leaf-file-name="bridge_socket.js" pinned="false" current="false" current-in-tab="true">
             <entry file="file://$PROJECT_DIR$/nodejs/bridge/bridge_socket.js">
               <provider selected="true" editor-type-id="text-editor">
-                <state line="4" column="4" selection-start="108" selection-end="108" vertical-scroll-proportion="0.0" vertical-offset="60" max-vertical-offset="900">
+                <state line="36" column="31" selection-start="1078" selection-end="1078" vertical-scroll-proportion="0.4074074" vertical-offset="375" max-vertical-offset="1065">
                   <folding />
                 </state>
               </provider>
             </entry>
           </file>
-          <file leaf-file-name="controller_socket.js" pinned="false" current="false" current-in-tab="true">
+          <file leaf-file-name="controller_socket.js" pinned="false" current="false" current-in-tab="false">
             <entry file="file://$PROJECT_DIR$/nodejs/controller/controller_socket.js">
               <provider selected="true" editor-type-id="text-editor">
-                <state line="113" column="0" selection-start="3581" selection-end="3581" vertical-scroll-proportion="4.1955447" vertical-offset="0" max-vertical-offset="2385">
+                <state line="113" column="0" selection-start="3581" selection-end="3581" vertical-scroll-proportion="0.0" vertical-offset="0" max-vertical-offset="2385">
+                  <folding />
+                </state>
+              </provider>
+            </entry>
+          </file>
+          <file leaf-file-name="index.js" pinned="false" current="false" current-in-tab="false">
+            <entry file="file://$PROJECT_DIR$/nodejs/index.js">
+              <provider selected="true" editor-type-id="text-editor">
+                <state line="17" column="0" selection-start="520" selection-end="520" vertical-scroll-proportion="0.0" vertical-offset="225" max-vertical-offset="960">
                   <folding />
                 </state>
               </provider>
@@ -125,12 +143,14 @@
         <option value="$PROJECT_DIR$/requirements.txt" />
         <option value="$PROJECT_DIR$/nodejs/bridge/bridge_concentrator.js" />
         <option value="$PROJECT_DIR$/nodejs/env.js" />
-        <option value="$PROJECT_DIR$/nodejs/bridge/bridge_socket.js" />
         <option value="$PROJECT_DIR$/nodejs/controller/controller_auth.js" />
         <option value="$PROJECT_DIR$/nodejs/logger.js" />
         <option value="$PROJECT_DIR$/package.json" />
         <option value="$PROJECT_DIR$/nodejs/controller/controller_socket.js" />
         <option value="$PROJECT_DIR$/nodejs/index.js" />
+        <option value="$PROJECT_DIR$/nodejs/heartbeat.js" />
+        <option value="$PROJECT_DIR$/nodejs/message_utils.js" />
+        <option value="$PROJECT_DIR$/nodejs/bridge/bridge_socket.js" />
       </list>
     </option>
   </component>
@@ -698,13 +718,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/nodejs/env.js">
-      <provider selected="true" editor-type-id="text-editor">
-        <state line="20" column="0" selection-start="759" selection-end="759" vertical-scroll-proportion="0.0" vertical-offset="68" max-vertical-offset="405">
-          <folding />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/manager/testDiscovery.py">
       <provider selected="true" editor-type-id="text-editor">
         <state line="14" column="10" selection-start="427" selection-end="427" vertical-scroll-proportion="-0.04278075" vertical-offset="226" max-vertical-offset="600" />
@@ -724,13 +737,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/nodejs/bridge/bridge_socket.js">
-      <provider selected="true" editor-type-id="text-editor">
-        <state line="4" column="4" selection-start="108" selection-end="108" vertical-scroll-proportion="0.0" vertical-offset="0" max-vertical-offset="900">
-          <folding />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/package.json">
       <provider selected="true" editor-type-id="text-editor">
         <state line="13" column="31" selection-start="383" selection-end="383" vertical-scroll-proportion="-3.75" vertical-offset="105" max-vertical-offset="585">
@@ -740,14 +746,42 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/nodejs/controller/controller_socket.js">
       <provider selected="true" editor-type-id="text-editor">
-        <state line="113" column="0" selection-start="3581" selection-end="3581" vertical-scroll-proportion="4.1955447" vertical-offset="0" max-vertical-offset="2385">
+        <state line="113" column="0" selection-start="3581" selection-end="3581" vertical-scroll-proportion="0.0" vertical-offset="0" max-vertical-offset="2385">
           <folding />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/nodejs/index.js">
       <provider selected="true" editor-type-id="text-editor">
-        <state line="51" column="21" selection-start="1531" selection-end="1531" vertical-scroll-proportion="0.8011869" vertical-offset="495" max-vertical-offset="870">
+        <state line="17" column="0" selection-start="520" selection-end="520" vertical-scroll-proportion="0.0" vertical-offset="225" max-vertical-offset="960">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/nodejs/heartbeat.js">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="20" column="47" selection-start="585" selection-end="585" vertical-scroll-proportion="0.0" vertical-offset="159" max-vertical-offset="495">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/nodejs/env.js">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="20" column="0" selection-start="759" selection-end="759" vertical-scroll-proportion="0.0" vertical-offset="0" max-vertical-offset="405">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/nodejs/bridge/bridge_socket.js">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="36" column="31" selection-start="1078" selection-end="1078" vertical-scroll-proportion="0.4074074" vertical-offset="375" max-vertical-offset="1065">
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/nodejs/message_utils.js">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="24" column="31" selection-start="520" selection-end="520" vertical-scroll-proportion="1.0714285" vertical-offset="0" max-vertical-offset="765">
           <folding />
         </state>
       </provider>
