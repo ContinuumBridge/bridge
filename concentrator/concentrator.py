@@ -122,10 +122,10 @@ class DropboxStore():
                 devName = idToName.get(i)
                 t.get_or_insert(i, type='idtoname', device=i, name=devName)
             self.datastore.commit()
-            self.configured = True
+        self.configured = True
     
     def appendData(self, device, type, timeStamp, data):
-        if self.configured:
+        if self.connected and self.configured:
             devTable = self.datastore.get_table(device)
             date = Date(timeStamp)
             t = devTable.insert(Date=date, Type=type, Data=data)
