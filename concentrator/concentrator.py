@@ -9,6 +9,7 @@ ModuleName = "Concentrator"
 
 # Number of samples stored locally before a commit to Dropbox
 DROPBOX_COMMIT_COUNT = 10
+DROPBOX_START_DELAY = 20  # Time to wait before trying to connect to Dropbox
 
 import sys
 import time
@@ -90,6 +91,7 @@ class DataStore():
 class DropboxStore():
     def __init__(self):
         self.configured = False
+        self.connected = False
         self.count = 0
 
     def connectDropbox(self, hostname):
@@ -245,19 +247,28 @@ class Concentrator():
 
         # Connect to Dropbox
         if self.conc_mode == 'client':
-            with open('/etc/hostname', 'r') as hostFile:
-                hostname = hostFile.read()
-            if hostname.endswith('\n'):
-                    hostname = hostname[:-1]
             self.dropboxStore = DropboxStore()
-            d1 = threads.deferToThread(self.dropboxStore.connectDropbox, hostname)
-            d1.addCallback(self.checkDropbox)
-    
+            with open('/etc/hostname', 'r') as hostFile:
+                self.hostname = hostFile.read()
+                if self.hostname.endswith('\n'):
+                    self.hostname = self.hostname[:-1]
+            reactor.callLater(DROPBOX_START_DELAY, self.connectDropbox)
+
         reactor.run()
 
+    def connectDropbox(self):
+        d1 = threads.deferToThread(self.dropboxStore.connectDropbox, self.hostname)
+        d1.addCallback(self.checkDropbox)
+    
     def checkDropbox(self, connected):
+        """ Will continually try to connect until it is connected. """
         logging.info("%s Connected to Dropbox: %s", ModuleName, connected)
-
+        if not connected:
+            logging.info("%s Dropbox connection failed. Trying again", ModuleName)
+            reactor.callLater(DROPBOX_START_DELAY, self.connectDropbox)
+        else:
+            logging.info("%s Dropbox connection successful", ModuleName)
+ 
     def processConf(self, config):
         """Config is based on what apps are available."""
         logging.info("%s processConf: %s", ModuleName, config)

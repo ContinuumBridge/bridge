@@ -406,12 +406,12 @@ class ManageBridge:
             reactor.callLater(0.2, self.stopAll)
         else:
             if time.time() - self.timeLastConduitMsg > CONDUIT_WATCHDOG_MAXTIME: 
-                logging.info('%s Not heard from conduit for %s, rebooting', ModuleName, CONDUIT_WATCHDOG_MAXTIME)
+                logging.info('%s Not heard from conduit for %s. Notifyinng supervisor', ModuleName, CONDUIT_WATCHDOG_MAXTIME)
                 resp = {"msg": "status",
                         "status": "disconnected"
                        }
             elif self.disconnectedCount > CONDUIT_MAX_DISCONNECT_COUNT:
-                logging.info('%s Disconnected from bridge controller. Rebooting', ModuleName)
+                logging.info('%s Disconnected from bridge controller. Notifying supervisor', ModuleName)
                 resp = {"msg": "status",
                         "status": "disconnected"
                        }
@@ -435,6 +435,7 @@ class ManageBridge:
                 self.disconnectedCount += 1
  
     def processControlMsg(self, msg):
+        #logging.info('%s msg received from controller: %s', ModuleName, msg)
         if not "message" in msg: 
             logging.error('%s msg received from controller with no "message" key', ModuleName)
             msg = {"cmd": "msg",
