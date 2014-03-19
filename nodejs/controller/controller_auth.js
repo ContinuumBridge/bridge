@@ -21,13 +21,12 @@ var controllerAuth = function(controllerURL, email, password) {
         method: "post",
         headers: {
             'Content-type': 'application/json', 
-            'Accept': 'application/json',
+            'Accept': 'application/json'
         },
         data: authDetails
     };  
 
     controllerAuthURL = controllerURL + 'bridge_auth/login/'
-    console.log('controllerAuthURL is', controllerAuthURL);
 
     // Make a request to Django to get session data
     rest.post(controllerAuthURL, controllerAuthOptions).on('complete', function(data, response) {
@@ -41,9 +40,9 @@ var controllerAuth = function(controllerURL, email, password) {
                 deferredSessionData.reject('Error from bridge controller', response, data);
             }
         } else {
-            deferredSessionData.reject('There was an error connecting to the bridge controller');
+            deferredSessionData.reject('There was an error authenticating to the Bridge Controller');
         }   
-    });     
+    });
 
     return deferredSessionData.promise;
 }
