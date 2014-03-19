@@ -100,7 +100,7 @@ class DropboxStore():
             self.client = DropboxClient(access_token)
         except:
             logging.error("%s Could not access Dropbox. Wrong access token?", ModuleName)
-            connected = False
+            self.connected = False
         else:
             self.manager = DatastoreManager(self.client)
             hostname = hostname.lower()
@@ -109,7 +109,7 @@ class DropboxStore():
                 self.datastore = self.manager.open_or_create_datastore(hostname)
             except:
                 logging.info("%s Could not open Dropbox datastore", ModuleName)
-                connected = False
+                self.connected = False
         return self.connected
 
     def setConfig(self, config):
@@ -250,8 +250,8 @@ class Concentrator():
             if hostname.endswith('\n'):
                     hostname = hostname[:-1]
             self.dropboxStore = DropboxStore()
-            self.d1 = threads.deferToThread(self.dropboxStore.connectDropbox, hostname)
-            self.d1.addCallback(self.checkDropbox)
+            d1 = threads.deferToThread(self.dropboxStore.connectDropbox, hostname)
+            d1.addCallback(self.checkDropbox)
     
         reactor.run()
 

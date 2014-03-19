@@ -7,7 +7,7 @@
 #
 ModuleName = "Supervisor"
 
-TIME_TO_IFUP = 20 # Time to wait before checking if we have an Internet connection (secs)
+TIME_TO_IFUP = 10 # Time to wait before checking if we have an Internet connection (secs)
 WATCHDOG_INTERVAL = 30  # Time between manager checks (secs)
 CONNECT_CHECK_INTERVAL = 60
 
