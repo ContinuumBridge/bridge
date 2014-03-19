@@ -274,7 +274,7 @@ class Concentrator():
                     reactor.listenUNIX(appConcSoc, self.cbFactory[iName])
 
     def processServerMsg(self, msg):
-        logging.info("%s Received from controller: %s", ModuleName, msg)
+        #logging.debug("%s Received from controller: %s", ModuleName, msg)
         msg["status"] = "control_msg"
         self.cbSendManagerMsg(msg)
 
