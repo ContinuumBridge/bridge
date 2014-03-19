@@ -75,6 +75,11 @@ class BridgeControl:
                         "body": "update_config"}
                 print "Sending command to bridge: > ", msg
                 reactor.callFromThread(self.cbSendMsg, msg)
+            elif cmd.startswith("call"):
+                msg  = {"message": "command",
+                        "body": cmd}
+                print "Sending command to bridge: > ", msg
+                reactor.callFromThread(self.cbSendMsg, msg)
             elif cmd == "":
                 pass
             else:

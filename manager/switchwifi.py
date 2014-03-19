@@ -8,50 +8,51 @@
 
 """ Switches wlan0 between being an access point and a client """
 
-ModuleName = "Switch WiFi          "
+ModuleName = "Switch WiFi"
 
 import sys
 import time
 import os
 from subprocess import call
 import pexpect
+import logging
+from cbconfig import *
 
 class SwitchWiFi:
 
     def __init__(self):
-        self.bridgeRoot = os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..'))
-        print ModuleName, "CB_BRIDGE_ROOT = ", self.bridgeRoot
+        logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(message)s')
+        logging.info("%s Hello", ModuleName)
 
     def connectClient(self):
         try:
             cmd = 'ifup wlan0'
             p = pexpect.spawn(cmd)
         except:
-            print ModuleName, "Can't spawn ifup wlan0"
+            logging.warning("%s Cannot spawn ifup wlan0", ModuleName)
         connecting = True
         tries = 0
         while connecting:
-            #try:
-            index = p.expect(['bound',  pexpect.TIMEOUT], timeout=60)
-            #except:
-            #    print ModuleName, "p.expect problem in connectClient"
-            #else:
-            if True:
+            try:
+                index = p.expect(['bound',  pexpect.TIMEOUT, pexpect.EOF], timeout=60)
+            except:
+                logging.warning("%s Cannot spawn ifup wlan0", ModuleName)
+            else:
                 try:
                     if index == 0:
-                        print ModuleName, "Connected in client mode"
+                        logging.info("%s Connected in client mode", ModuleName)
                         connecting = False
                     else:
                         if tries > 1:
-                            print ModuleName, "DHCP failed again. Oh s***"
+                            logging.warning("%s DHCP failed again. Oh s***", ModuleName)
                             p.kill(9)
                             connecting = False
                         else:
-                            print ModuleName, "DHCP failed. Trying again"
+                            logging.warning("%s DHCP failed Trying again", ModuleName)
                             p.kill(9)
                             tries += 1
                 except:
-                    print ModuleNamee, "Upexpected response from p.expect"
+                    logging.warning("%s Unexpeced reponse from p.expect", ModuleName)
                     tries += 1
             if tries > 1:
                 break
@@ -61,48 +62,48 @@ class SwitchWiFi:
    
         if switchTo == "server":
             call(["ifdown", "wlan0"])
-            print ModuleName, "wlan0 down"
+            logging.debug("%s wlan0 down", ModuleName)
             call(["killall", "wpa_supplicant"])
-            print ModuleName, "wpa_supplicant process killed"
-            interfacesFile = self.bridgeRoot + "/bridgeconfig/interfaces.server"
+            logging.debug("%s wpa_supplicant process killed", ModuleName)
+            interfacesFile = CB_BRIDGE_ROOT + "/bridgeconfig/interfaces.server"
             call(["cp", interfacesFile, "/etc/network/interfaces"])
             call(["ifup", "wlan0"])
-            print ModuleName, "wlan0 up"
+            logging.debug("%s wlan0 up", ModuleName)
 
             # dnsmasq - dhcp server
-            dnsmasqFile = self.bridgeRoot + "/bridgeconfig/dnsmasq.conf"
+            dnsmasqFile = CB_BRIDGE_ROOT + "/bridgeconfig/dnsmasq.conf"
             call(["cp", dnsmasqFile, "/etc/dnsmasq.conf"])
             call(["service", "dnsmasq", "start"])
-            print ModuleName, "dnsmasq started"
+            logging.info("%s dnsmasq started", ModuleName)
             
             # hostapd configuration and start
-            hostapdFile = self.bridgeRoot + "/bridgeconfig/hostapd"
+            hostapdFile = CB_BRIDGE_ROOT + "/bridgeconfig/hostapd"
             call(["cp", hostapdFile, "/etc/default/hostapd"])
             # Just in case it's not there:
-            hostapdFile = self.bridgeRoot + "/bridgeconfig/hostapd.conf"
+            hostapdFile = CB_BRIDGE_ROOT + "/bridgeconfig/hostapd.conf"
             call(["cp", hostapdFile, "/etc/hostapd/hostapd.conf"])
             call(["service",  "hostapd", "start"])
-            print ModuleName, "hostapd started"
+            logging.info("%s hostapd started", ModuleName)
             # Because wlan0 loses its ip address when hostapd is started
             call(["ifconfig", "wlan0", "10.0.0.1"])
         elif switchTo == "client":
             call(["ifdown", "wlan0"])
-            print ModuleName, "wlan0 down"
+            logging.debug("%s wlan0 down", ModuleName)
             call(["service", "dnsmasq", "stop"])
-            print ModuleName, "dnsmasq stopped"
+            logging.info("%s dnsmasq stopped", ModuleName)
             call(["service", "hostapd", " stop"])
-            print ModuleName, "hostapd stopped"
+            logging.info("%s hostapd stopped", ModuleName)
             try:
                 call(["rm", "/etc/dnsmasq.conf"])
             except:
-                print ModuleName, "Unable to remove /etc/dnsmasq.conf. Already in client mode?"
+                logging.info("%s dUnable to remove /etc/dnsmasq.conf. Already in client mode?", ModuleName)
             try:
                 call(["rm", "/etc/default/hostapd"])
             except:
-                print ModuleName, "Unable to remove /etc/default.hostapd. Already in client mode?"
-            interfacesFile = self.bridgeRoot + "../bridgeconfig/interfaces.client"
+                logging.info("%s Unable to remove /etc/default.hostapd. Already in client mode?", ModuleName)
+            interfacesFile = CB_BRIDGE_ROOT + "/bridgeconfig/interfaces.client"
             call(["cp", interfacesFile, "/etc/network/interfaces"])
-            wpa_config_file = self.bridgeRoot + "/thisbridge/wpa_supplicant.conf"
+            wpa_config_file = CB_CONFIG_DIR + "/wpa_supplicant.conf"
             call(["cp", wpa_config_file, "/etc/wpa_supplicant/wpa_supplicant.conf"])
             time.sleep(1)
             self.connectClient()

@@ -301,34 +301,44 @@ class ManageBridge:
 
     def upgradeBridge(self):
         access_token = os.getenv('CB_DROPBOX_TOKEN', 'NO_TOKEN')
-        logging.info('%s Dropbox access token = %s', ModuleName, access_token)
-        self.client = DropboxClient(access_token)
-
-        f, metadata = self.client.get_file_and_metadata('/bridge_clone.tgz')
-        tarFile = CB_HOME + "/bridge_clone.tgz"
-        out = open(tarFile, 'wb')
-        out.write(f.read())
-        out.close()
-
-        subprocess.call(["tar", "xfz", tarFile])
-        logging.info('%s Extracted upgrade tar', ModuleName)
-        bridgeDir = CB_HOME + "/bridge"
-        bridgeSave = CB_HOME + "/bridge_save"
-        bridgeClone = "bridge_clone"
-        logging.info('%s Files: %s %s %s', bridgeDir, bridgeSave, bridgeClone)
-        subprocess.call(["mv", bridgeDir, bridgeSave])
-        logging.info('%s Moved bridggeDir to bridgeSave', ModuleName)
-        subprocess.call(["mv", bridgeClone, bridgeDir])
-        logging.info('%s Moved bridgeClone to bridgeDir', ModuleName)
-        msg = {"cmd": "msg",
-               "msg": {"message": "status",
-                       "channel": "bridge_manager",
-                        "body": "rebooting"
-                      }
-              }
-        self.cbSendConcMsg(msg)
-        resp = {"msg": "reboot"}
-        self.cbSendSuperMsg(resp)
+        try:
+            logging.info('%s Dropbox access token = %s', ModuleName, access_token)
+            self.client = DropboxClient(access_token)
+            f, metadata = self.client.get_file_and_metadata('/bridge_clone.tgz')
+        except:
+            logging.error('%s Cannot access Dropbox to upgrade', ModuleName)
+            msg = {"cmd": "msg",
+                   "msg": {"message": "status",
+                           "channel": "bridge_manager",
+                            "body": "Cannot access Dropbox to upgrade"
+                          }
+                  }
+            self.cbSendConcMsg(msg)
+        else:
+            tarFile = CB_HOME + "/bridge_clone.tgz"
+            out = open(tarFile, 'wb')
+            out.write(f.read())
+            out.close()
+    
+            subprocess.call(["tar", "xfz", tarFile])
+            logging.info('%s Extracted upgrade tar', ModuleName)
+            bridgeDir = CB_HOME + "/bridge"
+            bridgeSave = CB_HOME + "/bridge_save"
+            bridgeClone = "bridge_clone"
+            logging.info('%s Files: %s %s %s', bridgeDir, bridgeSave, bridgeClone)
+            subprocess.call(["mv", bridgeDir, bridgeSave])
+            logging.info('%s Moved bridggeDir to bridgeSave', ModuleName)
+            subprocess.call(["mv", bridgeClone, bridgeDir])
+            logging.info('%s Moved bridgeClone to bridgeDir', ModuleName)
+            msg = {"cmd": "msg",
+                   "msg": {"message": "status",
+                           "channel": "bridge_manager",
+                            "body": "rebooting"
+                          }
+                  }
+            self.cbSendConcMsg(msg)
+            resp = {"msg": "reboot"}
+            self.cbSendSuperMsg(resp)
 
     def sendLog(self):
         status = "Logfile upload failed"
@@ -367,8 +377,23 @@ class ManageBridge:
               }
         self.cbSendConcMsg(msg)
 
+    def doCall(self, cmd):
+        try:
+            output = subprocess.check_output(cmd, shell=True)
+            logging.debug('%s Output from call: %s', ModuleName, output)
+        except:
+            logging.warning('%s Error in running call: %s', ModuleName, cmd)
+            output = "Error in running call"
+        msg = {"cmd": "msg",
+               "msg": {"message": "status",
+                       "channel": "bridge_manager",
+                        "body": output 
+                      }
+              }
+        reactor.callFromThread(self.cbSendConcMsg, msg)
+
     def processSuper(self, msg):
-        """ A watchdog. Replies with status=ok or a restart/reboot command. """
+        """  watchdog. Replies with status=ok or a restart/reboot command. """
         if msg["msg"] == "stopall":
             resp = {"msg": "status",
                     "status": "stopping"
@@ -381,6 +406,16 @@ class ManageBridge:
                     "status": self.bridgeStatus
                    }
             self.cbSendSuperMsg(resp)
+
+    def processConduitStatus(self, msg):
+        if not "body" in msg:
+            logging.warning('%s Unrecognised command received from controller: %s', ModuleName, msg)
+            return
+        else:
+            if "body" == "connected":
+                self.bridgeStatus = "ok"
+            else:
+                self.bridgeStatus = "disconnected"
 
     def processControlMsg(self, msg):
         logging.info('%s Controller msg = %s', ModuleName,  msg)
@@ -455,6 +490,9 @@ class ManageBridge:
                 self.upgradeBridge()
             elif msg["body"] == "sendlog":
                 self.sendLog()
+            elif msg["body"].startswith("call"):
+                # Need to call in thread is case it hangs
+                reactor.callInThread(self.doCall, msg["body"][5:])
             elif msg["body"] == "update_config":
                 req = {"cmd": "msg",
                        "msg": {"message": "request",
@@ -480,6 +518,12 @@ class ManageBridge:
                        "type": "conc"}
                 self.processClient(req)
                 self.concNoApps = False
+        elif msg["message"] == "status":
+            if not "source" in msg:
+                logging.warning('%s Unrecognised command received from controller: %s', ModuleName, msg)
+                return
+            else:
+                self.processConduitStatus(msg)
         else:
             logging.info('%s Unrecognised message received from server: %s', ModuleName, msg)
             msg = {"cmd": "msg",
@@ -589,6 +633,9 @@ class ManageBridge:
             logging.warning('%s No id key in message from client; %s', ModuleName, msg)
             return
         if msg["status"] == "req-config":
+            if not "type" in msg:
+                logging.warning('%s No type key in message from client; %s', ModuleName, msg)
+                return
             if msg["type"] == "app":
                 for a in self.apps:
                     if a["app"]["id"] == msg["id"]:

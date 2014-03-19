@@ -1,4 +1,5 @@
 #!/bin/bash
+cd /home/bridge/bridge/manager
 rm ../../thisbridge/skt-*
 if [ -f ../../thisbridge/thisbridge.sh ]; then
     echo 'Starting bridge'

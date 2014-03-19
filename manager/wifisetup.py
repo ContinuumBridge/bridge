@@ -5,6 +5,8 @@
 # Proprietary and confidential
 # Written by Peter Claydon
 #
+PING_TIMEOUT = 20
+
 ModuleName = "WiFiSetup"
 
 import sys
@@ -35,33 +37,70 @@ class WiFiSetup():
     def __init__(self):
         logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(message)s')
         logging.info("%s Hello", ModuleName)
+        self.testmode = os.getenv('CB_TEST_WIFISETUP', 'False')
+        logging.debug("%s CB_TEST_WIFISETUP = %s", ModuleName, self.testmode)
+        logging.debug("%s CB_LOGGIN_LEVEL = %s", ModuleName, CB_LOGGING_LEVEL)
+
+    def checkInterface(self):
+        """ Determines if we have an ip address on eth0, wlan0 or neither. """
+        logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(message)s')
+        logging.debug("%s checkInterface", ModuleName)
+        connectMode = "none"
+        cmd = 'ifconfig eth0'
+        p = pexpect.spawn(cmd)
+        index = p.expect(['inet addr', pexpect.TIMEOUT, pexpect.EOF], timeout=5)
+        if index == 1:
+            logging.warning("%s pexpect timeout on ifconfig eth0", ModuleName)
+        elif index == 2:
+            logging.debug("%s Not connected by eth0", ModuleName)
+            cmd = 'ifconfig wlan0'
+            p = pexpect.spawn(cmd)
+            index = p.expect(['inet addr', pexpect.TIMEOUT, pexpect.EOF], timeout=5)
+            if index == 1:
+                logging.warning("%s pexpect timeout on ifconfig wlan0", ModuleName)
+            elif index == 2:
+                logging.debug("%s Not connected by wlan0", ModuleName)
+            else:
+                raw = p.after.split()
+                logging.debug("%s raw from pexpect: %s", ModuleName, raw)
+                connectMode = "wlan0"
+        else:
+            connectMode = "eth0"
+        logging.info("%s Connection mode is %s", ModuleName, connectMode)
+        if self.testmode == 'True':
+            return "none"
+        else:
+            return connectMode
 
     def clientConnected(self):
-        try:
-            # This is ContinuumBridge portal ip address
-            cmd = 'ping continuumbridge.com'
-            p = pexpect.spawn(cmd)
-        except:
-            logging.error("%s Cannot spawn ping", ModuleName)
-            self.connected = False
-        index = p.expect(['time', pexpect.TIMEOUT], timeout=10)
-        if index == 1:
-            logging.warning("%s CClient connection timed out. Changing to server", ModuleName)
-            p.kill(9)
-            return False
-        else:
-            p.kill(9)
-            return True
- 
+        attempt = 0
+        cmd = 'ping continuumbridge.com'
+        while attempt < 2: 
+            try:
+                p = pexpect.spawn(cmd)
+            except:
+                logging.error("%s Cannot spawn ping", ModuleName)
+                attempt += 1
+            index = p.expect(['time', pexpect.TIMEOUT], timeout=PING_TIMEOUT)
+            if index == 1:
+                logging.warning("%s Client connection timed out", ModuleName)
+                p.kill(9)
+                cmd = 'ping bbc.co.uk'
+                attempt += 1
+            else:
+                p.kill(9)
+                return True
+        # If we don't return before getting here, we've failed
+        return False
+     
     def getCredentials(self):
         exe = CB_BRIDGE_ROOT + "/manager/wificonfig.py"
-        logging.info("%s getCredentials exe = ", ModuleName, exe)
+        logging.info("%s getCredentials exe = %s", ModuleName, exe)
         try:
             p = pexpect.spawn(exe)
         except:
             logging.error("%s Cannot run wificonfig.py", ModuleName)
-            self.connected = False
-        index = p.expect(['Credentials.*', pexpect.TIMEOUT], timeout=300)
+        index = p.expect(['Credentials.*', pexpect.TIMEOUT, pexpect.EOF], timeout=300)
         p.kill(9)
         if index == 1:
             logging.warning("%s SSID and WPA key not supplied before timeout", ModuleName)
@@ -83,11 +122,12 @@ class WiFiSetup():
         """
         s = SwitchWiFi()
         # Ensure we are in client mode
-        #s.switch("client")
-        #if self.clientConnected():
-        #    return True
-        #else:
-        if True:
+        s.switch("client")
+        mode = self.checkInterface()
+        if self.testmode == "False" and mode != "none":
+            return True
+        else:
+            # Assume we want to connect using WiFi
             logging.info("%s Cannot connect. Switching to server mode", ModuleName)
             s.switch("server")
             if self.getCredentials():
@@ -95,10 +135,10 @@ class WiFiSetup():
                     call(["rm", "/etc/wpa_supplicant/wpa_supplicant.conf"])
                 except:
                     pass
-                wpa_proto_file = self.bridgeRoot + "/bridgeconfig/wpa_supplicant.conf.proto"
-                wpa_config_file = self.bridgeRoot + "/thisbridge/wpa_supplicant.conf"
+                wpa_proto_file = CB_BRIDGE_ROOT + "/bridgeconfig/wpa_supplicant.conf.proto"
+                wpa_config_file = CB_CONFIG_DIR + "/wpa_supplicant.conf"
                 i = open(wpa_proto_file, 'r')
-                o = open(wpa_config_file, 'w')
+                o = open(wpa_config_file, 'a')  #append new SSID to file
                 for line in i:
                     line = line.replace("XXXX", self.ssid)
                     line = line.replace("YYYY", self.wpa_key)
