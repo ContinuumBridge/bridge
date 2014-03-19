@@ -1,6 +1,8 @@
 
 var Q = require('q');
 
+
+
 var Heartbeat = function(controllerSocket, bridgeSocket) {
 
     /* Periodically sends a message to the bridge manager with connection status */
@@ -15,9 +17,11 @@ var Heartbeat = function(controllerSocket, bridgeSocket) {
         message.message = "status";
         message.source = "conduit";
 
+
         setInterval(function() {
 
-            message.body = '{"connected":"' + controllerSocket.connected + '"}';
+            //message.body = '{"connected":"' + controllerSocket.connected + '"}';
+            message.body = {connected: controllerSocket.connected};
             bridgeSocket.toBridge.push(message);
         }, 1000);
     }
