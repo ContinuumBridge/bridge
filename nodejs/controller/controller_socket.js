@@ -1,55 +1,153 @@
 
 var SERVER_PORT = 3000;
 // Set up the socket client
-var io = require('socket.io-client');
-var Bacon = require('baconjs').Bacon;
-    Q = require('q');
+var io = require('socket.io-client')
+    ,Bacon = require('baconjs').Bacon
+    ,events = require('events');
+    ;
 
-/* Controller Web Socket */
+var logger = require('../logger');
+
+/* Controller socket manager */
 
 module.exports = ControllerSocket;
 
 function ControllerSocket(controllerURL, sessionID) {
 
-    console.log('Attempting to connect to', controllerURL);
-    var controllerSocket = {};
-    controllerSocket.connected = false;
+    var socketWrapper = new events.EventEmitter();
 
-    var socketAddress = controllerURL + "?sessionID=" + sessionID;
-    var socket = io.connect(socketAddress, {
-        'max reconnection attempts': 10000000
-    });
+    // Connection status flag
+    socketWrapper.connected = false;
 
-    var fromController = new Bacon.Bus();
-    var toController = new Bacon.Bus();
-    var unsubscribeControllerSocket = function(){};
+    var fromController = socketWrapper.fromController = new Bacon.Bus();
+    var toController = socketWrapper.toController = new Bacon.Bus();
 
-    socket.on('connect', function() { 
+    socketWrapper.on('connect', function() {
 
-        controllerSocket.connected = true;
+        socketWrapper.clearConnectionTimeout();
 
-        unsubscribeControllerSocket = toController.onValue(function(message) {
-            socket.emit('message', message); 
+        socketWrapper.unsubscribeControllerBus = toController.onValue(function(message) {
+            if (socketWrapper.socket) {
+                socketWrapper.socket.emit('message', message);
+            } else {
+                logger.error('socket connect fired but there is no socket?');
+            }
         });
-        console.log('Server > Connected to Bridge Controller');
+        socketWrapper.connected = true;
+
+        socketWrapper.socket.on('message', function(message) {
+            // When the socket receives a message push it to the fromController bus
+            fromController.push(message);
+        });
+
+        logger.info('Connected to Bridge Controller:', controllerURL);
     });
 
-    socket.on('message', function(message) {
+    socketWrapper.startConnectionTimeout = function() {
 
-        //console.log('Controller > ' + message);
-        fromController.push(message);
+        socketWrapper.clearConnectionTimeout();
+
+        // Set a timeout to start re-authorisation if connection is not established
+        socketWrapper.connectionTimeout = setTimeout(function() {
+            logger.log('debug', 'connect timed out');
+            socketWrapper.giveUp();
+        }, 10000);
+    };
+
+    socketWrapper.clearConnectionTimeout = function() {
+
+        // If there is an existing timeout, clear it
+        if (socketWrapper.connectionTimeout) {
+            clearTimeout(socketWrapper.connectionTimeout);
+            logger.log('debug', 'connectTimeout cleared');
+        }
+    };
+
+    socketWrapper.giveUp = function() {
+
+        logger.log('debug', 'giveUp');
+        socketWrapper.emit('disconnect');
+        //logger.log('debug', 'In giveUp socketWrapper.socket is', socketWrapper.socket.co);
+        socketWrapper.socket.removeAllListeners();
+
+        socketWrapper.socket.disconnect();
+        delete socketWrapper.socket;
+        socketWrapper.emit('giveUp');
+    };
+
+    // Socket Wrapper listeners
+    socketWrapper.on('connecting', function() {
+
+        logger.info('Connecting..');
     });
 
-    socket.on('disconnect', function() {
+    socketWrapper.on('disconnect', function() {
 
-        controllerSocket.connected = false;
-        unsubscribeControllerSocket();
-        console.log('Server > Disconnected from Bridge Controller');
-    }); 
+        socketWrapper.connected = false;
+        if (socketWrapper.unsubscribeControllerBus) {
+            socketWrapper.unsubscribeControllerBus();
+        };
+        logger.info('Disconnected from Bridge Controller:', controllerURL);
+        socketWrapper.startConnectionTimeout();
+    });
 
-    controllerSocket.socket = socket;
-    controllerSocket.fromController = fromController;
-    controllerSocket.toController = toController;
+    socketWrapper.connect = function(controllerURL, sessionID) {
 
-    return controllerSocket;
+        logger.log('debug', 'socketWrapper.connect');
+        var socketAddress = controllerURL + "?sessionID=" + sessionID;
+        var socket = io.connect(socketAddress, {
+            //'max reconnection attempts': 10,
+            'force new connection': true,
+            //'auto connect': false,
+            'log level': 2,
+            'reconnect': false
+        });
+        logger.log('debug', 'connecting', socket.connecting);
+
+        //socket.connect(function(){logger.log('debug', 'connection callback')});
+
+        /*
+        if (!socket.connecting && !socket.reconnecting) {
+            logger.log('debug', 'socket', socket);
+        };
+         */
+
+        logger.log('debug', 'socket2', socket);
+
+        // Proxy socket events to the controllerSocketWrapper
+        socket.on('connect', function() {
+            logger.log('debug', 'socket connect', controllerURL);
+            socketWrapper.emit('connect');
+        });
+        socket.on('connecting', function() {
+            logger.log('debug', 'socket connecting', controllerURL);
+            socketWrapper.emit('connecting');
+        });
+        socket.on('error', function() {
+            logger.log('debug', 'socket error', controllerURL);
+            socketWrapper.giveUp();
+        });
+        socket.on('reconnecting', function() {
+            logger.log('debug', 'socket reconnecting', controllerURL);
+            socketWrapper.emit('connecting');
+        });
+        socket.on('reconnect', function() {
+            logger.log('debug', 'socket reconnect', controllerURL);
+            socketWrapper.emit('connect');
+        });
+        socket.on('disconnect', function() {
+            logger.log('debug', 'socket disconnect', controllerURL);
+            socketWrapper.emit('disconnect');
+        });
+
+        logger.info('Establishing socket to Bridge Controller:', controllerURL);
+
+        // Run on initial attempt to connect
+        socketWrapper.startConnectionTimeout();
+
+        // Attach the socket to the wrapper
+        socketWrapper.socket = socket;
+    };
+
+    return socketWrapper;
 }

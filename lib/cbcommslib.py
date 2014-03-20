@@ -43,8 +43,8 @@ class CbAdaptor:
         initMsg = {"id": self.id,
                    "type": "adt",
                    "status": "req-config"} 
-        managerFactory = CbClientFactory(self.processManager, initMsg)
-        reactor.connectUNIX(managerSocket, managerFactory, timeout=10)
+        self.managerFactory = CbClientFactory(self.processManager, initMsg)
+        reactor.connectUNIX(managerSocket, self.managerFactory, timeout=10)
         reactor.run()
 
     def cbAdtConfigure(self, config):
@@ -90,7 +90,7 @@ class CbAdaptor:
         else:
             msg = {"id": self.id,
                    "status": "none"}
-        return msg
+        self.managerFactory.sendMsg(msg)
 
     def stopReactor(self):
         try:
@@ -125,8 +125,8 @@ class CbApp:
         initMsg = {"id": self.id,
                    "type": "app",
                    "status": "req-config"} 
-        managerFactory = CbClientFactory(self.processManager, initMsg)
-        reactor.connectUNIX(managerSocket, managerFactory, timeout=10)
+        self.managerFactory = CbClientFactory(self.processManager, initMsg)
+        reactor.connectUNIX(managerSocket, self.managerFactory, timeout=10)
         reactor.run()
 
     def processResp(self, resp):
@@ -192,7 +192,7 @@ class CbApp:
         else:
             msg = {"id": self.id,
                    "status": "none"}
-        return msg
+        self.managerFactory.sendMsg(msg)
 
     def stopReactor(self):
         try:

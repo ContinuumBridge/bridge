@@ -359,7 +359,7 @@ class App(CbApp):
         CbApp.__init__(self, argv)
 
     def processConcResp(self, resp):
-        logging.debug("%s resp from conc: %s", ModuleName, resp)
+        #logging.debug("%s resp from conc: %s", ModuleName, resp)
         if resp["resp"] == "config":
             msg = {
                "msg": "req",
@@ -384,7 +384,7 @@ class App(CbApp):
         This method is called in a thread by cbcommslib so it will not cause
         problems if it takes some time to complete (other than to itself).
         """
-        logging.debug("%s resp: %s", ModuleName, resp)
+        #logging.debug("%s resp: %s", ModuleName, resp)
         if resp["content"] == "acceleration":
             for a in self.accel:
                 if a.id == resp["id"]: 
