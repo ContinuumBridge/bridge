@@ -6,6 +6,9 @@
 # Written by Peter Claydon
 #
 ModuleName = "SensorTag"
+# 2 lines below set parameters to monitor gatttool & kill thread if it has disappeared
+EOF_MONITOR_INTERVAL = 1  # Interval over which to count EOFs from device
+mAX_EOF_COUNT = 2         # Max EOFs allowed in that interval
 
 import pexpect
 import sys
@@ -138,6 +141,7 @@ class Adaptor(CbAdaptor):
                 logging.debug("%s %s Activating", ModuleName, self.id)
                 status = self.switchSensors()
                 reactor.callInThread(self.getValues)
+            self.status = "running"
             self.state = "running"
         logging.debug("%s %s state = %s", ModuleName, self.id, self.state)
 
@@ -329,8 +333,20 @@ class Adaptor(CbAdaptor):
                     # Must switch sensors on/off again after re-init
                     status = self.switchSensors()
             elif index == 2:
+                # Most likely cause of EOFs is that gatt process has been killed.
+                # In this case, there will be lots of them. Detect this and exit the thread.
+                # Also report back to manager to allow it to take action. Eg: restart adaptor.
                 if not self.doStop:
                     logging.debug("%s %s %s gatt EO in getValues", ModuleName, self.id, self.friendly_name)
+                    eofTime = time.time()
+                    if eofTime - self.lastEOFTime > EOF_MONITOR_INTERVAL:
+                       self.eofCount = 1
+                    else:
+                       self.eofCount += 1
+                    self.lastEOFTime = eofTime
+                    if self.eofCount > MAX_EOF_COUNT:
+                        self.status = "please_restart"
+                        break
                 else:
                     break
             else:
@@ -557,6 +573,7 @@ class Adaptor(CbAdaptor):
                 self.simValues = SimValues()
             self.connectSensorTag()
             self.configured = True
+            self.status = "configured"
 
 if __name__ == '__main__':
     adaptor = Adaptor(sys.argv)

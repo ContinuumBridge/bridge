@@ -6,6 +6,15 @@
 # Written by Peter Claydon
 #
 ModuleName = "cbLib" 
+"""
+self.status must be set by each app & adaptor to report back to the manager. Allowable values:
+idle            Initial value at the start
+configured      Should be set to indicate successful configuration
+running         Indicates normal operation
+please_restart  Something wrong. Requests the manager to restart the app
+timeout         Not usually set by user apps
+running should be set at least every 10 seconds as a heartbeat
+"""
 
 import sys
 import os.path
@@ -84,13 +93,14 @@ class CbAdaptor:
             reactor.callInThread(self.processConf, cmd["config"]) 
             msg = {"id": self.id,
                    "status": "ok"}
-        elif cmd["cmd"] != "ok":
-            msg = {"id": self.id,
-                   "status": "unknown"}
         else:
             msg = {"id": self.id,
-                   "status": "none"}
+                   "status": self.status}
         self.managerFactory.sendMsg(msg)
+        # The adaptor must set self.status back to "running" as a heartbeat
+        if self.status == "running":
+            self.status = "timeout"
+
 
     def stopReactor(self):
         try:
@@ -104,8 +114,10 @@ class CbAdaptor:
         self.cbFactory[iName].sendMsg(msg)
 
 class CbApp:
-    """This should be sub-classed by any app."""
-    ModuleName = "cbApp               " 
+    """
+    This should be sub-classed by any app.
+    """
+    ModuleName = "cbApp" 
 
     def __init__(self, argv):
         logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(message)s')
@@ -114,6 +126,7 @@ class CbApp:
         self.doStop = False
         self.friendlyLookup = {}
         self.configured = False
+        self.status = "idle"
 
         if len(argv) < 3:
             logging.error("%s cbApp improper number of arguments", ModuleName)
@@ -186,13 +199,13 @@ class CbApp:
             reactor.callInThread(self.processConf, cmd["config"]) 
             msg = {"id": self.id,
                    "status": "ok"}
-        elif cmd["cmd"] != "ok":
-            msg = {"id": self.id,
-                   "status": "unknown"}
         else:
             msg = {"id": self.id,
-                   "status": "none"}
+                   "status": self.status}
         self.managerFactory.sendMsg(msg)
+        # The app must set self.status back to "running" as a heartbeat
+        if self.status == "running":
+            self.status = "timeout"
 
     def stopReactor(self):
         try:
