@@ -5,7 +5,6 @@ manager/*.db
 manager/*.config
 *.py[cod]
 thisbridge/*
-<<<<<<< HEAD
 *.csv
 *.swp
 
@@ -49,3 +48,6 @@ nosetests.xml
 .mr.developer.cfg
 .project
 .pydevproject
+
+# Pycharm
+.idea/

@@ -55,15 +55,20 @@ class WiFiSetup():
             logging.debug("%s Not connected by eth0", ModuleName)
             cmd = 'ifconfig wlan0'
             p = pexpect.spawn(cmd)
-            index = p.expect(['inet addr', pexpect.TIMEOUT, pexpect.EOF], timeout=5)
+            index = p.expect(['Bcast', pexpect.TIMEOUT, pexpect.EOF], timeout=5)
             if index == 1:
                 logging.warning("%s pexpect timeout on ifconfig wlan0", ModuleName)
             elif index == 2:
                 logging.debug("%s Not connected by wlan0", ModuleName)
             else:
-                raw = p.after.split()
+                raw = p.before.split()
                 logging.debug("%s raw from pexpect: %s", ModuleName, raw)
-                connectMode = "wlan0"
+                logging.info("%s raw6 = %s", ModuleName, raw[6])
+                if raw[6] == "addr:10.0.0.1":
+                    logging.info("%s WiFi had server address", ModuleName)
+                    connectMode = "none"
+                else:
+                    connectMode = "wlan0"
         else:
             connectMode = "eth0"
         logging.info("%s Connection mode is %s", ModuleName, connectMode)
