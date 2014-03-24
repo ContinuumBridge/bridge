@@ -30,7 +30,9 @@ class Supervisor:
         logging.info("%s Restart", ModuleName)
         logging.info("%s *************************************", ModuleName)
         logging.info("%s CB_LOGGIN_LEVEL =  %s", ModuleName, CB_LOGGING_LEVEL)
-        self.starting = True
+        self.starting = True    # Don't check manager watchdog when manager not running
+        self.connecting = True  # Ignore conduit not connected messages if trying to connect
+        self.timeStamp = time.time()
         self.wiFiSetup = WiFiSetup()
         self.startManager(False)
 
@@ -79,6 +81,12 @@ class Supervisor:
         elif msg["msg"] == "reboot":
             self.starting = True
             self.doReboot()
+        elif msg["msg"] == "status":
+            logging.debug("%s status = %s", ModuleName, msg["status"])
+            if msg["status"] == "disconnected":
+                logging.debug("%s status = %s, connecting = %s", ModuleName, msg["status"], self.connecting)
+                if not self.connecting:
+                    self.doRebbot()
 
     def checkManager(self, startTime):
         if not self.starting:
@@ -125,11 +133,13 @@ class Supervisor:
         if mode == "none":
             d = threads.deferToThread(self.wiFiSetup.getConnected)
             d.addCallback(self.checkReconnected)
+        else:
+            self.connecting = False
 
     def checkReconnected(self, connected):
-        """ Detected we were not connected. Tried to reconnect. Failed. Therefore reboot. """
+        """ Detected we were not connected. Tried to reconnect. If not connected, reboot. """
         if connected:
-            reactor.callLater(CONNECT_CHECK_INTERVAL, self.checkInterface)
+            self.connecting = False
         else:
             self.doReboot()
 
