@@ -5,6 +5,7 @@
 # Proprietary and confidential
 # Written by Peter Claydon
 #
+START_DELAY = 2 # Delay between starting each adaptor or app
 ModuleName = "Manager"
 id = "manager"
 
@@ -37,6 +38,7 @@ class ManageBridge:
         """
         logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(message)s')
         logging.info("%s CB_NO_CLOUD = %s", ModuleName, CB_NO_CLOUD)
+        self.bridgeStatus = "ok" # Used to set status for sending to supervisor
         self.discovered = False
         self.configured = False
         self.reqSync = False
@@ -64,11 +66,10 @@ class ManageBridge:
         else:
             logging.info('%s Running without Cloud Server', ModuleName)
         # Give time for node interface to start
-        time.sleep(2)
 
+        reactor.callLater(START_DELAY, self.startConcentrator)
         if self.configured:
-            reactor.callLater(1, self.startAll)
-        self.startConcentrator()
+            reactor.callLater(START_DELAY*2, self.startAll)
         reactor.run()
 
     def listMgrSocs(self):
@@ -91,7 +92,7 @@ class ManageBridge:
             self.concListen = reactor.listenUNIX(s, self.cbConcFactory, backlog=4)
             logging.debug('%s Opened manager socket: %s', ModuleName, s)
         except:
-            logging.debug('%s Socket already exists: %s', ModuleName, s)
+            logging.error('%s Failed to open manager-conc socket: %s', ModuleName, s)
 
         # Now start the concentrator in a subprocess
         exe = self.concPath
@@ -101,7 +102,7 @@ class ManageBridge:
             self.concProc = subprocess.Popen([exe, mgrSoc, id])
             logging.debug('%s Started concentrator', ModuleName)
         except:
-            logging.debug('%s Failed to start concentrator', ModuleName)
+            logging.error('%s Failed to start concentrator', ModuleName)
 
         # Initiate comms with supervisor, which started the manager in the first place
         s = CB_SOCKET_DIR + "skt-super-mgr"
@@ -114,20 +115,6 @@ class ManageBridge:
             logging.info('%s Opened supervisor socket %s', ModuleName, s)
         except:
             logging.error('%s Cannot open supervisor socket %s', ModuleName, s)
-
-    def startApps(self):
-        for a in self.apps:
-            try:
-                id = a["app"]["id"]
-                exe = a["app"]["exe"]
-                mgrSoc = a["app"]["mgrSoc"]
-                p = subprocess.Popen([exe, mgrSoc, id])
-                self.appProcs.append(p)
-                logging.info('%s App %s started', ModuleName, id)
-            except:
-                logging.error('%s App %s failed to start', ModuleName, id)
-        # Give time for everything to start before we consider ourselves running
-        reactor.callLater(10, self.setRunning)
 
     def setRunning(self):
         logging.info('%s Bridge running', ModuleName)
@@ -154,25 +141,41 @@ class ManageBridge:
             except:
                 logging.error('%s Manager socket already exists %s %s', ModuleName, s, mgrSocs[s])
 
-        # Start adaptors
+        # Start adaptors with 2 secs between them to give time for each to start
+        delay = START_DELAY 
         for d in self.devices:
             exe = d["adaptor"]["exe"]
-            fName = d["friendly_name"]
+            friendlyName = d["friendly_name"]
             id = d["id"]
             mgrSoc = d["adaptor"]["mgrSoc"]
-            try:
-                p = subprocess.Popen([exe, mgrSoc, id])
-                self.appProcs.append(p)
-                logging.info('%s Started adaptor %s ID: %s', ModuleName, fName, id)
-                # Give time for adaptor to start before starting the next one
-                time.sleep(2)
-            except:
-                logging.error('%s Adaptor %s failed to start', ModuleName, fName)
-                logging.error('%s Params: %s %s %s', ModuleName, exe, id, mgrSoc)
-                time.sleep(2)
+            reactor.callLater(delay, self.startAdaptor, exe, mgrSoc, id, friendlyName)
+            delay += START_DELAY
+        # Now start all the apps
+        for a in self.apps:
+            id = a["app"]["id"]
+            exe = a["app"]["exe"]
+            mgrSoc = a["app"]["mgrSoc"]
+            reactor.callLater(delay, self.startApp, exe, mgrSoc, id)
+            delay += START_DELAY
+        # Give time for everything to start before we consider ourselves running
+        reactor.callLater(START_DELAY*5, self.setRunning)
 
-        # Give time for all adaptors to start before starting apps
-        reactor.callLater(5, self.startApps)
+    def startAdaptor(self, exe, mgrSoc, id, friendlyName):
+        try:
+            p = subprocess.Popen([exe, mgrSoc, id])
+            self.appProcs.append(p)
+            logging.info('%s Started adaptor %s ID: %s', ModuleName, friendlyName, id)
+        except:
+            logging.error('%s Adaptor %s failed to start', ModuleName, friendlyName)
+            logging.error('%s Params: %s %s %s', ModuleName, exe, id, mgrSoc)
+
+    def startApp(self, exe, mgrSoc, id):
+        try:
+            p = subprocess.Popen([exe, mgrSoc, id])
+            self.appProcs.append(p)
+            logging.info('%s App %s started', ModuleName, id)
+        except:
+            logging.error('%s App %s failed to start', ModuleName, id)
 
     def doDiscover(self):
         self.discoveredDevices = {}
@@ -180,31 +183,42 @@ class ManageBridge:
         protocol = "btle"
         output = subprocess.check_output([exe, protocol, str(CB_SIM_LEVEL), CB_CONFIG_DIR])
         logging.info('%s Discovery output: %s', ModuleName, output)
-        discOutput = json.loads(output)
-        self.discoveredDevices["message"] = "request"
-        self.discoveredDevices["verb"] = "post"
-        self.discoveredDevices["url"] = "/api/bridge/v1/device_discovery"
-        self.discoveredDevices["body"] = []
-        if self.configured:
-            for d in discOutput["body"]:
-                addrFound = False
-                if d["protocol"] == "btle":
-                    for oldDev in self.devices:
-                       if oldDev["adaptor"]["protocol"] == "btle": 
-                           if d["mac_addr"] == oldDev["mac_addr"]:
-                               addrFound = True
-                if addrFound == False:
+        try:
+            discOutput = json.loads(output)
+        except:
+            logging.error('%s Unable to load output from discovery.py', ModuleName)
+            msg = {"cmd": "msg",
+                          "msg": {"message": "status",
+                                  "channel": "bridge_manager",
+                                  "body": "Unable to load output from discovery.py" 
+                                 }
+                  }
+            reactor.callFromThread(self.cbSendConcMsg, msg)
+        else:   
+            self.discoveredDevices["message"] = "request"
+            self.discoveredDevices["verb"] = "post"
+            self.discoveredDevices["url"] = "/api/bridge/v1/device_discovery"
+            self.discoveredDevices["body"] = []
+            if self.configured:
+                for d in discOutput["body"]:
+                    addrFound = False
+                    if d["protocol"] == "btle":
+                        for oldDev in self.devices:
+                           if oldDev["adaptor"]["protocol"] == "btle": 
+                               if d["mac_addr"] == oldDev["mac_addr"]:
+                                   addrFound = True
+                    if addrFound == False:
+                        self.discoveredDevices["body"].append(d)  
+            else:
+                for d in discOutput["body"]:
                     self.discoveredDevices["body"].append(d)  
-        else:
-            for d in discOutput["body"]:
-                self.discoveredDevices["body"].append(d)  
-        logging.info('%s Discovered devices:', ModuleName)
-        logging.info('%s %s', ModuleName, self.discoveredDevices)
-        msg = {"cmd": "msg",
-               "msg": self.discoveredDevices}
-        reactor.callFromThread(self.cbSendConcMsg, msg)
-        self.discovered = True
-
+            logging.info('%s Discovered devices:', ModuleName)
+            logging.info('%s %s', ModuleName, self.discoveredDevices)
+            msg = {"cmd": "msg",
+                   "msg": self.discoveredDevices}
+            reactor.callFromThread(self.cbSendConcMsg, msg)
+            self.discovered = True
+    
     def discover(self):
         # Call in thread so that manager can still process other messages
         reactor.callInThread(self.doDiscover)
@@ -221,7 +235,7 @@ class ManageBridge:
                 configRead = True
                 logging.info('%s Read config', ModuleName)
         except:
-            logging.warning('%s No config file exists', ModuleName)
+            logging.warning('%s No config file exists or file is corrupt', ModuleName)
             self.configured = False
         if configRead:
             try:
@@ -229,6 +243,7 @@ class ManageBridge:
                 self.devices = config["body"]["devices"]
                 self.configured = True
             except:
+                self.configured = False
                 logging.error('%s bridge.config appears to be corrupt. Ignoring', ModuleName)
 
         if self.configured:
@@ -286,51 +301,99 @@ class ManageBridge:
 
     def upgradeBridge(self):
         access_token = os.getenv('CB_DROPBOX_TOKEN', 'NO_TOKEN')
-        logging.info('%s Dropbox access token = %s', ModuleName, access_token)
-        self.client = DropboxClient(access_token)
+        try:
+            logging.info('%s Dropbox access token = %s', ModuleName, access_token)
+            self.client = DropboxClient(access_token)
+            f, metadata = self.client.get_file_and_metadata('/bridge_clone.tgz')
+        except:
+            logging.error('%s Cannot access Dropbox to upgrade', ModuleName)
+            msg = {"cmd": "msg",
+                   "msg": {"message": "status",
+                           "channel": "bridge_manager",
+                            "body": "Cannot access Dropbox to upgrade"
+                          }
+                  }
+            self.cbSendConcMsg(msg)
+        else:
+            tarFile = CB_HOME + "/bridge_clone.tgz"
+            out = open(tarFile, 'wb')
+            out.write(f.read())
+            out.close()
+    
+            subprocess.call(["tar", "xfz", tarFile])
+            logging.info('%s Extracted upgrade tar', ModuleName)
+            bridgeDir = CB_HOME + "/bridge"
+            bridgeSave = CB_HOME + "/bridge_save"
+            bridgeClone = "bridge_clone"
+            logging.info('%s Files: %s %s %s', bridgeDir, bridgeSave, bridgeClone)
+            subprocess.call(["mv", bridgeDir, bridgeSave])
+            logging.info('%s Moved bridggeDir to bridgeSave', ModuleName)
+            subprocess.call(["mv", bridgeClone, bridgeDir])
+            logging.info('%s Moved bridgeClone to bridgeDir', ModuleName)
+            msg = {"cmd": "msg",
+                   "msg": {"message": "status",
+                           "channel": "bridge_manager",
+                            "body": "rebooting"
+                          }
+                  }
+            self.cbSendConcMsg(msg)
+            resp = {"msg": "reboot"}
+            self.cbSendSuperMsg(resp)
 
-        f, metadata = self.client.get_file_and_metadata('/bridge_clone.tgz')
-        tarFile = CB_HOME + "/bridge_clone.tgz"
-        out = open(tarFile, 'wb')
-        out.write(f.read())
-        out.close()
-
-        subprocess.call(["tar", "xfz", tarFile])
-        logging.info('%s Extracted upgrade tar', ModuleName)
-        bridgeDir = CB_HOME + "/bridge"
-        bridgeSave = CB_HOME + "/bridge_save"
-        bridgeClone = "bridge_clone"
-        logging.info('%s Files: %s %s %s', bridgeDir, bridgeSave, bridgeClone)
-        subprocess.call(["mv", bridgeDir, bridgeSave])
-        logging.info('%s Moved bridggeDir to bridgeSave', ModuleName)
-        subprocess.call(["mv", bridgeClone, bridgeDir])
-        logging.info('%s Moved bridgeClone to bridgeDir', ModuleName)
+    def sendLog(self):
+        status = "Logfile upload failed"
+        access_token = os.getenv('CB_DROPBOX_TOKEN', 'NO_TOKEN')
+        logging.info('%s Dropbox access token %s', ModuleName, access_token)
+        try:
+            self.client = DropboxClient(access_token)
+            status = "Logfile upload OK" 
+        except:
+            logging.error('%s Dropbox access token did not work %s', ModuleName, access_token)
+            status = "Dropbox access token did not work"
+        else:
+            hostname = "unknown"
+            with open('/etc/hostname', 'r') as hostFile:
+                hostname = hostFile.read()
+            if hostname.endswith('\n'):
+                hostname = hostname[:-1]
+            dropboxPlace = '/' + hostname +'.log'
+            logFile = CB_CONFIG_DIR + '/bridge.log'
+            logging.info('%s Uploading %s to %s', ModuleName, logFile, dropboxPlace)
+            try:
+                f = open(logFile, 'rb')
+            except:
+                status = "Could not open log file for upload: " + logFile
+            else:
+                try:
+                    response = self.client.put_file(dropboxPlace, f)
+                    logging.debug('%s Dropbox log upload response: %s', ModuleName, response)
+                except:
+                    status = "Could not upload log file: " + logFile
         msg = {"cmd": "msg",
                "msg": {"message": "status",
                        "channel": "bridge_manager",
-                        "body": "rebooting"
+                        "body": status 
                       }
               }
         self.cbSendConcMsg(msg)
-        resp = {"msg": "reboot"}
-        self.cbSendSuperMsg(resp)
 
-    def sendLog(self):
-        access_token = os.getenv('CB_DROPBOX_TOKEN', 'NO_TOKEN')
-        logging.info('%s Dropbox access token %s', ModuleName, access_token)
-        self.client = DropboxClient(access_token)
-        with open('/etc/hostname', 'r') as hostFile:
-            hostname = hostFile.read()
-        if hostname.endswith('\n'):
-            hostname = hostname[:-1]
-        dropboxPlace = '/' + hostname +'.log'
-        logFile = CB_CONFIG_DIR + '/bridge.log'
-        logging.info('%s Uploading %s to %s', ModuleName, logFile, dropboxPlace)
-        f = open(logFile, 'rb')
-        response = self.client.put_file(dropboxPlace, f)
+    def doCall(self, cmd):
+        try:
+            output = subprocess.check_output(cmd, shell=True)
+            logging.debug('%s Output from call: %s', ModuleName, output)
+        except:
+            logging.warning('%s Error in running call: %s', ModuleName, cmd)
+            output = "Error in running call"
+        msg = {"cmd": "msg",
+               "msg": {"message": "status",
+                       "channel": "bridge_manager",
+                        "body": output 
+                      }
+              }
+        reactor.callFromThread(self.cbSendConcMsg, msg)
 
     def processSuper(self, msg):
-        """ A watchdog. Replies with status=ok or a restart/reboot command. """
+        """  watchdog. Replies with status=ok or a restart/reboot command. """
         if msg["msg"] == "stopall":
             resp = {"msg": "status",
                     "status": "stopping"
@@ -340,13 +403,43 @@ class ManageBridge:
 
         else:
             resp = {"msg": "status",
-                    "status": "ok"
+                    "status": self.bridgeStatus
                    }
             self.cbSendSuperMsg(resp)
 
+    def processConduitStatus(self, msg):
+        if not "body" in msg:
+            logging.warning('%s Unrecognised command received from controller: %s', ModuleName, msg)
+            return
+        else:
+            if "body" == "connected":
+                self.bridgeStatus = "ok"
+            else:
+                self.bridgeStatus = "disconnected"
+
     def processControlMsg(self, msg):
         logging.info('%s Controller msg = %s', ModuleName,  msg)
+        if not "message" in msg: 
+            logging.error('%s msg received from controller with no "message" key', ModuleName)
+            msg = {"cmd": "msg",
+                   "msg": {"message": "status",
+                           "channel": "bridge_manager",
+                           "body": "Error. message received from controller with no message key"
+                          }
+                  }
+            self.cbSendConcMsg(msg)
+            return 
         if msg["message"] == "command":
+            if not "body" in msg:
+                logging.error('%s command message received from controller with no body', ModuleName)
+                msg = {"cmd": "msg",
+                       "msg": {"message": "status",
+                               "channel": "bridge_manager",
+                               "body": "Error. command message received from controller with no body"
+                              }
+                      }
+                self.cbSendConcMsg(msg)
+                return 
             if msg["body"] == "start":
                 if self.configured:
                     logging.info('%s Starting adaptors and apps', ModuleName)
@@ -356,7 +449,7 @@ class ManageBridge:
                     msg = {"cmd": "msg",
                            "msg": {"message": "status",
                                    "channel": "bridge_manager",
-                                   "body": "start_req_with_no_apps_installed"
+                                   "body": "Start command received with no apps and adaptors"
                                   }
                           }
                     self.cbSendConcMsg(msg)
@@ -397,6 +490,9 @@ class ManageBridge:
                 self.upgradeBridge()
             elif msg["body"] == "sendlog":
                 self.sendLog()
+            elif msg["body"].startswith("call"):
+                # Need to call in thread is case it hangs
+                reactor.callInThread(self.doCall, msg["body"][5:])
             elif msg["body"] == "update_config":
                 req = {"cmd": "msg",
                        "msg": {"message": "request",
@@ -405,6 +501,15 @@ class ManageBridge:
                                "url": "/api/bridge/v1/current_bridge/bridge"}
                       }
                 self.cbSendConcMsg(req)
+            else:
+                logging.warning('%s Unrecognised command received from controller', ModuleName)
+                msg = {"cmd": "msg",
+                       "msg": {"message": "status",
+                               "channel": "bridge_manager",
+                               "body": "Unrecognised command received from controller"
+                              }
+                      }
+                self.cbSendConcMsg(msg)
         elif msg["message"] == "response":
             self.updateConfig(msg)
             # Need to give concentrator new config if initial one was without apps
@@ -413,9 +518,22 @@ class ManageBridge:
                        "type": "conc"}
                 self.processClient(req)
                 self.concNoApps = False
+        elif msg["message"] == "status":
+            if not "source" in msg:
+                logging.warning('%s Unrecognised command received from controller: %s', ModuleName, msg)
+                return
+            else:
+                self.processConduitStatus(msg)
         else:
-            logging.info('%s Received from server: %s', ModuleName, msg)
-
+            logging.info('%s Unrecognised message received from server: %s', ModuleName, msg)
+            msg = {"cmd": "msg",
+                   "msg": {"message": "status",
+                           "channel": "bridge_manager",
+                           "body": "Unrecognised message received from controller"
+                          }
+                  }
+            self.cbSendConcMsg(msg)
+ 
     def stopAll(self):
         if self.configured and self.running and not self.stopping:
             logging.info('%s Processing stop. Stopping apps', ModuleName)
@@ -504,10 +622,20 @@ class ManageBridge:
 
     def processClient(self, msg):
         logging.debug('%s Received message from client: %s', ModuleName, msg)
+        if not "status" in msg:
+            logging.warning('%s No status key in message from client; %s', ModuleName, msg)
+            return
         if msg["status"] == "control_msg":
             del msg["status"]
             self.processControlMsg(msg)
-        elif msg["status"] == "req-config":
+            return
+        elif not "id" in msg:
+            logging.warning('%s No id key in message from client; %s', ModuleName, msg)
+            return
+        if msg["status"] == "req-config":
+            if not "type" in msg:
+                logging.warning('%s No type key in message from client; %s', ModuleName, msg)
+                return
             if msg["type"] == "app":
                 for a in self.apps:
                     if a["app"]["id"] == msg["id"]:
@@ -556,9 +684,22 @@ class ManageBridge:
                 logging.debug('%s Sending config to conc:  %s', ModuleName, response)
                 self.cbSendConcMsg(response)
             else:
-                logging.warning('%s Config req from unknown instance: %s', ModuleName, msg['id'])
+                logging.warning('%s Config req from unknown instance type: %s', ModuleName, msg['id'])
                 response = {"cmd": "error"}
                 self.cbSendMsg(response, msg["id"])
-
+        elif msg["status"] == "log":
+            if "log" in msg:
+                log = "log " + msg["id"] + ": " + msg["log"]
+            else:
+                log = "log " + msg["id"] + ": No log message provided" 
+            logging.warning('%s %s', ModuleName, log)
+            status = {"cmd": "msg",
+                      "msg": {"message": "status",
+                              "channel": "bridge_manager",
+                              "body": log
+                             }
+                     }
+            self.cbSendConcMsg(msg)
+ 
 if __name__ == '__main__':
     m = ManageBridge()

@@ -7,10 +7,14 @@
 #
 ModuleName = "Supervisor"
 
+TIME_TO_IFUP = 10 # Time to wait before checking if we have an Internet connection (secs)
+WATCHDOG_INTERVAL = 30  # Time between manager checks (secs)
+CONNECT_CHECK_INTERVAL = 60
+
 import sys
 import time
 import os
-from  wifisetup import WiFiSetup
+from wifisetup import WiFiSetup
 from subprocess import call
 from subprocess import Popen
 from twisted.internet import threads
@@ -25,10 +29,7 @@ class Supervisor:
         logging.info("%s *************************************", ModuleName)
         logging.info("%s Restart", ModuleName)
         logging.info("%s *************************************", ModuleName)
-        self.watchDogInterval = 30 # Number of secs between bridge manager checks
-        self.connectionCheckInterval = 60 # Check internet connection this often
-        self.reconnectCount = 0  
-        self.maxReconnectCount = 10
+        logging.info("%s CB_LOGGIN_LEVEL =  %s", ModuleName, CB_LOGGING_LEVEL)
         self.starting = True
         self.wiFiSetup = WiFiSetup()
         self.startManager(False)
@@ -41,8 +42,8 @@ class Supervisor:
             os.remove(s)
         except:
             logging.debug("%s Socket was not present %s", ModuleName, s)
-        if not restart:
-            self.cbManagerFactory = CbServerFactory(self.processManager)
+        #if not restart:
+        self.cbManagerFactory = CbServerFactory(self.processManager)
         self.mgrPort = reactor.listenUNIX(s, self.cbManagerFactory, backlog=4)
 
         # Start the manager in a subprocess
@@ -51,17 +52,15 @@ class Supervisor:
             self.managerProc = Popen([exe])
             logging.info("%s Starting bridge manager", ModuleName)
             self.starting = False
-            reactor.callLater(2*self.watchDogInterval, self.checkManager, time.time())
+            reactor.callLater(2*WATCHDOG_INTERVAL, self.checkManager, time.time())
         except:
             logging.error("%s Bridge manager failed to start: %s", ModuleName, exe)
         
-        if not restart:
-            # Only check connections when not in simulation mode
-            try:
-                reactor.callLater(0.5, self.checkConnection)
-            except:
-                logging.error("%s iUnable to call checkConnection", ModuleName)
-            reactor.run()
+        try:
+            reactor.callLater(TIME_TO_IFUP, self.checkInterface)
+        except:
+            logging.error("%s iUnable to call checkInterface", ModuleName)
+        reactor.run()
 
     def cbSendManagerMsg(self, msg):
         logging.debug("%s Sending msg to manager: %s", ModuleName, msg)
@@ -69,13 +68,14 @@ class Supervisor:
 
     def processManager(self, msg):
         logging.debug("%s processManager received: %s", ModuleName, msg)
+        # Regardless of message content, timeStamp is the time when we last heard from the manager
         self.timeStamp = time.time()
         if msg["msg"] == "restart":
-            msg = {"msg": "stopall"
-                  }
-            self.cbSendManagerMsg(msg)
+            resp = {"msg": "stopall"
+                   }
+            self.cbSendManagerMsg(resp)
             self.starting = True
-            reactor.callLater(self.watchDogInterval, self.startManager, True)
+            reactor.callLater(WATCHDOG_INTERVAL, self.startManager, True)
         elif msg["msg"] == "reboot":
             self.starting = True
             self.doReboot()
@@ -84,7 +84,7 @@ class Supervisor:
         if not self.starting:
             # -1 is allowance for times not being sync'd (eg: separate devices)
             if self.timeStamp > startTime - 1:
-                reactor.callLater(self.watchDogInterval, self.checkManager, time.time())
+                reactor.callLater(WATCHDOG_INTERVAL, self.checkManager, time.time())
                 msg = {"msg": "status",
                        "status": "ok"
                       }
@@ -95,9 +95,9 @@ class Supervisor:
                       }
                 try:
                     self.cbSendManagerMsg(msg)
-                    reactor.callLater(self.watchDogInterval, self.recheckManager, time.time())
+                    reactor.callLater(WATCHDOG_INTERVAL, self.recheckManager, time.time())
                 except:
-                    reactor.callLater(self.watchDogInterval, self.startManager,True) 
+                    reactor.callLater(WATCHDOG_INTERVAL, self.startManager,True) 
 
     def recheckManager(self, startTime):
         # Whatever happened, stop listening on manager port.
@@ -113,29 +113,25 @@ class Supervisor:
         # For now, just do a reboot rather than anything more elegant
         self.reboot()
 
-    def checkConnection(self):
-        self.d1 = threads.deferToThread(self.wiFiSetup.clientConnected)
-        self.d1.addCallback(self.connectionChecked)
+    def checkInterface(self):
+        # Defer to thread - it could take several seconds
+        logging.debug("%s checkInterface called", ModuleName)
+        self.wiFiSetup.checkInterface()
+        d1 = threads.deferToThread(self.wiFiSetup.checkInterface)
+        d1.addCallback(self.interfaceChecked)
 
-    def connectionChecked(self, connected):
-        logging.info("%s Checked LAN connection %s", ModuleName, connected)
-        if connected:
-            reactor.callLater(self.connectionCheckInterval, self.checkConnection)
-        else:
-            self.d2 = threads.deferToThreat(self.wiFiSetup.getConnected)
-            self.d2.addCallback(self.checkReconnected)
+    def interfaceChecked(self, mode):
+        logging.info("%s Connected by %s", ModuleName, mode)
+        if mode == "none":
+            d = threads.deferToThread(self.wiFiSetup.getConnected)
+            d.addCallback(self.checkReconnected)
 
     def checkReconnected(self, connected):
+        """ Detected we were not connected. Tried to reconnect. Failed. Therefore reboot. """
         if connected:
-            self.reconnectCount = 0
-            reactor.callLater(self.connectionCheckInterval, self.checkConnection)
+            reactor.callLater(CONNECT_CHECK_INTERVAL, self.checkInterface)
         else:
-            if self.reconnectCount > self.maxReconnectCount:
-                self.doReboot()
-            else:
-                self.reconnectCount += 1    
-                d = threads.deferToThreat(self.wiFiSetup.getConnected)
-                d.addCallback(self.checkReconnected)
+            self.doReboot()
 
     def doReboot(self):
         """ Give bridge manager a chance to tidy up nicely before rebooting. """
@@ -146,18 +142,15 @@ class Supervisor:
         except:
             logging.info("%s Cannot tell manager to stop, just rebooting", ModuleName)
         # Tidy up
-        try:
-            self.d1.cancel
-            self.d2.cancel
-        except:
-            # just being lazy and masking errors
-            pass
-        self.mgrPort.stopListening()
-        reactor.callLater(self.watchDogInterval, self.reboot)
+        #self.mgrPort.stopListening()
+        reactor.callLater(WATCHDOG_INTERVAL, self.reboot)
 
     def reboot(self):
-        reactor.stop()
-        if CB_SIM_LEVEL == 0:
+        try:
+            reactor.stop()
+        except:
+            logging.info("%s Unable to stop reactor, just rebooting", ModuleName)
+        if CB_SIM_LEVEL == '0':
             try:
                 call(["reboot"])
             except:

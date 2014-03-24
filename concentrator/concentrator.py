@@ -88,33 +88,40 @@ class DataStore():
         logging.info("%s enabledOutput: %s", ModuleName, self.enabled)
 
 class DropboxStore():
-    def __init__(self, hostname):
+    def __init__(self):
         self.configured = False
-        reactor.callInThread(self.connectDropbox, hostname)
+        self.count = 0
 
     def connectDropbox(self, hostname):
+        self.connected = True
         access_token = os.getenv('CB_DROPBOX_TOKEN', 'NO_TOKEN')
         logging.info("%s Dropbox access token: %s", ModuleName, access_token)
         try:
             self.client = DropboxClient(access_token)
         except:
             logging.error("%s Could not access Dropbox. Wrong access token?", ModuleName)
+            self.connected = False
         else:
             self.manager = DatastoreManager(self.client)
             hostname = hostname.lower()
             logging.info("%s Datastore ID: %s", ModuleName, hostname)
-            self.datastore = self.manager.open_or_create_datastore(hostname)
-            self.count = 0
+            try:
+                self.datastore = self.manager.open_or_create_datastore(hostname)
+            except:
+                logging.info("%s Could not open Dropbox datastore", ModuleName)
+                self.connected = False
+        return self.connected
 
     def setConfig(self, config):
-        idToName = config['idToName']
-        t = self.datastore.get_table('config')
-        for i in idToName:
-            devName = idToName.get(i)
-            t.get_or_insert(i, type='idtoname', device=i, name=devName)
-        self.datastore.commit()
-        self.configured = True
-
+        if self.connected:
+            idToName = config['idToName']
+            t = self.datastore.get_table('config')
+            for i in idToName:
+                devName = idToName.get(i)
+                t.get_or_insert(i, type='idtoname', device=i, name=devName)
+            self.datastore.commit()
+            self.configured = True
+    
     def appendData(self, device, type, timeStamp, data):
         if self.configured:
             devTable = self.datastore.get_table(device)
@@ -224,7 +231,7 @@ class Concentrator():
         self.managerFactory = CbClientFactory(self.processManager, initMsg)
         self.managerConnect = reactor.connectUNIX(managerSocket, self.managerFactory, timeout=10)
 
-        # Connection to websockets process
+        # Connection to conduit process
         initMsg = {"message": "status",
                    "body": "ready"}
         self.concFactory = CbClientFactory(self.processServerMsg, initMsg)
@@ -242,9 +249,14 @@ class Concentrator():
                 hostname = hostFile.read()
             if hostname.endswith('\n'):
                     hostname = hostname[:-1]
-            self.dropboxStore = DropboxStore(hostname)
+            self.dropboxStore = DropboxStore()
+            d1 = threads.deferToThread(self.dropboxStore.connectDropbox, hostname)
+            d1.addCallback(self.checkDropbox)
     
         reactor.run()
+
+    def checkDropbox(self, connected):
+        logging.info("%s Connected to Dropbox: %s", ModuleName, connected)
 
     def processConf(self, config):
         """Config is based on what apps are available."""
