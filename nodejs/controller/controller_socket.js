@@ -74,10 +74,12 @@ function ControllerSocket(controllerURL, sessionID) {
         logger.log('debug', 'giveUp');
         socketWrapper.emit('disconnect');
         //logger.log('debug', 'In giveUp socketWrapper.socket is', socketWrapper.socket.co);
-        socketWrapper.socket.removeAllListeners();
-
-        socketWrapper.socket.disconnect();
-        delete socketWrapper.socket;
+        if (socketWrapper.socket) {
+            var socket = socketWrapper.socket;
+            socket.removeAllListeners();
+            socket.disconnect();
+            delete socket;
+        }
         socketWrapper.emit('giveUp');
     };
 
