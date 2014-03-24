@@ -34,7 +34,9 @@ class Supervisor:
         self.connecting = True  # Ignore conduit not connected messages if trying to connect
         self.timeStamp = time.time()
         self.wiFiSetup = WiFiSetup()
-        self.startManager(False)
+        # startManager called later partly so that reactor can be started once in __init__
+        reactor.callLater(1, self.startManager, False)
+        reactor.run()
 
     def startManager(self, restart):
         # Open a socket for communicating with the bridge manager
@@ -62,7 +64,6 @@ class Supervisor:
             reactor.callLater(TIME_TO_IFUP, self.checkInterface)
         except:
             logging.error("%s iUnable to call checkInterface", ModuleName)
-        reactor.run()
 
     def cbSendManagerMsg(self, msg):
         logging.debug("%s Sending msg to manager: %s", ModuleName, msg)

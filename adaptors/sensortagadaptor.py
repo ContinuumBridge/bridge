@@ -7,8 +7,10 @@
 #
 ModuleName = "SensorTag"
 # 2 lines below set parameters to monitor gatttool & kill thread if it has disappeared
-EOF_MONITOR_INTERVAL = 1  # Interval over which to count EOFs from device
+EOF_MONITOR_INTERVAL = 1  # Interval over which to count EOFs from device (sec)
 MAX_EOF_COUNT = 2         # Max EOFs allowed in that interval
+INIT_TIMEOUT = 20         # Timeout when initialising SensorTag (sec)
+GATT_TIMEOUT = 5          # Timeout listening to SensorTag (sec)
 
 import pexpect
 import sys
@@ -165,9 +167,10 @@ class Adaptor(CbAdaptor):
             return "noConnect"
         self.gatt.expect('\[LE\]>')
         self.gatt.sendline('connect')
-        index = self.gatt.expect(['successful', pexpect.TIMEOUT, pexpect.EOF], timeout=20)
+        index = self.gatt.expect(['successful', pexpect.TIMEOUT, pexpect.EOF], timeout=INIT_TIMEOUT)
         if index == 1 or index == 2:
             # index 2 is not actually a timeout, but something has gone wrong
+            self.connected = False
             self.gatt.kill(9)
             return "timeout"
         else:
@@ -321,7 +324,7 @@ class Adaptor(CbAdaptor):
         """
         while not self.doStop:
             if self.sim == 0:
-                index = self.gatt.expect(['handle.*', pexpect.TIMEOUT, pexpect.EOF], timeout=15)
+                index = self.gatt.expect(['handle.*', pexpect.TIMEOUT, pexpect.EOF], timeout=GATT_TIMEOUT)
             else:
                 index = 0
             if index == 1:
