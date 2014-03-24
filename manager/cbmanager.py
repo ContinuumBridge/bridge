@@ -404,7 +404,7 @@ class ManageBridge:
                    }
             self.cbSendSuperMsg(resp)
             reactor.callLater(0.2, self.stopAll)
-        else:
+        elif CB_SIM_LEVEL == '0':
             if time.time() - self.timeLastConduitMsg > CONDUIT_WATCHDOG_MAXTIME: 
                 logging.info('%s Not heard from conduit for %s. Notifyinng supervisor', ModuleName, CONDUIT_WATCHDOG_MAXTIME)
                 resp = {"msg": "status",

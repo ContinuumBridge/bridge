@@ -82,7 +82,9 @@ class Supervisor:
             self.starting = True
             self.doReboot()
         elif msg["msg"] == "status":
-            if msg["status"] == "disconnencted":
+            logging.debug("%s status = %s", ModuleName, msg["status"])
+            if msg["status"] == "disconnected":
+                logging.debug("%s status = %s, connecting = %s", ModuleName, msg["status"], self.connecting)
                 if not self.connecting:
                     self.doRebbot()
 

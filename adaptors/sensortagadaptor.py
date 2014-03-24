@@ -331,8 +331,9 @@ class Adaptor(CbAdaptor):
                     time.sleep(1)
                     status = self.initSensorTag()   
                     logging.info("%s %s %s re-init status: %s", ModuleName, self.id, self.friendly_name, status)
-                    # Must switch sensors on/off again after re-init
-                    status = self.switchSensors()
+                    if status == "ok":
+                        # Must switch sensors on/off again after re-init
+                        status = self.switchSensors()
             elif index == 2:
                 # Most likely cause of EOFs is that gatt process has been killed.
                 # In this case, there will be lots of them. Detect this and exit the thread.
