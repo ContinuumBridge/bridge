@@ -59,7 +59,7 @@ class ManageBridge:
 
     def initBridge(self):
         if CB_NO_CLOUD != "True":
-            logging.info('%s Starting node', ModuleName)
+            logging.info('%s Starting conduit', ModuleName)
             exe = "/opt/node/bin/node"
             path = CB_BRIDGE_ROOT + "/nodejs/index.js"
             try:
@@ -404,13 +404,13 @@ class ManageBridge:
                    }
             self.cbSendSuperMsg(resp)
             reactor.callLater(0.2, self.stopAll)
-        elif CB_SIM_LEVEL == '0':
-            if time.time() - self.timeLastConduitMsg > CONDUIT_WATCHDOG_MAXTIME: 
+        else:
+            if time.time() - self.timeLastConduitMsg > CONDUIT_WATCHDOG_MAXTIME and CB_NO_CLOUD != "True": 
                 logging.info('%s Not heard from conduit for %s. Notifyinng supervisor', ModuleName, CONDUIT_WATCHDOG_MAXTIME)
                 resp = {"msg": "status",
                         "status": "disconnected"
                        }
-            elif self.disconnectedCount > CONDUIT_MAX_DISCONNECT_COUNT:
+            elif self.disconnectedCount > CONDUIT_MAX_DISCONNECT_COUNT and CB_NO_CLOUD != "True":
                 logging.info('%s Disconnected from bridge controller. Notifying supervisor', ModuleName)
                 resp = {"msg": "status",
                         "status": "disconnected"

@@ -95,14 +95,14 @@ class DropboxStore():
         self.count = 0
 
     def connectDropbox(self, hostname):
-        self.connected = True
+        connected = True
         access_token = os.getenv('CB_DROPBOX_TOKEN', 'NO_TOKEN')
         logging.info("%s Dropbox access token: %s", ModuleName, access_token)
         try:
             self.client = DropboxClient(access_token)
         except:
             logging.error("%s Could not access Dropbox. Wrong access token?", ModuleName)
-            self.connected = False
+            connected = False
         else:
             self.manager = DatastoreManager(self.client)
             hostname = hostname.lower()
@@ -111,7 +111,8 @@ class DropboxStore():
                 self.datastore = self.manager.open_or_create_datastore(hostname)
             except:
                 logging.info("%s Could not open Dropbox datastore", ModuleName)
-                self.connected = False
+                connected = False
+        self.connected = connected
         return self.connected
 
     def setConfig(self, config):
@@ -287,6 +288,8 @@ class Concentrator():
     def processServerMsg(self, msg):
         #logging.debug("%s Received from controller: %s", ModuleName, msg)
         msg["status"] = "control_msg"
+        #if "type" in msg:
+            #msg["message"] = msg.pop("type")
         self.cbSendManagerMsg(msg)
 
     def processManagerMsg(self, msg):
