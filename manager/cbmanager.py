@@ -201,7 +201,7 @@ class ManageBridge:
         else:   
             self.discoveredDevices["message"] = "request"
             self.discoveredDevices["verb"] = "post"
-            self.discoveredDevices["url"] = "/api/bridge/v1/device_discovery"
+            self.discoveredDevices["url"] = "/api/bridge/v1/device_discovery/"
             self.discoveredDevices["body"] = []
             if self.configured:
                 for d in discOutput["body"]:

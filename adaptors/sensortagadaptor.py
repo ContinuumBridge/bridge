@@ -8,7 +8,7 @@
 ModuleName = "SensorTag"
 # 2 lines below set parameters to monitor gatttool & kill thread if it has disappeared
 EOF_MONITOR_INTERVAL = 1  # Interval over which to count EOFs from device
-mAX_EOF_COUNT = 2         # Max EOFs allowed in that interval
+MAX_EOF_COUNT = 2         # Max EOFs allowed in that interval
 
 import pexpect
 import sys
@@ -67,6 +67,7 @@ class Adaptor(CbAdaptor):
         self.connected = False  # Indicates we are connected to SensorTag
         self.status = "ok"
         self.state = "idle"
+        self.lastEOFTime = time.time()
         self.tempApps = []
         self.irTempApps = []
         self.accelApps = []

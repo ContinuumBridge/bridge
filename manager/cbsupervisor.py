@@ -32,6 +32,7 @@ class Supervisor:
         logging.info("%s CB_LOGGIN_LEVEL =  %s", ModuleName, CB_LOGGING_LEVEL)
         self.starting = True    # Don't check manager watchdog when manager not running
         self.connecting = True  # Ignore conduit not connected messages if trying to connect
+        self.timeStamp = time.time()
         self.wiFiSetup = WiFiSetup()
         self.startManager(False)
 
