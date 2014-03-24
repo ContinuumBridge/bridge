@@ -510,7 +510,7 @@ class ManageBridge:
             elif msg["body"].startswith("call"):
                 # Need to call in thread is case it hangs
                 reactor.callInThread(self.doCall, msg["body"][5:])
-            elif msg["body"] == "update_config":
+            elif msg["body"] == "update_config" | msg["body"] == "update":
                 req = {"cmd": "msg",
                        "msg": {"message": "request",
                                "channel": "bridge_manager",

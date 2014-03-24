@@ -141,6 +141,7 @@ class Adaptor(CbAdaptor):
             elif self.sim == 0:
                 logging.debug("%s %s Activating", ModuleName, self.id)
                 status = self.switchSensors()
+                logging.info("%s %s %s switchSensors status: %s", ModuleName, self.id, self.friendly_name, status)
                 reactor.callInThread(self.getValues)
             self.status = "running"
             self.state = "running"
@@ -164,8 +165,9 @@ class Adaptor(CbAdaptor):
             return "noConnect"
         self.gatt.expect('\[LE\]>')
         self.gatt.sendline('connect')
-        index = self.gatt.expect(['successful', pexpect.TIMEOUT], timeout=20)
-        if index == 1:
+        index = self.gatt.expect(['successful', pexpect.TIMEOUT, pexpect.EOF], timeout=20)
+        if index == 1 or index == 2:
+            # index 2 is not actually a timeout, but something has gone wrong
             self.gatt.kill(9)
             return "timeout"
         else:
@@ -334,6 +336,7 @@ class Adaptor(CbAdaptor):
                     if status == "ok":
                         # Must switch sensors on/off again after re-init
                         status = self.switchSensors()
+                        logging.info("%s %s %s switchSensors status: %s", ModuleName, self.id, self.friendly_name, status)
             elif index == 2:
                 # Most likely cause of EOFs is that gatt process has been killed.
                 # In this case, there will be lots of them. Detect this and exit the thread.
