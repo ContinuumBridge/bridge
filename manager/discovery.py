@@ -104,12 +104,12 @@ if __name__ == '__main__':
         elif simStep == 3:
             discoveredAddresses = ["55.55.55.55.55.55", "66.66.66.66.66.66"]
         elif simStep == 4:
-            discoveredAddresses = ["66.66.66.66.66.66"]
-        elif simStep == 5:
             discoveredAddresses = ["77.77.77.77.77.77", "88.88.88.88.88.88", "99.99.99.99.99.99"]
-        elif simStep == 6:
-            discoveredAddresses = ["88.88.88.88.88.88", "99.99.99.99.99.99"]
+        elif simStep == 5:
+            discoveredAddresses = ["AA.AA.AA.AA.BB.BB", "CC.CC.CC.CC.CC.CC"]
         simStep += 1
+        if simStep == 5:
+            simStep = 0
         f = open(discoverySimFile, 'w')
         f.write(str(simStep) + '\n')
         f.close()
