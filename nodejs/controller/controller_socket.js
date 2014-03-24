@@ -6,7 +6,9 @@ var io = require('socket.io-client')
     ,events = require('events');
     ;
 
-var logger = require('../logger');
+var logger = require('../logger')
+    ,Message = require('../message')
+    ;
 
 /* Controller socket manager */
 
@@ -27,20 +29,24 @@ function ControllerSocket(controllerURL, sessionID) {
         socketWrapper.clearConnectionTimeout();
 
         socketWrapper.unsubscribeControllerBus = toController.onValue(function(message) {
+
+            var jsonMessage = message.getJSON();
             if (socketWrapper.socket) {
-                socketWrapper.socket.emit('message', message);
+                socketWrapper.socket.emit('message', jsonMessage);
             } else {
                 logger.error('socket connect fired but there is no socket?');
             }
         });
         socketWrapper.connected = true;
 
-        socketWrapper.socket.on('message', function(message) {
+        socketWrapper.socket.on('message', function(jsonMessage) {
+
+            var message = new Message(jsonMessage);
             // When the socket receives a message push it to the fromController bus
             fromController.push(message);
         });
 
-        logger.info('Connected to Bridge Controller:', controllerURL);
+        logger.info('Connected to Bridge Controller:', socketWrapper.controllerURL);
     });
 
     socketWrapper.startConnectionTimeout = function() {
@@ -93,26 +99,15 @@ function ControllerSocket(controllerURL, sessionID) {
 
     socketWrapper.connect = function(controllerURL, sessionID) {
 
-        logger.log('debug', 'socketWrapper.connect');
+        socketWrapper.controllerURL = controllerURL;
         var socketAddress = controllerURL + "?sessionID=" + sessionID;
-        var socket = io.connect(socketAddress, {
+        var socket = socketWrapper.socket = io.connect(socketAddress, {
             //'max reconnection attempts': 10,
             'force new connection': true,
             //'auto connect': false,
             'log level': 2,
             'reconnect': false
         });
-        logger.log('debug', 'connecting', socket.connecting);
-
-        //socket.connect(function(){logger.log('debug', 'connection callback')});
-
-        /*
-        if (!socket.connecting && !socket.reconnecting) {
-            logger.log('debug', 'socket', socket);
-        };
-         */
-
-        logger.log('debug', 'socket2', socket);
 
         // Proxy socket events to the controllerSocketWrapper
         socket.on('connect', function() {
@@ -144,9 +139,6 @@ function ControllerSocket(controllerURL, sessionID) {
 
         // Run on initial attempt to connect
         socketWrapper.startConnectionTimeout();
-
-        // Attach the socket to the wrapper
-        socketWrapper.socket = socket;
     };
 
     return socketWrapper;
