@@ -86,7 +86,7 @@ class Supervisor:
             if msg["status"] == "disconnected":
                 logging.debug("%s status = %s, connecting = %s", ModuleName, msg["status"], self.connecting)
                 if not self.connecting:
-                    self.doRebbot()
+                    self.doReboot()
 
     def checkManager(self, startTime):
         if not self.starting:
