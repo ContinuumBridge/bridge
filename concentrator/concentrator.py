@@ -92,6 +92,7 @@ class DropboxStore():
     def __init__(self):
         self.configured = False
         self.connected = False
+        self.gotConfig = False
         self.count = 0
 
     def connectDropbox(self, hostname):
@@ -115,27 +116,35 @@ class DropboxStore():
         self.connected = connected
         return self.connected
 
-    def setConfig(self, config):
-        if self.connected:
-            idToName = config['idToName']
-            t = self.datastore.get_table('config')
-            for i in idToName:
-                devName = idToName.get(i)
-                t.get_or_insert(i, type='idtoname', device=i, name=devName)
-            self.datastore.commit()
+    def configure(self):
+        idToName = self.config['idToName']
+        t = self.datastore.get_table('config')
+        for i in idToName:
+            devName = idToName.get(i)
+            t.get_or_insert(i, type='idtoname', device=i, name=devName)
+        self.datastore.commit()
         self.configured = True
+
+    def setConfig(self, config):
+        self.config = config
+        self.gotConfig = True
+        if self.connected:
+            self.configure()
     
     def appendData(self, device, type, timeStamp, data):
-        if self.connected and self.configured:
-            devTable = self.datastore.get_table(device)
-            date = Date(timeStamp)
-            t = devTable.insert(Date=date, Type=type, Data=data)
-            if self.count > DROPBOX_COMMIT_COUNT:
-                self.datastore.commit()
-                self.count = 0
-            else:
-                self.count += 1
-
+        if self.connected:
+            if self.configured:
+                devTable = self.datastore.get_table(device)
+                date = Date(timeStamp)
+                t = devTable.insert(Date=date, Type=type, Data=data)
+                if self.count > DROPBOX_COMMIT_COUNT:
+                    self.datastore.commit()
+                    self.count = 0
+                else:
+                    self.count += 1
+            elif self.gotConfig:
+                self.configure()
+    
 class DevicePage(Resource):
     isLeaf = True
     def __init__(self, dataStore):
