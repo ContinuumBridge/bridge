@@ -9,8 +9,9 @@ ModuleName = "SensorTag"
 # 2 lines below set parameters to monitor gatttool & kill thread if it has disappeared
 EOF_MONITOR_INTERVAL = 1  # Interval over which to count EOFs from device (sec)
 MAX_EOF_COUNT = 2         # Max EOFs allowed in that interval
-INIT_TIMEOUT = 20         # Timeout when initialising SensorTag (sec)
-GATT_TIMEOUT = 5          # Timeout listening to SensorTag (sec)
+INIT_TIMEOUT = 16         # Timeout when initialising SensorTag (sec)
+GATT_TIMEOUT = 3          # Timeout listening to SensorTag (sec)
+GATT_SLEEP_TIME = 2       # Time to sleep between killing one gatt process & starting another
 
 import pexpect
 import sys
@@ -174,8 +175,12 @@ class Adaptor(CbAdaptor):
             self.gatt.kill(9)
             return "timeout"
         else:
-            self.connected = True
-            return "ok"
+            if self.doStop:
+                self.gatt.kill(9)
+                return "killed"
+            else:
+                self.connected = True
+                return "ok"
 
     def checkAllProcessed(self, appID):
         self.processedApps.append(appID)
@@ -333,7 +338,7 @@ class Adaptor(CbAdaptor):
                 while status != "ok" and not self.doStop:
                     logging.warning("%s %s %s gatt timeout", ModuleName, self.id, self.friendly_name)
                     self.gatt.kill(9)
-                    time.sleep(1)
+                    time.sleep(GATT_SLEEP_TIME)
                     status = self.initSensorTag()   
                     logging.info("%s %s %s re-init status: %s", ModuleName, self.id, self.friendly_name, status)
                     if status == "ok":

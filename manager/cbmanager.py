@@ -155,6 +155,7 @@ class ManageBridge:
             reactor.callLater(delay, self.startAdaptor, exe, mgrSoc, id, friendlyName)
             delay += START_DELAY
         # Now start all the apps
+        delay += START_DELAY*2
         for a in self.apps:
             id = a["app"]["id"]
             exe = a["app"]["exe"]
