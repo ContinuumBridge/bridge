@@ -519,7 +519,7 @@ class ManageBridge:
                       }
                 self.cbSendConcMsg(req)
             else:
-                logging.warning('%s Unrecognised command received from controller', ModuleName)
+                logging.warning('%s Unrecognised message received from server: %s', ModuleName, msg)
                 msg = {"cmd": "msg",
                        "msg": {"message": "status",
                                "channel": "bridge_manager",
