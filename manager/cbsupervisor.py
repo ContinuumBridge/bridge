@@ -7,7 +7,7 @@
 #
 ModuleName = "Supervisor"
 
-TIME_TO_IFUP = 10 # Time to wait before checking if we have an Internet connection (secs)
+TIME_TO_IFUP = 60 # Time to wait before checking if we have an Internet connection (secs)
 WATCHDOG_INTERVAL = 30  # Time between manager checks (secs)
 CONNECT_CHECK_INTERVAL = 60
 
@@ -66,28 +66,33 @@ class Supervisor:
             logging.error("%s iUnable to call checkInterface", ModuleName)
 
     def cbSendManagerMsg(self, msg):
-        logging.debug("%s Sending msg to manager: %s", ModuleName, msg)
+        #logging.debug("%s Sending msg to manager: %s", ModuleName, msg)
         self.cbManagerFactory.sendMsg(msg)
 
     def processManager(self, msg):
-        logging.debug("%s processManager received: %s", ModuleName, msg)
+        #logging.debug("%s processManager received: %s", ModuleName, msg)
         # Regardless of message content, timeStamp is the time when we last heard from the manager
         self.timeStamp = time.time()
         if msg["msg"] == "restart":
+            logging.info("%s Restart message received from manager", ModuleName)
             resp = {"msg": "stopall"
                    }
             self.cbSendManagerMsg(resp)
             self.starting = True
             reactor.callLater(WATCHDOG_INTERVAL, self.startManager, True)
         elif msg["msg"] == "reboot":
+            logging.info("%s Reboot message received from manager", ModuleName)
             self.starting = True
             self.doReboot()
         elif msg["msg"] == "status":
-            logging.debug("%s status = %s", ModuleName, msg["status"])
             if msg["status"] == "disconnected":
-                logging.debug("%s status = %s, connecting = %s", ModuleName, msg["status"], self.connecting)
+                logging.info("%s status = %s, connecting = %s", ModuleName, msg["status"], self.connecting)
                 if not self.connecting:
                     self.doReboot()
+            elif msg["status"] != "ok":
+                logging.info("%s Unknown status received from manager: %s", ModuleName, msg["status"])
+        else:
+            logging.info("%s Unknown message received from manager: %s", ModuleName, msg)
 
     def checkManager(self, startTime):
         if not self.starting:
@@ -116,6 +121,7 @@ class Supervisor:
             reactor.callLater(1, self.startManager,True) 
         else:
             # Manager is well and truely dead.
+            logging.warning("%s Manager is well and truly dead. Rebooting", ModuleName)
             self.killBridge()
 
     def killBridge(self):
@@ -157,6 +163,7 @@ class Supervisor:
         reactor.callLater(WATCHDOG_INTERVAL, self.reboot)
 
     def reboot(self):
+        logging.info("%s Rebooting", ModuleName)
         try:
             reactor.stop()
         except:

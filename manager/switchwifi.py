@@ -86,6 +86,7 @@ class SwitchWiFi:
             logging.info("%s hostapd started", ModuleName)
             # Because wlan0 loses its ip address when hostapd is started
             call(["ifconfig", "wlan0", "10.0.0.1"])
+            logging.info("%s Wifi in server mode", ModuleName)
         elif switchTo == "client":
             call(["ifdown", "wlan0"])
             logging.debug("%s wlan0 down", ModuleName)
@@ -107,6 +108,7 @@ class SwitchWiFi:
             call(["cp", wpa_config_file, "/etc/wpa_supplicant/wpa_supplicant.conf"])
             time.sleep(1)
             self.connectClient()
+            logging.info("%s Wifi in client mode", ModuleName)
         else:
             print ModuleName, "Must switch to either client or server"
 

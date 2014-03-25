@@ -139,7 +139,7 @@ class WiFiSetup():
                 try:
                     call(["rm", "/etc/wpa_supplicant/wpa_supplicant.conf"])
                 except:
-                    pass
+                    logging.wwarning("%s Cannot rm wpa_supplicant.conf", ModuleName)
                 wpa_proto_file = CB_BRIDGE_ROOT + "/bridgeconfig/wpa_supplicant.conf.proto"
                 wpa_config_file = CB_CONFIG_DIR + "/wpa_supplicant.conf"
                 i = open(wpa_proto_file, 'r')
@@ -151,14 +151,22 @@ class WiFiSetup():
                 i.close()
                 o.close()
                 s.switch("client")
-                if self.clientConnected():
-                    logging.info("%s Client connected", ModuleName)
+                c = self.checkInterace()
+                if c != "none":
+                    logging.info("%s Client connected by %s", ModuleName, c)
                     return True
                 else:
                     return False
             else:
+                s.switch("client")
                 logging.info("%s Did not get WiFi SSID and WPA from a human", ModuleName)
-                return False
+                # We may have been connected by Ethernet in the meantime. Check.
+                c = self.checkInterface()
+                if c != "none":
+                    logging.info("%s Client connected by %s", ModuleName, c)
+                    return True
+                else:
+                    return False
     
 if __name__ == '__main__':
     wiFiSetup = WiFiSetup()
