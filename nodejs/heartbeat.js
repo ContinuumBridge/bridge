@@ -1,5 +1,5 @@
 
-var Q = require('q');
+var Message = require('./message');
 
 
 
@@ -13,15 +13,11 @@ var Heartbeat = function(controllerSocket, bridgeSocket) {
 
     heartbeat.start = function() {
 
-        var message = {};
-        message.message = "status";
-        message.source = "conduit";
-
+        var message = new Message({message: "status", source: "conduit"})
 
         setInterval(function() {
 
-            //message.body = '{"connected":"' + controllerSocket.connected + '"}';
-            message.body = {connected: controllerSocket.connected};
+            message.set('body',{connected: controllerSocket.connected});
             bridgeSocket.toBridge.push(message);
         }, 1000);
     }

@@ -5,6 +5,7 @@ var net = require('net')
     ;
 
 var logger = require('../logger')
+    ,Message = require('../message')
     ,MessageUtils = require('../message_utils')
     ;
 
@@ -29,22 +30,14 @@ function BridgeConcentrator(port) {
 
         toBridge.onValue(function(message) {
 
-            var message = MessageUtils.stripFields(message);
-            MessageUtils.stringify(message).then(function(jsonMessage) {
-                if (message.source == 'conduit') {
-                    logger.debug(message.source + ' => bridge', jsonMessage);
-                } else {
-                    logger.info(message.source + ' => bridge', jsonMessage);
-                }
-                socket.write(jsonMessage + '\r\n');
-            }, function(error) {
-                logger.error(error);
-            });
+            var jsonMessage = message.getJSON();
+            socket.write(jsonMessage + '\r\n');
         });
 
-        socket.on('data', function(data) {
+        socket.on('data', function(jsonMessage) {
 
-            fromBridge.push(data);
+            var message = new Message(jsonMessage);
+            fromBridge.push(message);
         }); 
 
         // Add a 'close' event handler for the bridgeTCPClient socket
