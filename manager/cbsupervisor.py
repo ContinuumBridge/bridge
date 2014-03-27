@@ -7,10 +7,11 @@
 #
 ModuleName = "Supervisor"
 
-TIME_TO_IFUP = 10            # Time to wait before checking if we have an Internet connection (secs)
-WATCHDOG_INTERVAL = 30       # Time between manager checks (secs)
-CONNECT_CHECK_INTERVAL = 60  # How often to check LAN connection
-MAX_NO_SERVER_COUNT = 5      # Used when making decisions about rebooting
+TIME_TO_IFUP = 10              # Time to wait before checking if we have an Internet connection (secs)
+WATCHDOG_INTERVAL = 30         # Time between manager checks (secs)
+CONNECT_CHECK_INTERVAL = 60    # How often to check LAN connection
+MAX_NO_SERVER_COUNT = 10       # Used when making decisions about rebooting
+MIN_TIME_BETWEEN_REBOOTS = 600 # Stops constant rebooting (secs)
 
 import sys
 import time
