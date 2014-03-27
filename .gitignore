@@ -3,6 +3,7 @@ aggregator/node-modules
 build
 manager/*.db
 manager/*.config
+manager/cb_version
 *.py[cod]
 thisbridge/*
 *.csv

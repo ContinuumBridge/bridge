@@ -7,7 +7,7 @@
 #
 ModuleName = "Supervisor"
 
-TIME_TO_IFUP = 10              # Time to wait before checking if we have an Internet connection (secs)
+TIME_TO_IFUP = 15              # Time to wait before checking if we have an Internet connection (secs)
 WATCHDOG_INTERVAL = 30         # Time between manager checks (secs)
 CONNECT_CHECK_INTERVAL = 60    # How often to check LAN connection
 MAX_NO_SERVER_COUNT = 10       # Used when making decisions about rebooting
@@ -32,13 +32,26 @@ class Supervisor:
         logging.info("%s Restart", ModuleName)
         logging.info("%s *************************************", ModuleName)
         logging.info("%s CB_LOGGIN_LEVEL =  %s", ModuleName, CB_LOGGING_LEVEL)
+        try:
+            versionFile =  CB_BRIDGE_ROOT + "/manager/" + "cb_version"
+            with open(versionFile, 'r') as f:
+                v = f.read()
+            if v.endswith('\n'):
+                v = v[:-1]
+        except:
+            v = "Unknown"
+        logging.info("%s Bridge version =  %s", ModuleName, v)
         self.starting = True    # Don't check manager watchdog when manager not running
         self.connecting = True  # Ignore conduit not connected messages if trying to connect
         self.timeStamp = time.time()
         self.wiFiSetup = WiFiSetup()
         self.beginningOfTime = time.time() # Used when making decisions about rebooting
         self.noServerCount = 0             # Used when making decisions about rebooting
-        # startManager called later partly so that reactor can be started once in __init__
+        try:
+            reactor.callLater(TIME_TO_IFUP, self.checkInterface)
+        except:
+            logging.error("%s iUnable to call checkInterface", ModuleName)
+
         reactor.callLater(1, self.startManager, False)
         reactor.run()
 
@@ -64,16 +77,11 @@ class Supervisor:
         except:
             logging.error("%s Bridge manager failed to start: %s", ModuleName, exe)
         
-        try:
-            reactor.callLater(TIME_TO_IFUP, self.checkInterface)
-        except:
-            logging.error("%s iUnable to call checkInterface", ModuleName)
-
     def cbSendManagerMsg(self, msg):
         self.cbManagerFactory.sendMsg(msg)
 
     def processManager(self, msg):
-        logging.debug("%s processManager received message: %s", ModuleName, msg)
+        #logging.debug("%s processManager received message: %s", ModuleName, msg)
         # Regardless of message content, timeStamp is the time when we last heard from the manager
         self.timeStamp = time.time()
         if msg["msg"] == "restart":
@@ -152,6 +160,7 @@ class Supervisor:
         if connected:
             self.connecting = False
         else:
+            logging.info("%s Unable to reconnect to a network. Rebooting ...", ModuleName)
             self.doReboot()
 
     def doReboot(self):
@@ -173,6 +182,7 @@ class Supervisor:
             logging.info("%s Unable to stop reactor, just rebooting", ModuleName)
         if CB_SIM_LEVEL == '0':
             try:
+                logging.info("%s Rebooting now. Goodbye ...", ModuleName)
                 call(["reboot"])
             except:
                 logging.info("%s Unable to reboot, probably because bridge not run as root", ModuleName)
