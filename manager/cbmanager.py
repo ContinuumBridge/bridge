@@ -7,7 +7,7 @@
 #
 START_DELAY = 2 # Delay between starting each adaptor or app
 CONDUIT_WATCHDOG_MAXTIME = 30  # Max time with no message before reboot
-CONDUIT_MAX_DISCONNECT_COUNT = 30  # Max number of messages before reboot
+CONDUIT_MAX_DISCONNECT_COUNT = 60  # Max number of messages before reboot
 ModuleName = "Manager"
 id = "manager"
 
@@ -330,7 +330,8 @@ class ManageBridge:
             bridgeDir = CB_HOME + "/bridge"
             bridgeSave = CB_HOME + "/bridge_save"
             bridgeClone = "bridge_clone"
-            logging.info('%s Files: %s %s %s', bridgeDir, bridgeSave, bridgeClone)
+            logging.info('%s Files: %s %s %s', ModuleName, bridgeDir, bridgeSave, bridgeClone)
+            subprocess.call(["rm -rf", bridgeSave])
             subprocess.call(["mv", bridgeDir, bridgeSave])
             logging.info('%s Moved bridggeDir to bridgeSave', ModuleName)
             subprocess.call(["mv", bridgeClone, bridgeDir])

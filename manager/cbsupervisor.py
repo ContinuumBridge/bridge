@@ -7,9 +7,10 @@
 #
 ModuleName = "Supervisor"
 
-TIME_TO_IFUP = 10 # Time to wait before checking if we have an Internet connection (secs)
-WATCHDOG_INTERVAL = 30  # Time between manager checks (secs)
-CONNECT_CHECK_INTERVAL = 60
+TIME_TO_IFUP = 10            # Time to wait before checking if we have an Internet connection (secs)
+WATCHDOG_INTERVAL = 30       # Time between manager checks (secs)
+CONNECT_CHECK_INTERVAL = 60  # How often to check LAN connection
+MAX_NO_SERVER_COUNT = 5      # Used when making decisions about rebooting
 
 import sys
 import time
@@ -34,6 +35,8 @@ class Supervisor:
         self.connecting = True  # Ignore conduit not connected messages if trying to connect
         self.timeStamp = time.time()
         self.wiFiSetup = WiFiSetup()
+        self.beginningOfTime = time.time() # Used when making decisions about rebooting
+        self.noServerCount = 0             # Used when making decisions about rebooting
         # startManager called later partly so that reactor can be started once in __init__
         reactor.callLater(1, self.startManager, False)
         reactor.run()
@@ -66,14 +69,13 @@ class Supervisor:
             logging.error("%s iUnable to call checkInterface", ModuleName)
 
     def cbSendManagerMsg(self, msg):
-        logging.debug("%s Sending msg to manager: %s", ModuleName, msg)
         self.cbManagerFactory.sendMsg(msg)
 
     def processManager(self, msg):
-        logging.debug("%s processManager received: %s", ModuleName, msg)
         # Regardless of message content, timeStamp is the time when we last heard from the manager
         self.timeStamp = time.time()
         if msg["msg"] == "restart":
+            logging.info("%s processManager restarting", ModuleName)
             resp = {"msg": "stopall"
                    }
             self.cbSendManagerMsg(resp)
@@ -83,11 +85,17 @@ class Supervisor:
             self.starting = True
             self.doReboot()
         elif msg["msg"] == "status":
-            logging.debug("%s status = %s", ModuleName, msg["status"])
             if msg["status"] == "disconnected":
                 logging.debug("%s status = %s, connecting = %s", ModuleName, msg["status"], self.connecting)
                 if not self.connecting:
-                    self.doReboot()
+                    if self.wiFiSetup.clientConnected():
+                        logging.info("%s Connected to Internet but not to server", ModuleName)
+                        self.noServerCount += 1
+                    if time.time() - self.beginningOfTime > MIN_TIME_BETWEEN_REBOOTS or \
+                    self.noServerCount > MAX_NO_SERVER_COUNT:
+                        self.doReboot()
+            else:
+                self.noServerCount = 0
 
     def checkManager(self, startTime):
         if not self.starting:

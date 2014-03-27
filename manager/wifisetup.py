@@ -5,7 +5,7 @@
 # Proprietary and confidential
 # Written by Peter Claydon
 #
-PING_TIMEOUT = 20
+PING_TIMEOUT = 10
 
 ModuleName = "WiFiSetup"
 
