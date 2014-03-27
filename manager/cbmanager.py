@@ -512,7 +512,7 @@ class ManageBridge:
                 self.stopAll()
             elif msg["body"] == "upgrade":
                 self.upgradeBridge()
-            elif msg["body"] == "sendlog":
+            elif msg["body"] == "sendlog" or msg["body"] == "send_log":
                 self.sendLog()
             elif msg["body"].startswith("call"):
                 # Need to call in thread is case it hangs
