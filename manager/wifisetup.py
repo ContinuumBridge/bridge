@@ -5,7 +5,7 @@
 # Proprietary and confidential
 # Written by Peter Claydon
 #
-PING_TIMEOUT = 20
+PING_TIMEOUT = 10
 
 ModuleName = "WiFiSetup"
 
@@ -86,9 +86,9 @@ class WiFiSetup():
             except:
                 logging.error("%s Cannot spawn ping", ModuleName)
                 attempt += 1
-            index = p.expect(['time', pexpect.TIMEOUT], timeout=PING_TIMEOUT)
-            if index == 1:
-                logging.warning("%s Client connection timed out", ModuleName)
+            index = p.expect(['time', pexpect.TIMEOUT, pexpect.EOF], timeout=PING_TIMEOUT)
+            if index == 1 or index == 2:
+                logging.warning("%s %s did not succeed", ModuleName, cmd)
                 p.kill(9)
                 cmd = 'ping bbc.co.uk'
                 attempt += 1

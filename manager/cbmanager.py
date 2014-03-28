@@ -7,7 +7,7 @@
 #
 START_DELAY = 2 # Delay between starting each adaptor or app
 CONDUIT_WATCHDOG_MAXTIME = 30  # Max time with no message before reboot
-CONDUIT_MAX_DISCONNECT_COUNT = 30  # Max number of messages before reboot
+CONDUIT_MAX_DISCONNECT_COUNT = 60  # Max number of messages before reboot
 ModuleName = "Manager"
 id = "manager"
 
@@ -305,6 +305,8 @@ class ManageBridge:
         logging.info('%s %s', ModuleName, status)
 
     def upgradeBridge(self):
+        upgradeStat = ""
+        okToReboot = False
         access_token = os.getenv('CB_DROPBOX_TOKEN', 'NO_TOKEN')
         try:
             logging.info('%s Dropbox access token = %s', ModuleName, access_token)
@@ -312,36 +314,41 @@ class ManageBridge:
             f, metadata = self.client.get_file_and_metadata('/bridge_clone.tgz')
         except:
             logging.error('%s Cannot access Dropbox to upgrade', ModuleName)
-            msg = {"cmd": "msg",
-                   "msg": {"message": "status",
-                           "channel": "bridge_manager",
-                            "body": "Cannot access Dropbox to upgrade"
-                          }
-                  }
-            self.cbSendConcMsg(msg)
+            upgradeStat = "Cannot access Dropbox to upgrade"
         else:
             tarFile = CB_HOME + "/bridge_clone.tgz"
             out = open(tarFile, 'wb')
             out.write(f.read())
             out.close()
-    
             subprocess.call(["tar", "xfz", tarFile])
             logging.info('%s Extracted upgrade tar', ModuleName)
+
             bridgeDir = CB_HOME + "/bridge"
             bridgeSave = CB_HOME + "/bridge_save"
             bridgeClone = "bridge_clone"
-            logging.info('%s Files: %s %s %s', bridgeDir, bridgeSave, bridgeClone)
-            subprocess.call(["mv", bridgeDir, bridgeSave])
-            logging.info('%s Moved bridggeDir to bridgeSave', ModuleName)
-            subprocess.call(["mv", bridgeClone, bridgeDir])
-            logging.info('%s Moved bridgeClone to bridgeDir', ModuleName)
-            msg = {"cmd": "msg",
-                   "msg": {"message": "status",
-                           "channel": "bridge_manager",
-                            "body": "rebooting"
-                          }
-                  }
-            self.cbSendConcMsg(msg)
+            logging.info('%s Files: %s %s %s', ModuleName, bridgeDir, bridgeSave, bridgeClone)
+            try:
+                subprocess.call(["rm", "-rf", bridgeSave])
+            except:
+                logging.warning('%s Could not remove bridgeSave', ModuleName)
+                upgradeStat = "OK, but could not delete bridgeSave. Try manual reboot"
+            try:
+                subprocess.call(["mv", bridgeDir, bridgeSave])
+                logging.info('%s Moved bridggeDir to bridgeSave', ModuleName)
+                subprocess.call(["mv", bridgeClone, bridgeDir])
+                logging.info('%s Moved bridgeClone to bridgeDir', ModuleName)
+                upgradeStat = "Upgrade success. Rebooting"
+                okToReboot = True
+            except:
+                upgradeStat = "Failed. Problems moving directories"
+        msg = {"cmd": "msg",
+               "msg": {"message": "status",
+                       "channel": "bridge_manager",
+                       "body": upgradeStat
+                      }
+              }
+        self.cbSendConcMsg(msg)
+        if okToReboot:
             resp = {"msg": "reboot"}
             self.cbSendSuperMsg(resp)
 
@@ -506,7 +513,7 @@ class ManageBridge:
                 self.stopAll()
             elif msg["body"] == "upgrade":
                 self.upgradeBridge()
-            elif msg["body"] == "sendlog":
+            elif msg["body"] == "sendlog" or msg["body"] == "send_log":
                 self.sendLog()
             elif msg["body"].startswith("call"):
                 # Need to call in thread is case it hangs
@@ -584,7 +591,7 @@ class ManageBridge:
                 os.remove(socket) 
                 logging.debug('%s Socket %s renoved', ModuleName, socket)
             except:
-                logging.debug('%s Socket %s alredy renoved', ModuleName, socket)
+                logging.debug('%s Socket %s already renoved', ModuleName, socket)
         logging.info('%s Stopping reactor', ModuleName)
         reactor.stop()
         sys.exit

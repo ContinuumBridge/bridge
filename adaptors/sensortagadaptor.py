@@ -197,6 +197,7 @@ class Adaptor(CbAdaptor):
         self.gatt.sendline(line)
         index = self.gatt.expect(['successfully', pexpect.TIMEOUT, pexpect.EOF], timeout=1)
         if index == 1 or index == 2:
+            logging.debug("%s char-write-req failed. index =  %s", ModuleName, index)
             self.tagOK = "not ok"
 
     def switchSensors(self):
