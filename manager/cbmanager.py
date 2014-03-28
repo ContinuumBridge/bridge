@@ -328,8 +328,9 @@ class ManageBridge:
             bridgeClone = "bridge_clone"
             logging.info('%s Files: %s %s %s', ModuleName, bridgeDir, bridgeSave, bridgeClone)
             try:
-                subprocess.call(["rm -rf", bridgeSave])
+                subprocess.call(["rm", "-rf", bridgeSave])
             except:
+                logging.warning('%s Could not remove bridgeSave', ModuleName)
                 upgradeStat = "OK, but could not delete bridgeSave. Try manual reboot"
             try:
                 subprocess.call(["mv", bridgeDir, bridgeSave])
