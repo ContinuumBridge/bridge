@@ -126,13 +126,15 @@ class Supervisor:
                     self.cbSendManagerMsg(msg)
                     reactor.callLater(WATCHDOG_INTERVAL, self.recheckManager, time.time())
                 except:
-                    reactor.callLater(WATCHDOG_INTERVAL, self.startManager,True) 
+                    logging.warning("%s Cannot send message to manager. Rebooting", ModuleName)
+                    self.killBridge()
 
     def recheckManager(self, startTime):
         # Whatever happened, stop listening on manager port.
         self.mgrPort.stopListening()
         if self.timeStamp > startTime - 1:
             # Manager responded to request to stop. Restart it.
+            logging.info("%s Manager stopped sucessfully. Restarting ...", ModuleName)
             reactor.callLater(1, self.startManager,True) 
         else:
             # Manager is well and truely dead.

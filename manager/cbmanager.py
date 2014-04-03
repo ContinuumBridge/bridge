@@ -5,8 +5,8 @@
 # Proprietary and confidential
 # Written by Peter Claydon
 #
-START_DELAY = 2 # Delay between starting each adaptor or app
-CONDUIT_WATCHDOG_MAXTIME = 30  # Max time with no message before reboot
+START_DELAY = 2.0                  # Delay between starting each adaptor or app
+CONDUIT_WATCHDOG_MAXTIME = 30      # Max time with no message before reboot
 CONDUIT_MAX_DISCONNECT_COUNT = 60  # Max number of messages before reboot
 ModuleName = "Manager"
 id = "manager"
@@ -163,7 +163,8 @@ class ManageBridge:
             reactor.callLater(delay, self.startApp, exe, mgrSoc, id)
             delay += START_DELAY
         # Give time for everything to start before we consider ourselves running
-        reactor.callLater(START_DELAY*5, self.setRunning)
+        reactor.callLater(delay, self.setRunning)
+        logging.info('%s All adaptors and apps set to start', ModuleName)
 
     def startAdaptor(self, exe, mgrSoc, id, friendlyName):
         try:
