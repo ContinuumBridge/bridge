@@ -67,6 +67,8 @@ class Adaptor(CbAdaptor):
         #CbAdaptor methods processReq & cbAdtConfig MUST be subclassed
         CbAdaptor.processReq = self.processReq
         CbAdaptor.cbAdtConfigure = self.configure
+        # Override stopAdaptor if you need to be told when to stop
+        CbAdaptor.stopAdaptor = self.stopAdaptor
         self.connected = False  # Indicates we are connected to SensorTag
         self.status = "ok"
         self.state = "idle"
@@ -149,6 +151,15 @@ class Adaptor(CbAdaptor):
             self.status = "running"
             self.state = "running"
         logging.debug("%s %s state = %s", ModuleName, self.id, self.state)
+
+    def stopAdaptor(self):
+        # Mainly caters for situation where adaptor is told to stop while it is starting
+        if self.connected:
+            try:
+                self.gatt.kill(9)
+                logging.debug("%s %s %s stopAdaptor killed gatt", ModuleName, self.id, self.friendly_name)
+            except:
+                logging.warning("%s %s %s stopAdaptor unable to kill gatt", ModuleName, self.id, self.friendly_name)
 
     def initSensorTag(self):
         logging.info("%s %s %s Init", ModuleName, self.id, self.friendly_name)

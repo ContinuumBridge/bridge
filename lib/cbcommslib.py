@@ -60,6 +60,10 @@ class CbAdaptor:
         """The app should overwrite this and do all configuration in it."""
         logging.warning("%s %s The wrong cbAdtConfigure method", ModuleName, self.id)
 
+    def stopAdaptor(self):
+        """The app should overwrite this and do all configuration in it."""
+        pass
+
     def processConf(self, config):
         """Config is based on what apps are available."""
         logging.debug("%s %s Configuration: %s ", ModuleName, self.id, config)
@@ -83,6 +87,7 @@ class CbAdaptor:
     def processManager(self, cmd):
         logging.debug("%s %s Received from manager: %s ", ModuleName, self.id, cmd)
         if cmd["cmd"] == "stop":
+            self.stopAdaptor()
             self.doStop = True
             msg = {"id": self.id,
                    "status": "stopping"}
@@ -100,7 +105,6 @@ class CbAdaptor:
         # The adaptor must set self.status back to "running" as a heartbeat
         if self.status == "running":
             self.status = "timeout"
-
 
     def stopReactor(self):
         try:
@@ -154,6 +158,10 @@ class CbApp:
         """The app should overwrite this and do all configuration in it."""
         logging.warning("%s %s should subclass cbAppConfigure method", ModuleName, self.id)
 
+    def stopApp(self):
+        """The app should overwrite this and do all configuration in it."""
+        pass
+
     def processConf(self, config):
         """Config is based on what adaptors are available."""
         logging.debug("%s %s Config: %s", ModuleName, self.id, config)
@@ -189,6 +197,7 @@ class CbApp:
     def processManager(self, cmd):
         logging.debug("%s %s Received from manager: %s", ModuleName, self.id, cmd)
         if cmd["cmd"] == "stop":
+            self.stopApp()
             self.doStop = True
             msg = {"id": self.id,
                    "status": "stopping"}
