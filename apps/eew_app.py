@@ -340,11 +340,13 @@ class App(CbApp):
     def __init__(self, argv):
         logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(message)s')
         # The following 3 declarations must be made
-        self.appClass = "monitor"
         CbApp.processResp = self.processResp
         CbApp.cbAppConfigure = self.configure
         CbApp.processConcResp = self.processConcResp
         #
+        self.appClass = "monitor"
+        self.state = "stopped"
+        self.status = "ok"
         self.accel = []
         self.gyro = []
         self.magnet = []
@@ -356,7 +358,18 @@ class App(CbApp):
         self.devServices = [] 
         self.idToName = {} 
         self.dm = DataManager(self.cbSendMsg)
+        #CbApp.__init__ MUST be called
         CbApp.__init__(self, argv)
+
+    def states(self, action):
+        if action == "clear_error":
+            self.state = "running"
+        else:
+            self.state = action
+        msg = {"id": self.id,
+               "status": "state",
+               "state": self.state}
+        self.cbSendManagerMsg(msg)
 
     def processConcResp(self, resp):
         #logging.debug("%s resp from conc: %s", ModuleName, resp)
@@ -464,6 +477,7 @@ class App(CbApp):
                    "req": "services",
                    "services": serviceReq}
             self.cbSendMsg(msg, resp["id"])
+            self.states("running")
         elif resp["content"] == "none":
             pass
         else:
@@ -485,6 +499,7 @@ class App(CbApp):
                 self.idToName[adtID] = friendly_name
                 self.devices.append(adtID)
         self.dm.initFile(self.idToName)
+        self.states("starting")
 
 if __name__ == '__main__':
 

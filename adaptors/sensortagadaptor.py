@@ -71,7 +71,8 @@ class Adaptor(CbAdaptor):
         CbAdaptor.stopAdaptor = self.stopAdaptor
         self.connected = False  # Indicates we are connected to SensorTag
         self.status = "ok"
-        self.state = "idle"
+        self.state = "stopped"
+        self.badCount = 0       # Used to count errors on the BLE interface
         self.lastEOFTime = time.time()
         self.tempApps = []
         self.irTempApps = []
@@ -127,7 +128,7 @@ class Adaptor(CbAdaptor):
         CbAdaptor.__init__(self, argv)
 
     def states(self, action):
-        if self.state == "idle":
+        if self.state == "stopped":
             if action == "connected":
                 self.state = "connected"
             elif action == "inUse":
@@ -148,9 +149,21 @@ class Adaptor(CbAdaptor):
                 status = self.switchSensors()
                 logging.info("%s %s %s switchSensors status: %s", ModuleName, self.id, self.friendly_name, status)
                 reactor.callInThread(self.getValues)
-            self.status = "running"
+            self.state = "running"
+        # error is only ever set from the running state, so set back to running if error is cleared
+        if action == "error":
+            self.state == "error"
+        elif action == "clear_error":
             self.state = "running"
         logging.debug("%s %s state = %s", ModuleName, self.id, self.state)
+        if self.state == "connected" or self.state == "inUse":
+            external_state = "starting"
+        else:
+            external_state = self.state
+        msg = {"id": self.id,
+               "status": "state",
+               "state": external_state}
+        self.cbSendManagerMsg(msg)
 
     def stopAdaptor(self):
         # Mainly caters for situation where adaptor is told to stop while it is starting
@@ -184,6 +197,8 @@ class Adaptor(CbAdaptor):
             # index 2 is not actually a timeout, but something has gone wrong
             self.connected = False
             self.gatt.kill(9)
+            # Wait a second just to give SensorTag time to "recover"
+            time.sleep(1)
             return "timeout"
         else:
             if self.doStop:
@@ -337,6 +352,9 @@ class Adaptor(CbAdaptor):
         """Continually updates sensor values. Run in a thread.
         """
         while not self.doStop:
+            # If things appear to be going wrong, signal an error
+            if self.badCount > 7:
+                self.states("error")
             if self.sim == 0:
                 index = self.gatt.expect(['handle.*', pexpect.TIMEOUT, pexpect.EOF], timeout=GATT_TIMEOUT)
             else:
@@ -350,6 +368,7 @@ class Adaptor(CbAdaptor):
                 if index == 1 or index == 2:
                     # index 2 is not actually a timeout, but something has gone wrong
                     logging.warning("%s Could not reconnect nicely. Killing", ModuleName)
+                    self.badCount += 1
                     self.connected = False
                 else:
                     logging.warning("%s Successful reconnection without kill", ModuleName)
@@ -369,7 +388,7 @@ class Adaptor(CbAdaptor):
                 # In this case, there will be lots of them. Detect this and exit the thread.
                 # Also report back to manager to allow it to take action. Eg: restart adaptor.
                 if not self.doStop:
-                    logging.debug("%s %s %s gatt EO in getValues", ModuleName, self.id, self.friendly_name)
+                    logging.debug("%s %s %s gatt EOF in getValues", ModuleName, self.id, self.friendly_name)
                     eofTime = time.time()
                     if eofTime - self.lastEOFTime > EOF_MONITOR_INTERVAL:
                        self.eofCount = 1
@@ -377,11 +396,14 @@ class Adaptor(CbAdaptor):
                        self.eofCount += 1
                     self.lastEOFTime = eofTime
                     if self.eofCount > MAX_EOF_COUNT:
-                        self.status = "please_restart"
+                        self.status = "error"
                         break
                 else:
                     break
             else:
+                if self.badCount > 7:
+                    self.states("reset_error")
+                self.badCount = 0  # Got a value so reset
                 if self.sim == 0:
                     raw = self.gatt.after.split()
                 else:
@@ -605,7 +627,6 @@ class Adaptor(CbAdaptor):
                 self.simValues = SimValues()
             self.connectSensorTag()
             self.configured = True
-            self.status = "configured"
 
 if __name__ == '__main__':
     adaptor = Adaptor(sys.argv)

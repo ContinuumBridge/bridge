@@ -5,7 +5,6 @@
 # Proprietary and confidential
 # Written by Peter Claydon
 #
-ModuleName = "cbLib" 
 """
 self.status must be set by each app & adaptor to report back to the manager. Allowable values:
 idle            Initial value at the start
@@ -15,6 +14,10 @@ please_restart  Something wrong. Requests the manager to restart the app
 timeout         Not usually set by user apps
 running should be set at least every 10 seconds as a heartbeat
 """
+
+ModuleName = "cbLib" 
+TIME_TO_MONITOR_STATUS = 60     # Time to wait before sending status messages to manager
+SEND_STATUS_INTERVAL = 30       # Interval between sending status messages to manager
 
 import sys
 import os.path
@@ -54,6 +57,8 @@ class CbAdaptor:
                    "status": "req-config"} 
         self.managerFactory = CbClientFactory(self.processManager, initMsg)
         reactor.connectUNIX(managerSocket, self.managerFactory, timeout=10)
+
+        reactor.callLater(TIME_TO_MONITOR_STATUS, self.sendStatus)
         reactor.run()
 
     def cbAdtConfigure(self, config):
@@ -63,6 +68,13 @@ class CbAdaptor:
     def stopAdaptor(self):
         """The app should overwrite this and do all configuration in it."""
         pass
+
+    def sendStatus(self):
+        """ Send status to the manager at regular intervals as a heartbeat. """
+        msg = {"id": self.id,
+               "status": self.status}
+        self.cbSendManagerMsg(msg)
+        reactor.callLater(SEND_STATUS_INTERVAL, self.sendStatus)
 
     def processConf(self, config):
         """Config is based on what apps are available."""
@@ -101,7 +113,7 @@ class CbAdaptor:
         else:
             msg = {"id": self.id,
                    "status": self.status}
-        self.managerFactory.sendMsg(msg)
+        self.cbSendManagerMsg(msg)
         # The adaptor must set self.status back to "running" as a heartbeat
         if self.status == "running":
             self.status = "timeout"
@@ -117,6 +129,9 @@ class CbAdaptor:
     def cbSendMsg(self, msg, iName):
         self.cbFactory[iName].sendMsg(msg)
 
+    def cbSendManagerMsg(self, msg):
+        self.managerFactory.sendMsg(msg)
+
 class CbApp:
     """
     This should be sub-classed by any app.
@@ -130,7 +145,7 @@ class CbApp:
         self.doStop = False
         self.friendlyLookup = {}
         self.configured = False
-        self.status = "idle"
+        self.status = "ok"
 
         if len(argv) < 3:
             logging.error("%s cbApp improper number of arguments", ModuleName)
@@ -144,6 +159,8 @@ class CbApp:
                    "status": "req-config"} 
         self.managerFactory = CbClientFactory(self.processManager, initMsg)
         reactor.connectUNIX(managerSocket, self.managerFactory, timeout=10)
+
+        reactor.callLater(TIME_TO_MONITOR_STATUS, self.sendStatus)
         reactor.run()
 
     def processResp(self, resp):
@@ -161,6 +178,13 @@ class CbApp:
     def stopApp(self):
         """The app should overwrite this and do all configuration in it."""
         pass
+
+    def sendStatus(self):
+        """ Send status to the manager at regular intervals as a heartbeat. """
+        msg = {"id": self.id,
+               "status": self.status}
+        self.cbSendManagerMsg(msg)
+        reactor.callLater(SEND_STATUS_INTERVAL, self.sendStatus)
 
     def processConf(self, config):
         """Config is based on what adaptors are available."""
@@ -211,7 +235,7 @@ class CbApp:
         else:
             msg = {"id": self.id,
                    "status": self.status}
-        self.managerFactory.sendMsg(msg)
+        self.cbSendManagerMsg(msg)
         # The app must set self.status back to "running" as a heartbeat
         if self.status == "running":
             self.status = "timeout"
@@ -226,6 +250,9 @@ class CbApp:
 
     def cbSendMsg(self, msg, iName):
         self.cbFactory[iName].sendMsg(msg)
+
+    def cbSendManagerMsg(self, msg):
+        self.managerFactory.sendMsg(msg)
 
 class CbClientProtocol(LineReceiver):
     def __init__(self, processMsg, initMsg):

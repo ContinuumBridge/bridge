@@ -297,6 +297,7 @@ class Concentrator():
     def processServerMsg(self, msg):
         #logging.debug("%s Received from controller: %s", ModuleName, msg)
         msg["status"] = "control_msg"
+        msg["id"] = self.id
         self.cbSendManagerMsg(msg)
 
     def processManagerMsg(self, msg):

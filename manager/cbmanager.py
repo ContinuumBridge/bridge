@@ -6,8 +6,9 @@
 # Written by Peter Claydon
 #
 START_DELAY = 2.0                  # Delay between starting each adaptor or app
-CONDUIT_WATCHDOG_MAXTIME = 30      # Max time with no message before reboot
-CONDUIT_MAX_DISCONNECT_COUNT = 60  # Max number of messages before reboot
+CONDUIT_WATCHDOG_MAXTIME = 600     # Max time with no message before reboot
+CONDUIT_MAX_DISCONNECT_COUNT = 600 # Max number of messages before reboot
+ELEMENT_WATCHDOG_INTERVAL = 120    # Interval at which to check apps/adaptors have communicated
 ModuleName = "Manager"
 id = "manager"
 
@@ -49,6 +50,7 @@ class ManageBridge:
         self.running = False
         self.stopping = False
         self.concNoApps = False
+        self.elements = {}
         self.appProcs = []
         self.concConfig = []
         self.cbFactory = {} 
@@ -148,22 +150,26 @@ class ManageBridge:
         # Start adaptors with 2 secs between them to give time for each to start
         delay = START_DELAY 
         for d in self.devices:
-            exe = d["adaptor"]["exe"]
-            friendlyName = d["friendly_name"]
             id = d["id"]
+            self.elements[id] = True
+            exe = d["adaptor"]["exe"]
             mgrSoc = d["adaptor"]["mgrSoc"]
+            friendlyName = d["friendly_name"]
             reactor.callLater(delay, self.startAdaptor, exe, mgrSoc, id, friendlyName)
             delay += START_DELAY
         # Now start all the apps
         delay += START_DELAY*2
         for a in self.apps:
             id = a["app"]["id"]
+            self.elements[id] = True
             exe = a["app"]["exe"]
             mgrSoc = a["app"]["mgrSoc"]
             reactor.callLater(delay, self.startApp, exe, mgrSoc, id)
             delay += START_DELAY
+        # Start watchdog to monitor apps and adaptors
+        reactor.callLater(delay+ELEMENT_WATCHDOG_INTERVAL, self.elementWatchdog)
         # Give time for everything to start before we consider ourselves running
-        reactor.callLater(delay, self.setRunning)
+        reactor.callLater(delay+START_DELAY, self.setRunning)
         logging.info('%s All adaptors and apps set to start', ModuleName)
 
     def startAdaptor(self, exe, mgrSoc, id, friendlyName):
@@ -436,7 +442,6 @@ class ManageBridge:
             logging.warning('%s Unrecognised command received from controller: %s', ModuleName, msg)
             return
         else:
-            #if msg["body"] == "{\"connected\":\"true\"}":
             if msg["body"]["connected"] == True:
                 self.disconnectedCount = 0
             else:
@@ -641,12 +646,39 @@ class ManageBridge:
         self.cbFactory[iName].sendMsg(msg)
 
     def cbSendConcMsg(self, msg):
-        self.cbConcFactory.sendMsg(msg)
+        try:
+            self.cbConcFactory.sendMsg(msg)
+        except:
+            logging.warning('%s Appear to be trying to send a message to concentrator before connected', ModuleName)
 
     def cbSendSuperMsg(self, msg):
         self.cbSupervisorFactory.sendMsg(msg)
 
+    def elementWatchdog(self):
+        """ Checks that all apps and adaptors have communicated within the designated interval. """
+        for e in self.elements:
+            if self.elements[e]== False:
+                if e != "conc":
+                    logging.warning('%s %s has not communicated within watchdog interval', ModuleName, e)
+                    body = "Watchdog timeout for " + e + " - Restarting"
+                    resp = {"cmd": "msg",
+                            "msg": {"message": "status",
+                                    "channel": "bridge_manager",
+                                    "body": body
+                                   }
+                           }
+                    self.cbSendConcMsg(resp)
+                    superMsg = {"msg": "restart"}
+                    self.cbSendSuperMsg(superMsg)
+                    break
+            else:
+                logging.debug('%s %s resetting watchdog', ModuleName, e)
+            self.elements[e] = False
+        reactor.callLater(ELEMENT_WATCHDOG_INTERVAL, self.elementWatchdog)
+
     def processClient(self, msg):
+        #logging.debug('%s Received msg; %s', ModuleName, msg)
+        # Set watchdog flag
         if not "status" in msg:
             logging.warning('%s No status key in message from client; %s', ModuleName, msg)
             return
@@ -657,6 +689,8 @@ class ManageBridge:
         elif not "id" in msg:
             logging.warning('%s No id key in message from client; %s', ModuleName, msg)
             return
+        else:
+            self.elements[msg["id"]] = True
         if msg["status"] == "req-config":
             if not "type" in msg:
                 logging.warning('%s No type key in message from client; %s', ModuleName, msg)
@@ -725,6 +759,23 @@ class ManageBridge:
                              }
                      }
             self.cbSendConcMsg(msg)
+        elif msg["status"] == "state":
+            if "state" in msg:
+                logging.debug('%s %s %s', ModuleName, msg["id"], msg["state"])
+            else:
+                logging.warning('%s Received state message from %s with no state', ModuleName, msg["id"])
+        elif msg["status"] == "error":
+                logging.warning('%s Error status received from %s. Restarting', ModuleName, msg["id"])
+                body = "Error status received from " + msg["id"] + " - Restarting"
+                resp = {"cmd": "msg",
+                        "msg": {"message": "status",
+                                "channel": "bridge_manager",
+                                "body": body
+                               }
+                       }
+                self.cbSendConcMsg(resp)
+                superMsg = {"msg": "restart"}
+                self.cbSendSuperMsg(superMsg)
  
 if __name__ == '__main__':
     m = ManageBridge()
