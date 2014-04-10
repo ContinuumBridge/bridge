@@ -323,10 +323,7 @@ class Adaptor(CbAdaptor):
         return v
 
     def getValues(self):
-        """Continually updates sensor values.
-
-        Run in a thread. When new accel values are received, the thread
-        sets the accelReady flag for each attached app to True.  
+        """Continually updates sensor values. Run in a thread.
         """
         while not self.doStop:
             if self.sim == 0:
@@ -334,10 +331,20 @@ class Adaptor(CbAdaptor):
             else:
                 index = 0
             if index == 1:
-                # A timeout error. Attempt to restart the SensorTag
                 status = ""
+                logging.warning("%s %s %s gatt timeout", ModuleName, self.id, self.friendly_name)
+                # First try to reconnect nicely
+                self.gatt.sendline('connect')
+                index = self.gatt.expect(['successful', pexpect.TIMEOUT, pexpect.EOF], timeout=INIT_TIMEOUT)
+                if index == 1 or index == 2:
+                    # index 2 is not actually a timeout, but something has gone wrong
+                    logging.warning("%s Could not reconnect nicely. Killing", ModuleName)
+                    self.connected = False
+                else:
+                    logging.warning("%s Successful reconnection without kill", ModuleName)
+                    status = self.switchSensors()
+                    logging.info("%s %s %s switchSensors status: %s", ModuleName, self.id, self.friendly_name, status)
                 while status != "ok" and not self.doStop:
-                    logging.warning("%s %s %s gatt timeout", ModuleName, self.id, self.friendly_name)
                     self.gatt.kill(9)
                     time.sleep(GATT_SLEEP_TIME)
                     status = self.initSensorTag()   

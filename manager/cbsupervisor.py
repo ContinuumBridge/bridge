@@ -78,6 +78,7 @@ class Supervisor:
             logging.error("%s Bridge manager failed to start: %s", ModuleName, exe)
         
     def cbSendManagerMsg(self, msg):
+        #logging.debug("%s Sending msg to manager: %s", ModuleName, msg)
         self.cbManagerFactory.sendMsg(msg)
 
     def processManager(self, msg):
@@ -92,11 +93,12 @@ class Supervisor:
             self.starting = True
             reactor.callLater(WATCHDOG_INTERVAL, self.startManager, True)
         elif msg["msg"] == "reboot":
+            logging.info("%s Reboot message received from manager", ModuleName)
             self.starting = True
             self.doReboot()
         elif msg["msg"] == "status":
             if msg["status"] == "disconnected":
-                logging.debug("%s status = %s, connecting = %s", ModuleName, msg["status"], self.connecting)
+                logging.info("%s status = %s, connecting = %s", ModuleName, msg["status"], self.connecting)
                 if not self.connecting:
                     if self.wiFiSetup.clientConnected():
                         logging.info("%s Connected to Internet but not to server", ModuleName)
@@ -124,16 +126,19 @@ class Supervisor:
                     self.cbSendManagerMsg(msg)
                     reactor.callLater(WATCHDOG_INTERVAL, self.recheckManager, time.time())
                 except:
-                    reactor.callLater(WATCHDOG_INTERVAL, self.startManager,True) 
+                    logging.warning("%s Cannot send message to manager. Rebooting", ModuleName)
+                    self.killBridge()
 
     def recheckManager(self, startTime):
         # Whatever happened, stop listening on manager port.
         self.mgrPort.stopListening()
         if self.timeStamp > startTime - 1:
             # Manager responded to request to stop. Restart it.
+            logging.info("%s Manager stopped sucessfully. Restarting ...", ModuleName)
             reactor.callLater(1, self.startManager,True) 
         else:
             # Manager is well and truely dead.
+            logging.warning("%s Manager is well and truly dead. Rebooting", ModuleName)
             self.killBridge()
 
     def killBridge(self):
@@ -176,6 +181,7 @@ class Supervisor:
         reactor.callLater(WATCHDOG_INTERVAL, self.reboot)
 
     def reboot(self):
+        logging.info("%s Rebooting", ModuleName)
         try:
             reactor.stop()
         except:
