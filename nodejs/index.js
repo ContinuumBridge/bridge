@@ -20,21 +20,12 @@ heartbeat.start();
 
 controllerSocket.fromController.onValue(function(message) {
 
-    // Translate type => message
-    message.set('message', message.get('type') || '');
-    message.unset('type');
-
     // Take messages from the controller and relay them to the bridge
     bridgeConcentrator.toBridge.push(message);
     logger.info('Controller => Bridge: ', message)
 });
 
 bridgeConcentrator.fromBridge.onValue(function(message) {
-
-    // Translate message => type
-    var type = message.get('message') || "";
-    message.set('type', type);
-    message.unset('message');
 
     // Take messages from the bridge and relay them to the controller
     controllerSocket.toController.push(message);
