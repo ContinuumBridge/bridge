@@ -200,14 +200,14 @@ class ManageBridge:
         except:
             logging.error('%s Unable to load output from discovery.py', ModuleName)
             msg = {"cmd": "msg",
-                          "msg": {"message": "status",
+                          "msg": {"type": "status",
                                   "channel": "bridge_manager",
                                   "body": "Unable to load output from discovery.py" 
                                  }
                   }
             reactor.callFromThread(self.cbSendConcMsg, msg)
         else:   
-            self.discoveredDevices["message"] = "request"
+            self.discoveredDevices["type"] = "request"
             self.discoveredDevices["verb"] = "post"
             self.discoveredDevices["url"] = "/api/bridge/v1/device_discovery/"
             self.discoveredDevices["body"] = []
@@ -349,7 +349,7 @@ class ManageBridge:
             except:
                 upgradeStat = "Failed. Problems moving directories"
         msg = {"cmd": "msg",
-               "msg": {"message": "status",
+               "msg": {"type": "status",
                        "channel": "bridge_manager",
                        "body": upgradeStat
                       }
@@ -389,7 +389,7 @@ class ManageBridge:
                 except:
                     status = "Could not upload log file: " + logFile
         msg = {"cmd": "msg",
-               "msg": {"message": "status",
+               "msg": {"type": "status",
                        "channel": "bridge_manager",
                         "body": status 
                       }
@@ -404,7 +404,7 @@ class ManageBridge:
             logging.warning('%s Error in running call: %s', ModuleName, cmd)
             output = "Error in running call"
         msg = {"cmd": "msg",
-               "msg": {"message": "status",
+               "msg": {"type": "status",
                        "channel": "bridge_manager",
                         "body": output 
                       }
@@ -450,21 +450,21 @@ class ManageBridge:
  
     def processControlMsg(self, msg):
         #logging.info('%s msg received from controller: %s', ModuleName, msg)
-        if not "message" in msg: 
+        if not "type" in msg: 
             logging.error('%s msg received from controller with no "message" key', ModuleName)
             msg = {"cmd": "msg",
-                   "msg": {"message": "status",
+                   "msg": {"type": "status",
                            "channel": "bridge_manager",
-                           "body": "Error. message received from controller with no message key"
+                           "body": "Error. message received from controller with no type key"
                           }
                   }
             self.cbSendConcMsg(msg)
             return 
-        if msg["message"] == "command":
+        if msg["type"] == "command":
             if not "body" in msg:
                 logging.error('%s command message received from controller with no body', ModuleName)
                 msg = {"cmd": "msg",
-                       "msg": {"message": "status",
+                       "msg": {"type": "status",
                                "channel": "bridge_manager",
                                "body": "Error. command message received from controller with no body"
                               }
@@ -478,7 +478,7 @@ class ManageBridge:
                 else:
                     logging.warning('%s Cannot start adaptors and apps. Please run discovery', ModuleName)
                     msg = {"cmd": "msg",
-                           "msg": {"message": "status",
+                           "msg": {"type": "status",
                                    "channel": "bridge_manager",
                                    "body": "Start command received with no apps and adaptors"
                                   }
@@ -495,7 +495,7 @@ class ManageBridge:
                 resp = {"msg": "restart"}
                 self.cbSendSuperMsg(resp)
                 msg = {"cmd": "msg",
-                       "msg": {"message": "status",
+                       "msg": {"type": "status",
                                "channel": "bridge_manager",
                                "body": "restarting"
                               }
@@ -506,7 +506,7 @@ class ManageBridge:
                 resp = {"msg": "reboot"}
                 self.cbSendSuperMsg(resp)
                 msg = {"cmd": "msg",
-                       "msg": {"message": "status",
+                       "msg": {"type": "status",
                                "channel": "bridge_manager",
                                "body": "rebooting"
                               }
@@ -526,7 +526,7 @@ class ManageBridge:
                 reactor.callInThread(self.doCall, msg["body"][5:])
             elif msg["body"] == "update_config" or msg["body"] == "update":
                 req = {"cmd": "msg",
-                       "msg": {"message": "request",
+                       "msg": {"type": "request",
                                "channel": "bridge_manager",
                                "request": "get",
                                "url": "/api/bridge/v1/current_bridge/bridge"}
@@ -535,13 +535,13 @@ class ManageBridge:
             else:
                 logging.warning('%s Unrecognised message received from server: %s', ModuleName, msg)
                 msg = {"cmd": "msg",
-                       "msg": {"message": "status",
+                       "msg": {"type": "status",
                                "channel": "bridge_manager",
                                "body": "Unrecognised command received from controller"
                               }
                       }
                 self.cbSendConcMsg(msg)
-        elif msg["message"] == "response":
+        elif msg["type"] == "response":
             self.updateConfig(msg)
             # Need to give concentrator new config if initial one was without apps
             if self.concNoApps:
@@ -549,7 +549,7 @@ class ManageBridge:
                        "type": "conc"}
                 self.processClient(req)
                 self.concNoApps = False
-        elif msg["message"] == "status":
+        elif msg["type"] == "status":
             if not "source" in msg:
                 logging.warning('%s Unrecognised command received from controller: %s', ModuleName, msg)
                 return
@@ -558,7 +558,7 @@ class ManageBridge:
         else:
             logging.info('%s Unrecognised message received from server: %s', ModuleName, msg)
             msg = {"cmd": "msg",
-                   "msg": {"message": "status",
+                   "msg": {"type": "status",
                            "channel": "bridge_manager",
                            "body": "Unrecognised message received from controller"
                           }
@@ -635,7 +635,7 @@ class ManageBridge:
                 except:
                     logging.debug('%s Socket %s already removed', ModuleName, socket)
         msg = {"cmd": "msg",
-               "msg": {"message": "status",
+               "msg": {"type": "status",
                        "channel": "bridge_manager",
                        "body": "apps_stopped"
                       }
@@ -656,24 +656,25 @@ class ManageBridge:
 
     def elementWatchdog(self):
         """ Checks that all apps and adaptors have communicated within the designated interval. """
-        for e in self.elements:
-            if self.elements[e]== False:
-                if e != "conc":
-                    logging.warning('%s %s has not communicated within watchdog interval', ModuleName, e)
-                    body = "Watchdog timeout for " + e + " - Restarting"
-                    resp = {"cmd": "msg",
-                            "msg": {"message": "status",
-                                    "channel": "bridge_manager",
-                                    "body": body
-                                   }
-                           }
-                    self.cbSendConcMsg(resp)
-                    superMsg = {"msg": "restart"}
-                    self.cbSendSuperMsg(superMsg)
-                    break
-            else:
-                logging.debug('%s %s resetting watchdog', ModuleName, e)
-            self.elements[e] = False
+        if self.running:
+            for e in self.elements:
+                if self.elements[e]== False:
+                    if e != "conc":
+                        logging.warning('%s %s has not communicated within watchdog interval', ModuleName, e)
+                        body = "Watchdog timeout for " + e + " - Restarting"
+                        resp = {"cmd": "msg",
+                                "msg": {"type": "status",
+                                        "channel": "bridge_manager",
+                                        "body": body
+                                       }
+                               }
+                        self.cbSendConcMsg(resp)
+                        superMsg = {"msg": "restart"}
+                        self.cbSendSuperMsg(superMsg)
+                        break
+                else:
+                    logging.debug('%s %s resetting watchdog', ModuleName, e)
+                self.elements[e] = False
         reactor.callLater(ELEMENT_WATCHDOG_INTERVAL, self.elementWatchdog)
 
     def processClient(self, msg):
@@ -753,7 +754,7 @@ class ManageBridge:
                 log = "log " + msg["id"] + ": No log message provided" 
             logging.warning('%s %s', ModuleName, log)
             status = {"cmd": "msg",
-                      "msg": {"message": "status",
+                      "msg": {"type": "status",
                               "channel": "bridge_manager",
                               "body": log
                              }
@@ -768,7 +769,7 @@ class ManageBridge:
                 logging.warning('%s Error status received from %s. Restarting', ModuleName, msg["id"])
                 body = "Error status received from " + msg["id"] + " - Restarting"
                 resp = {"cmd": "msg",
-                        "msg": {"message": "status",
+                        "msg": {"type": "status",
                                 "channel": "bridge_manager",
                                 "body": body
                                }

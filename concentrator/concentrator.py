@@ -244,7 +244,8 @@ class Concentrator():
         self.managerConnect = reactor.connectUNIX(managerSocket, self.managerFactory, timeout=10)
 
         # Connection to conduit process
-        initMsg = {"message": "status",
+        initMsg = {"type": "status",
+                   "time_sent": self.isotime(),
                    "body": "ready"}
         self.concFactory = CbClientFactory(self.processServerMsg, initMsg)
         self.jsConnect = reactor.connectTCP("localhost", 5000, self.concFactory, timeout=10)
@@ -298,9 +299,19 @@ class Concentrator():
         #logging.debug("%s Received from controller: %s", ModuleName, msg)
         msg["status"] = "control_msg"
         msg["id"] = self.id
+        if "message" in msg:
+            msg["type"] = msg.pop("message")
         self.cbSendManagerMsg(msg)
 
+    def isotime(self):
+        t = time.time()
+        gmtime = time.gmtime(t)
+        milliseconds = '%03d' % int((t - int(t)) * 1000)
+        now = time.strftime('%Y-%m-%dT%H:%M:%S.', gmtime) + milliseconds +"Z"
+        return now
+
     def processManagerMsg(self, msg):
+        msg["time_sent"] = self.isotime()
         self.concFactory.sendMsg(msg)
 
     def processManager(self, cmd):
