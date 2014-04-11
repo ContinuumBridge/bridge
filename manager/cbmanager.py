@@ -634,10 +634,11 @@ class ManageBridge:
                     logging.debug('%s Socket %s removed', ModuleName, socket)
                 except:
                     logging.debug('%s Socket %s already removed', ModuleName, socket)
+        subprocess.call(["killall", "gatttool"])
         msg = {"cmd": "msg",
                "msg": {"type": "status",
                        "channel": "bridge_manager",
-                       "body": "apps_stopped"
+                       "body": "apps stopped"
                       }
               }
         self.cbSendConcMsg(msg)
@@ -673,8 +674,7 @@ class ManageBridge:
                         self.cbSendSuperMsg(superMsg)
                         break
                 else:
-                    logging.debug('%s %s resetting watchdog', ModuleName, e)
-                self.elements[e] = False
+                    self.elements[e] = False
         reactor.callLater(ELEMENT_WATCHDOG_INTERVAL, self.elementWatchdog)
 
     def processClient(self, msg):
