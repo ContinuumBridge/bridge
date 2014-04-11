@@ -246,7 +246,7 @@ class Concentrator():
         # Connection to conduit process
         initMsg = {"type": "status",
                    "time_sent": self.isotime(),
-                   "body": "ready"}
+                   "body": "bridge manager started"}
         self.concFactory = CbClientFactory(self.processServerMsg, initMsg)
         self.jsConnect = reactor.connectTCP("localhost", 5000, self.concFactory, timeout=10)
         # Intermediate for UWE use
