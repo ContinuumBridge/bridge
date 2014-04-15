@@ -18,6 +18,7 @@ running should be set at least every 10 seconds as a heartbeat
 ModuleName = "cbLib" 
 TIME_TO_MONITOR_STATUS = 60     # Time to wait before sending status messages to manager
 SEND_STATUS_INTERVAL = 30       # Interval between sending status messages to manager
+REACTOR_STOP_DELAY = 2          # Time to wait between telling app/adt to stop & stopping reactor
 
 import sys
 import os.path
@@ -103,8 +104,8 @@ class CbAdaptor:
             self.doStop = True
             msg = {"id": self.id,
                    "status": "stopping"}
-            #Adaptor must check stop in less than 20 seconds
-            reactor.callLater(20, self.stopReactor)
+            #Adaptor must stop within REACTOR_STOP_DELAY seconds
+            reactor.callLater(REACTOR_STOP_DELAY, self.stopReactor)
         elif cmd["cmd"] == "config":
             #Call in thread in case user code hangs
             reactor.callInThread(self.processConf, cmd["config"]) 
@@ -225,8 +226,8 @@ class CbApp:
             self.doStop = True
             msg = {"id": self.id,
                    "status": "stopping"}
-            #App must stop within 20 seconds
-            reactor.callLater(20, self.stopReactor)
+            #App must stop within REACTOR_STOP_DELAY seconds
+            reactor.callLater(REACTOR_STOP_DELAY, self.stopReactor)
         elif cmd["cmd"] == "config":
             #Call in thread in case user code hangs
             reactor.callInThread(self.processConf, cmd["config"]) 

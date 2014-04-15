@@ -12,6 +12,7 @@ WATCHDOG_INTERVAL = 30         # Time between manager checks (secs)
 CONNECT_CHECK_INTERVAL = 60    # How often to check LAN connection
 MAX_NO_SERVER_COUNT = 10       # Used when making decisions about rebooting
 MIN_TIME_BETWEEN_REBOOTS = 600 # Stops constant rebooting (secs)
+REBOOT_WAIT = 10               # Time to allow bridge to stop before rebooting
 
 import sys
 import time
@@ -87,9 +88,7 @@ class Supervisor:
         self.timeStamp = time.time()
         if msg["msg"] == "restart":
             logging.info("%s processManager restarting", ModuleName)
-            resp = {"msg": "stopall"
-                   }
-            self.cbSendManagerMsg(resp)
+            self.cbSendManagerMsg({"msg": "stopall"})
             self.starting = True
             reactor.callLater(WATCHDOG_INTERVAL, self.startManager, True)
         elif msg["msg"] == "reboot":
@@ -171,14 +170,12 @@ class Supervisor:
     def doReboot(self):
         """ Give bridge manager a chance to tidy up nicely before rebooting. """
         try:
-            msg = {"msg": "stopall"
-                  }
-            self.cbSendManagerMsg(msg)
+            self.cbSendManagerMsg({"msg": "stopall"})
         except:
             logging.info("%s Cannot tell manager to stop, just rebooting", ModuleName)
         # Tidy up
         #self.mgrPort.stopListening()
-        reactor.callLater(WATCHDOG_INTERVAL, self.reboot)
+        reactor.callLater(REBOOT_WAIT, self.reboot)
 
     def reboot(self):
         logging.info("%s Rebooting", ModuleName)

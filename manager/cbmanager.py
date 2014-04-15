@@ -9,6 +9,8 @@ START_DELAY = 2.0                  # Delay between starting each adaptor or app
 CONDUIT_WATCHDOG_MAXTIME = 600     # Max time with no message before reboot
 CONDUIT_MAX_DISCONNECT_COUNT = 600 # Max number of messages before reboot
 ELEMENT_WATCHDOG_INTERVAL = 120    # Interval at which to check apps/adaptors have communicated
+APP_STOP_DELAY = 3                 # Time to allow apps/adaprts to stop before killing them
+MIN_DELAY = 1                      # Min time to wait when a delay is needed
 ModuleName = "Manager"
 id = "manager"
 
@@ -21,6 +23,7 @@ import json
 from twisted.internet import threads
 from twisted.internet.protocol import Protocol, Factory
 from twisted.internet import reactor, defer
+from twisted.internet.task import deferLater
 from twisted.internet import task
 from twisted.protocols.basic import LineReceiver
 from twisted.internet.protocol import ReconnectingClientFactory
@@ -71,8 +74,14 @@ class ManageBridge:
                 logging.error('%s node failed to start. exe = %s', ModuleName, exe)
         else:
             logging.info('%s Running without Cloud Server', ModuleName)
-        # Give time for node interface to start
+        # Reset Bluetooth interface
+        try:
+            subprocess.call(["sudo", "hciconfig", "hci0", "down"])
+            subprocess.call(["sudo", "hciconfig", "hci0", "up"])
+        except:
+            logging.warning("%s %s %s Unable to bring up hci0", ModuleName, self.id, self.friendly_name)
 
+        # Give time for node interface to start
         reactor.callLater(START_DELAY, self.startConcentrator)
         if self.configured:
             reactor.callLater(START_DELAY*2, self.startAll)
@@ -394,7 +403,9 @@ class ManageBridge:
                     "status": "stopping"
                    }
             self.cbSendSuperMsg(resp)
-            reactor.callLater(0.2, self.stopAll)
+            self.stopApps()
+            reactor.callLater(APP_STOP_DELAY, self.killAppProcs)
+            reactor.callLater(APP_STOP_DELAY + MIN_DELAY, self.stopAll)
         else:
             if time.time() - self.timeLastConduitMsg > CONDUIT_WATCHDOG_MAXTIME and CB_NO_CLOUD != "True": 
                 logging.info('%s Not heard from conduit for %s. Notifyinng supervisor', ModuleName, CONDUIT_WATCHDOG_MAXTIME)
@@ -443,11 +454,10 @@ class ManageBridge:
                     logging.warning('%s Cannot start adaptors and apps. Please run discovery', ModuleName)
                     self.sendStatusMsg("Start command received with no apps and adaptors")
             elif msg["body"] == "discover":
-                if self.configured and self.running and not self.stopping:
-                    self.stopApps()
-                    reactor.callLater(8, self.discover)
-                else:
-                    self.discover()
+                #if self.configured and self.running and not self.stopping:
+                self.stopApps()
+                reactor.callLater(APP_STOP_DELAY, self.killAppProcs)
+                reactor.callLater(APP_STOP_DELAY + MIN_DELAY, self.discover)
             elif msg["body"] == "restart":
                 logging.info('%s Received restart command', ModuleName)
                 self.cbSendSuperMsg({"msg": "restart"})
@@ -457,12 +467,17 @@ class ManageBridge:
                 self.cbSendSuperMsg({"msg": "reboot"})
                 self.sendStatusMsg("Preparing to reboot")
             elif msg["body"] == "stop":
-                if self.configured and self.running and not self.stopping:
-                    self.stopApps()
+                #if self.configured and self.running and not self.stopping:
+                self.stopApps()
+                reactor.callLater(APP_STOP_DELAY, self.killAppProcs)
             elif msg["body"] == "stop_manager" or msg["body"] == "stopall":
-                self.stopAll()
+                self.stopApps()
+                reactor.callLater(APP_STOP_DELAY, self.killAppProcs)
+                reactor.callLater(APP_STOP_DELAY + MIN_DELAY, self.stopAll)
             elif msg["body"] == "upgrade":
-                self.upgradeBridge()
+                self.stopApps()
+                reactor.callLater(APP_STOP_DELAY, self.killAppProcs)
+                reactor.callLater(APP_STOP_DELAY + MIN_DELAY, self.upgradeBridge)
             elif msg["body"] == "sendlog" or msg["body"] == "send_log":
                 self.sendLog()
             elif msg["body"].startswith("call"):
@@ -497,42 +512,6 @@ class ManageBridge:
             logging.info('%s Unrecognised message received from server: %s', ModuleName, msg)
             self.sendStatusMsg("Unrecognised message received from controller")
  
-    def stopAll(self):
-        if self.configured and self.running and not self.stopping:
-            logging.info('%s Processing stop. Stopping apps', ModuleName)
-            self.stopApps()
-            reactor.callLater(21, self.stopConcentrator)
-        else:
-            self.stopConcentrator()
- 
-    def stopConcentrator(self):
-        self.sendStatusMsg("Rebooting. Goodbye ...")
-        logging.info('%s Stopping concentrator', ModuleName)
-        self.cbSendConcMsg({"cmd": "stop"})
-        # Give concentrator a change to stop before killing it and its sockets
-        reactor.callLater(1, self.stopManager)
-
-    def stopManager(self):
-        self.concListen.stopListening()
-        try:
-            self.concProc.kill()
-        except:
-            logging.debug('%s No concentrator process to kill', ModuleName)
-        try:
-            self.nodejsProc.kill()
-        except:
-            logging.debug('%s No node  process to kill', ModuleName)
-        for soc in self.concConfig:
-            socket = soc["appConcSoc"]
-            try:
-                os.remove(socket) 
-                logging.debug('%s Socket %s renoved', ModuleName, socket)
-            except:
-                logging.debug('%s Socket %s already renoved', ModuleName, socket)
-        logging.info('%s Stopping reactor', ModuleName)
-        reactor.stop()
-        sys.exit
-
     def stopApps(self):
         """ Asks apps & adaptors to clean up nicely and die. """
         logging.info('%s Stopping apps and adaptors', ModuleName)
@@ -543,7 +522,7 @@ class ManageBridge:
             logging.info('%s Stopping %s', ModuleName, a)
             self.cbSendMsg(msg, a)
         self.running = False
-        reactor.callLater(20, self.killAppProcs)
+        reactor.callLater(APP_STOP_DELAY, self.killAppProcs)
 
     def killAppProcs(self):
         # Stop listing on sockets
@@ -565,8 +544,37 @@ class ManageBridge:
                     logging.debug('%s Socket %s removed', ModuleName, socket)
                 except:
                     logging.debug('%s Socket %s already removed', ModuleName, socket)
+        # In case some adaptors have not killed gatttool processes:
         subprocess.call(["killall", "gatttool"])
         self.sendStatusMsg("apps stopped")
+
+    def stopAll(self):
+        self.sendStatusMsg("Disconnecting. Goodbye, back soon ...")
+        logging.info('%s Stopping concentrator', ModuleName)
+        self.cbSendConcMsg({"cmd": "stop"})
+        # Give concentrator a change to stop before killing it and its sockets
+        reactor.callLater(MIN_DELAY, self.stopManager)
+
+    def stopManager(self):
+        self.concListen.stopListening()
+        try:
+            self.concProc.kill()
+        except:
+            logging.debug('%s No concentrator process to kill', ModuleName)
+        try:
+            self.nodejsProc.kill()
+        except:
+            logging.debug('%s No node  process to kill', ModuleName)
+        for soc in self.concConfig:
+            socket = soc["appConcSoc"]
+            try:
+                os.remove(socket) 
+                logging.debug('%s Socket %s renoved', ModuleName, socket)
+            except:
+                logging.debug('%s Socket %s already renoved', ModuleName, socket)
+        logging.info('%s Stopping reactor', ModuleName)
+        reactor.stop()
+        sys.exit
 
     def sendStatusMsg(self, status):
         msg = {"cmd": "msg",

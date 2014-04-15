@@ -176,11 +176,6 @@ class Adaptor(CbAdaptor):
 
     def initSensorTag(self):
         logging.info("%s %s %s Init", ModuleName, self.id, self.friendly_name)
-        # Ensure that the Bluetooth interface is up
-        try:
-            os.system("sudo hciconfig hci0 up")
-        except:
-            logging.warning("%s %s %s Unable to bring up hci0", ModuleName, self.id, self.friendly_name)
         try:
             cmd = 'gatttool -i ' + self.device + ' -b ' + self.addr + \
                   ' --interactive'
@@ -201,12 +196,8 @@ class Adaptor(CbAdaptor):
             time.sleep(1)
             return "timeout"
         else:
-            if self.doStop:
-                self.gatt.kill(9)
-                return "killed"
-            else:
-                self.connected = True
-                return "ok"
+            self.connected = True
+            return "ok"
 
     def checkAllProcessed(self, appID):
         self.processedApps.append(appID)
@@ -293,6 +284,8 @@ class Adaptor(CbAdaptor):
         if not self.doStop:
             logging.info("%s %s %s Initialised", ModuleName, self.id, self.friendly_name)
             self.states("connected")
+        else:
+            return
  
     def s16tofloat(self, s16):
         f = float.fromhex(s16)
@@ -626,7 +619,6 @@ class Adaptor(CbAdaptor):
             if self.sim != 0:
                 self.simValues = SimValues()
             self.connectSensorTag()
-            self.configured = True
 
 if __name__ == '__main__':
     adaptor = Adaptor(sys.argv)
