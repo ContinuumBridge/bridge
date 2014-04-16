@@ -50,8 +50,7 @@ class ManageBridge:
         self.discovered = False
         self.configured = False
         self.reqSync = False
-        self.running = False
-        self.stopping = False
+	self.state = "stopped"
         self.concNoApps = False
         self.elements = {}
         self.appProcs = []
@@ -61,6 +60,14 @@ class ManageBridge:
         status = self.readConfig()
         logging.info('%s Status: %s', ModuleName, status)
         self.initBridge()
+
+    def states(self, action):
+        if action == "clear_error":
+            self.state = "running"
+        else:
+            self.state = action
+        logging.info('%s state = %s', ModuleName, self.state)
+        self.sendStatusMsg("Bridge state: " + self.state)
 
     def initBridge(self):
         if CB_NO_CLOUD != "True":
@@ -132,11 +139,10 @@ class ManageBridge:
             logging.error('%s Cannot open supervisor socket %s', ModuleName, s)
 
     def setRunning(self):
-        logging.info('%s Bridge running', ModuleName)
-        self.running = True
+        self.state = "running"
 
     def startAll(self):
-        self.stopping = False
+	self.states("starting")
         # Manager sockets may already exist. If so, delete them
         mgrSocs = self.listMgrSocs()
         for s in mgrSocs:
@@ -448,13 +454,13 @@ class ManageBridge:
                 return 
             if msg["body"] == "start":
                 if self.configured:
-                    logging.info('%s Starting adaptors and apps', ModuleName)
-                    self.startAll()
+                    if self.state == "stopped":
+                        logging.info('%s Starting adaptors and apps', ModuleName)
+                        self.startAll()
                 else:
                     logging.warning('%s Cannot start adaptors and apps. Please run discovery', ModuleName)
                     self.sendStatusMsg("Start command received with no apps and adaptors")
             elif msg["body"] == "discover":
-                #if self.configured and self.running and not self.stopping:
                 self.stopApps()
                 reactor.callLater(APP_STOP_DELAY, self.killAppProcs)
                 reactor.callLater(APP_STOP_DELAY + MIN_DELAY, self.discover)
@@ -467,9 +473,9 @@ class ManageBridge:
                 self.cbSendSuperMsg({"msg": "reboot"})
                 self.sendStatusMsg("Preparing to reboot")
             elif msg["body"] == "stop":
-                #if self.configured and self.running and not self.stopping:
-                self.stopApps()
-                reactor.callLater(APP_STOP_DELAY, self.killAppProcs)
+                if self.state != stopping and self.state != stopped:
+                    self.stopApps()
+                    reactor.callLater(APP_STOP_DELAY, self.killAppProcs)
             elif msg["body"] == "stop_manager" or msg["body"] == "stopall":
                 self.stopApps()
                 reactor.callLater(APP_STOP_DELAY, self.killAppProcs)
@@ -514,15 +520,15 @@ class ManageBridge:
  
     def stopApps(self):
         """ Asks apps & adaptors to clean up nicely and die. """
-        logging.info('%s Stopping apps and adaptors', ModuleName)
-        self.stopping = True
-        mgrSocs = self.listMgrSocs()
-        for a in mgrSocs:
-            msg = {"cmd": "stop"}
-            logging.info('%s Stopping %s', ModuleName, a)
-            self.cbSendMsg(msg, a)
-        self.running = False
-        reactor.callLater(APP_STOP_DELAY, self.killAppProcs)
+        if self.state != "stopped" and self.state != "stopping":
+            logging.info('%s Stopping apps and adaptors', ModuleName)
+            self.states("stopping")
+            mgrSocs = self.listMgrSocs()
+            for a in mgrSocs:
+                msg = {"cmd": "stop"}
+                logging.info('%s Stopping %s', ModuleName, a)
+                self.cbSendMsg(msg, a)
+            reactor.callLater(APP_STOP_DELAY, self.killAppProcs)
 
     def killAppProcs(self):
         # Stop listing on sockets
@@ -546,7 +552,7 @@ class ManageBridge:
                     logging.debug('%s Socket %s already removed', ModuleName, socket)
         # In case some adaptors have not killed gatttool processes:
         subprocess.call(["killall", "gatttool"])
-        self.sendStatusMsg("apps stopped")
+	self.states("stopped")
 
     def stopAll(self):
         self.sendStatusMsg("Disconnecting. Goodbye, back soon ...")
@@ -599,7 +605,7 @@ class ManageBridge:
 
     def elementWatchdog(self):
         """ Checks that all apps and adaptors have communicated within the designated interval. """
-        if self.running:
+        if self.state == "running":
             for e in self.elements:
                 if self.elements[e]== False:
                     if e != "conc":
