@@ -50,7 +50,7 @@ class ManageBridge:
         self.discovered = False
         self.configured = False
         self.reqSync = False
-	self.state = "stopped"
+        self.state = "stopped"
         self.concNoApps = False
         self.elements = {}
         self.appProcs = []
@@ -139,10 +139,10 @@ class ManageBridge:
             logging.error('%s Cannot open supervisor socket %s', ModuleName, s)
 
     def setRunning(self):
-        self.state = "running"
+        self.states("running")
 
     def startAll(self):
-	self.states("starting")
+        self.states("starting")
         # Manager sockets may already exist. If so, delete them
         mgrSocs = self.listMgrSocs()
         for s in mgrSocs:
@@ -473,7 +473,7 @@ class ManageBridge:
                 self.cbSendSuperMsg({"msg": "reboot"})
                 self.sendStatusMsg("Preparing to reboot")
             elif msg["body"] == "stop":
-                if self.state != stopping and self.state != stopped:
+                if self.state != "stopping" and self.state != "stopped":
                     self.stopApps()
                     reactor.callLater(APP_STOP_DELAY, self.killAppProcs)
             elif msg["body"] == "stop_manager" or msg["body"] == "stopall":
@@ -521,14 +521,15 @@ class ManageBridge:
     def stopApps(self):
         """ Asks apps & adaptors to clean up nicely and die. """
         if self.state != "stopped" and self.state != "stopping":
-            logging.info('%s Stopping apps and adaptors', ModuleName)
             self.states("stopping")
+            logging.info('%s Stopping apps and adaptors', ModuleName)
             mgrSocs = self.listMgrSocs()
             for a in mgrSocs:
-                msg = {"cmd": "stop"}
-                logging.info('%s Stopping %s', ModuleName, a)
-                self.cbSendMsg(msg, a)
-            reactor.callLater(APP_STOP_DELAY, self.killAppProcs)
+                try:
+                    self.cbSendMsg({"cmd": "stop"}, a)
+                    logging.info('%s Stopping %s', ModuleName, a)
+                except:
+                    logging.info('%s Could not send stop message to  %s', ModuleName, a)
 
     def killAppProcs(self):
         # Stop listing on sockets
@@ -552,7 +553,7 @@ class ManageBridge:
                     logging.debug('%s Socket %s already removed', ModuleName, socket)
         # In case some adaptors have not killed gatttool processes:
         subprocess.call(["killall", "gatttool"])
-	self.states("stopped")
+        self.states("stopped")
 
     def stopAll(self):
         self.sendStatusMsg("Disconnecting. Goodbye, back soon ...")
@@ -578,6 +579,7 @@ class ManageBridge:
                 logging.debug('%s Socket %s renoved', ModuleName, socket)
             except:
                 logging.debug('%s Socket %s already renoved', ModuleName, socket)
+        self.cbSendSuperMsg({"msg": "stopped"})
         logging.info('%s Stopping reactor', ModuleName)
         reactor.stop()
         sys.exit

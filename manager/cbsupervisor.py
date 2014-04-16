@@ -13,6 +13,7 @@ CONNECT_CHECK_INTERVAL = 60    # How often to check LAN connection
 MAX_NO_SERVER_COUNT = 10       # Used when making decisions about rebooting
 MIN_TIME_BETWEEN_REBOOTS = 600 # Stops constant rebooting (secs)
 REBOOT_WAIT = 10               # Time to allow bridge to stop before rebooting
+RESTART_INTERVAL = 8           # Time between telling manager to stop and starting it again
 
 import sys
 import time
@@ -90,7 +91,7 @@ class Supervisor:
             logging.info("%s processManager restarting", ModuleName)
             self.cbSendManagerMsg({"msg": "stopall"})
             self.starting = True
-            reactor.callLater(WATCHDOG_INTERVAL, self.startManager, True)
+            reactor.callLater(RESTART_INTERVAL, self.startManager, True)
         elif msg["msg"] == "reboot":
             logging.info("%s Reboot message received from manager", ModuleName)
             self.starting = True

@@ -223,7 +223,6 @@ class Concentrator():
     def __init__(self, argv):
         logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(message)s')
         self.status = "ok"
-        self.doStop = False
         self.conc_mode = os.getenv('CB_CONCENTRATOR', 'client')
         logging.info("%s CB_CONCENTRATOR = %s", ModuleName, self.conc_mode)
 
@@ -321,10 +320,9 @@ class Concentrator():
             msg = {"id": self.id,
                    "status": "ok"}
         elif cmd["cmd"] == "stop":
-            self.doStop = True
             msg = {"id": self.id,
                    "status": "stopping"}
-            reactor.callLater(0.2, self.stopReactor)
+            reactor.callLater(0.2, self.doStop)
         elif cmd["cmd"] == "config":
             self.processConf(cmd["config"])
             msg = {"id": self.id,
@@ -337,7 +335,7 @@ class Concentrator():
                    "status": "none"}
         self.cbSendManagerMsg(msg)
 
-    def stopReactor(self):
+    def doStop(self):
         d1 = defer.maybeDeferred(self.jsConnect.disconnect)
         d2 = defer.maybeDeferred(self.managerConnect.disconnect)
         if self.conc_mode == "server":
@@ -350,6 +348,7 @@ class Concentrator():
     def goodbye(self, status):
         reactor.stop()
         logging.info("%s Bye. Status: %s", ModuleName, status)
+        sys.exit
 
     def cbSendMsg(self, msg, iName):
         self.cbFactory[iName].sendMsg(msg)
