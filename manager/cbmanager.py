@@ -457,6 +457,8 @@ class ManageBridge:
                     if self.state == "stopped":
                         logging.info('%s Starting adaptors and apps', ModuleName)
                         self.startAll()
+                    else:
+                        self.sendStatusMsg("Already starting or running. Start command ignored.")
                 else:
                     logging.warning('%s Cannot start adaptors and apps. Please run discovery', ModuleName)
                     self.sendStatusMsg("Start command received with no apps and adaptors")
@@ -476,10 +478,8 @@ class ManageBridge:
                 if self.state != "stopping" and self.state != "stopped":
                     self.stopApps()
                     reactor.callLater(APP_STOP_DELAY, self.killAppProcs)
-            elif msg["body"] == "stop_manager" or msg["body"] == "stopall":
-                self.stopApps()
-                reactor.callLater(APP_STOP_DELAY, self.killAppProcs)
-                reactor.callLater(APP_STOP_DELAY + MIN_DELAY, self.stopAll)
+                else:
+                    self.sendStatusMsg("Already stopped or stopping. Stop command ignored.")
             elif msg["body"] == "upgrade":
                 self.stopApps()
                 reactor.callLater(APP_STOP_DELAY, self.killAppProcs)
