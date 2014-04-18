@@ -257,17 +257,17 @@ class ManageBridge:
                 logging.info('%s Read config', ModuleName)
         except:
             logging.warning('%s No config file exists or file is corrupt', ModuleName)
-            self.configured = False
+            success= False
         if configRead:
             try:
                 self.apps = config["body"]["apps"]
                 self.devices = config["body"]["devices"]
-                self.configured = True
+                success = True
             except:
-                self.configured = False
+                success = False
                 logging.error('%s bridge.config appears to be corrupt. Ignoring', ModuleName)
 
-        if self.configured:
+        if success:
             # Process config to determine routing:
             for d in self.devices:
                 d["id"] = "dev" + str(d["id"])
@@ -309,17 +309,78 @@ class ManageBridge:
             logging.info('%s Devices:', ModuleName)
             logging.info('%s %s', ModuleName, str(self.devices))
             logging.info('%s', ModuleName)
-        return "Configured"
-    
+        return success
+
+    def downloadElement(self, elementType, elementID):
+        access_token = os.getenv('CB_DROPBOX_TOKEN', 'NO_TOKEN')
+        try:
+            logging.info('%s Dropbox access token = %s', ModuleName, access_token)
+            self.client = DropboxClient(access_token)
+        except:
+            logging.error('%s Cannot access Dropbox to update apps/adaptors', ModuleName)
+            upgradeStat = "Cannot access Dropbox to update apps/adaptors"
+        else:
+            f, metadata = self.client.get_file_and_metadata(url)
+            tarFile = CB_HOME + "/" + elementType + "s" + url
+            out = open(tarFile, 'wb')
+            out.write(f.read())
+            out.close()
+            subprocess.call(["tar", "xfz", tarFile])
+            logging.info('%s Extracted upgrade tar', ModuleName)
+
+            bridgeDir = CB_HOME + "/bridge"
+            bridgeSave = CB_HOME + "/bridge_save"
+            bridgeClone = "bridge_clone"
+            logging.info('%s Files: %s %s %s', ModuleName, bridgeDir, bridgeSave, bridgeClone)
+            try:
+                subprocess.call(["rm", "-rf", bridgeSave])
+            except:
+                logging.warning('%s Could not remove bridgeSave', ModuleName)
+                upgradeStat = "OK, but could not delete bridgeSave. Try manual reboot"
+  
+    def updateElements(self):
+        updateList = []
+        for dev in self.devices:
+            if dev["adaptor"]["url"] in self.urls:
+                if dev["adaptor"]["version"] != self.urls[dev["adaptor"]["url"]]:
+                    updateList.append(dev["adaptpr"]["url"])
+            else:
+                    updateList.append(dev["adaptpr"]["url"])
+
+        for app in self.apps:
+            if app["app"]["url"] in self.urls:
+                if app["app"]["version"] = self.urls[app["app"]["url"]]:
+                    updateList.append(dev["adaptpr"]["url"])
+            else:
+                    updateList.append(dev["adaptpr"]["url"])
+
+
     def updateConfig(self, msg):
         logging.debug('%s Config received from controller:', ModuleName)
         logging.debug('%s %s', ModuleName, str(msg))
+        if self.configured:
+            self.oldApps = self.apps
+            self.oldDevices = self.devices
         configFile = CB_CONFIG_DIR + "/bridge.config"
         with open(configFile, 'w') as configFile:
             json.dump(msg, configFile)
-        status = self.readConfig()
+        success = self.readConfig()
         logging.info('%s %s', ModuleName, status)
-        self.sendStatusMsg("Upgrade status: " + status)
+        if self.configured:
+            if success:
+                self.updateElements()
+            else:
+                status = "Update failed. Reverting to previous configuration."
+                self.apps = self.oldApps
+                self.devices = self.oldDevices
+        else:
+            if success:
+                self.updateElements()
+                self.configured = True
+                status = "Configuration loaded."
+            else:
+                status = "Problem with loading configuration."
+        self.sendStatusMsg(status)
 
     def upgradeBridge(self):
         upgradeStat = ""
