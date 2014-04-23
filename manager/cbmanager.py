@@ -311,7 +311,7 @@ class ManageBridge:
             logging.info('%s', ModuleName)
         return success
 
-    def downloadElement(self, elementType, elementID):
+    def downloadElement(self, el):
         access_token = os.getenv('CB_DROPBOX_TOKEN', 'NO_TOKEN')
         try:
             logging.info('%s Dropbox access token = %s', ModuleName, access_token)
@@ -320,40 +320,64 @@ class ManageBridge:
             logging.error('%s Cannot access Dropbox to update apps/adaptors', ModuleName)
             upgradeStat = "Cannot access Dropbox to update apps/adaptors"
         else:
-            f, metadata = self.client.get_file_and_metadata(url)
-            tarFile = CB_HOME + "/" + elementType + "s" + url
+            f, metadata = self.client.get_file_and_metadata(el"url" + "tgz")
+            tarFile = CB_HOME + "/" + el["type"] + el["url"] + ".tgz"
             out = open(tarFile, 'wb')
             out.write(f.read())
             out.close()
-            subprocess.call(["tar", "xfz", tarFile])
-            logging.info('%s Extracted upgrade tar', ModuleName)
-
-            bridgeDir = CB_HOME + "/bridge"
-            bridgeSave = CB_HOME + "/bridge_save"
-            bridgeClone = "bridge_clone"
-            logging.info('%s Files: %s %s %s', ModuleName, bridgeDir, bridgeSave, bridgeClone)
             try:
-                subprocess.call(["rm", "-rf", bridgeSave])
-            except:
-                logging.warning('%s Could not remove bridgeSave', ModuleName)
-                upgradeStat = "OK, but could not delete bridgeSave. Try manual reboot"
-  
+                # By default tar xf overwrites existing files
+                subprocess.check_call(["tar", "xfz", tarFile])
+                logging.info('%s Extracted %s', ModuleName, tarfile)
+            except CalledProcessError:
+                logging.warning('%s Error extracted %s', ModuleName, tarfile)
+
     def updateElements(self):
+        """
+        Directoriies: CB_HOME/apps/<appname>, CB_HOME/adaptors/<adaptorname>.
+        Check if appname/adaptorname exist. If not, download app/adaptor.
+        If directory does exist, check version file inside & download if changed.
+        """
+
+        def getVersion(self, elementDir):
+            try:
+                versionFile =  CB_HOME + elementDir
+                with open(versionFile, 'r') as f:
+                    v = f.read()
+                if v.endswith('\n'):
+                    v = v[:-1]
+                return v
+            except:
+                logging.error('%s No version file for %s', ModuleName, elementDir)
+                return "error"
+            
         updateList = []
+        dirs = os.listdir(CB_HOME + "/adaptors")
         for dev in self.devices:
-            if dev["adaptor"]["url"] in self.urls:
-                if dev["adaptor"]["version"] != self.urls[dev["adaptor"]["url"]]:
-                    updateList.append(dev["adaptpr"]["url"])
+            url = dev["adaptor"]["url"] 
+            if url in dirs:
+                v =  self.getVersion(url)
+                if v != error:
+                    if dev["adaptor"]["version"] != v:
+                        updateList.append({"url": url,
+                                           "type": "adaptors"})
             else:
-                    updateList.append(dev["adaptpr"]["url"])
-
+                updateList.append({"url": url,
+                                   "type": "adaptors"})
         for app in self.apps:
-            if app["app"]["url"] in self.urls:
-                if app["app"]["version"] = self.urls[app["app"]["url"]]:
-                    updateList.append(dev["adaptpr"]["url"])
+            dirs = os.listdir(CB_HOME + "/apps")
+            url = app["app"]["url"]
+            if url in dirs:
+                v =  self.getVersion(url)
+                if v != error:
+                    if dev["adaptor"]["version"] != v:
+                        updateList.append({"url": url,
+                                           "type": "apps"})
             else:
-                    updateList.append(dev["adaptpr"]["url"])
-
+                updateList.append({"url": url,
+                                   "type": "apps"})
+        for e in updateList:
+            self.downloadElement(e)
 
     def updateConfig(self, msg):
         logging.debug('%s Config received from controller:', ModuleName)
