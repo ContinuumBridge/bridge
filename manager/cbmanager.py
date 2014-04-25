@@ -58,7 +58,7 @@ class ManageBridge:
         self.cbFactory = {} 
         self.appListen = {}
         status = self.readConfig()
-        logging.info('%s Status: %s', ModuleName, status)
+        logging.info('%s Read config status: %s', ModuleName, status)
         self.initBridge()
 
     def states(self, action):
@@ -245,8 +245,8 @@ class ManageBridge:
         reactor.callInThread(self.doDiscover)
 
     def readConfig(self):
-        appRoot = CB_BRIDGE_ROOT + "/apps/"
-        adtRoot = CB_BRIDGE_ROOT + "/adaptors/"
+        appRoot = CB_HOME + "/apps/"
+        adtRoot = CB_HOME + "/adaptors/"
         self.concPath = CB_BRIDGE_ROOT + "/concentrator/concentrator.py"
         configFile = CB_CONFIG_DIR + "/bridge.config"
         configRead = False
@@ -269,18 +269,18 @@ class ManageBridge:
 
         if success:
             # Process config to determine routing:
+            logging.info('%s Success. Processing config', ModuleName)
             for d in self.devices:
                 d["id"] = "dev" + str(d["id"])
                 socket = CB_SOCKET_DIR + "skt-mgr-" + str(d["id"])
                 d["adaptor"]["mgrSoc"] = socket
-                d["adaptor"]["exe"] = adtRoot + \
-                    d["adaptor"]["exe"]
+                d["adaptor"]["exe"] = adtRoot + d["adaptor"]["url"] + "/" + d["adaptor"]["exe"]
                 # Add a apps list to each device adaptor
                 d["adaptor"]["apps"] = []
             # Add socket descriptors to apps and devices
             for a in self.apps:
                 a["app"]["id"] = "app" + str(a["app"]["id"])
-                a["app"]["exe"] = appRoot + a["app"]["exe"]
+                a["app"]["exe"] = appRoot + a["app"]["url"] + "/" + a["app"]["exe"]
                 a["app"]["mgrSoc"] = CB_SOCKET_DIR + "skt-mgr-" + str(a["app"]["id"])
                 a["app"]["concSoc"] = CB_SOCKET_DIR + "skt-conc-" + str(a["app"]["id"])
                 for appDev in a["device_permissions"]:
@@ -301,7 +301,7 @@ class ManageBridge:
                                 d["friendly_name"]
                             appDev["adtSoc"] = socket
                             break
-        if self.configured:
+        if success:
             logging.info('%s Config information processed', ModuleName)
             logging.info('%s Apps:', ModuleName)
             logging.info('%s %s', ModuleName, str(self.apps))
@@ -309,6 +309,7 @@ class ManageBridge:
             logging.info('%s Devices:', ModuleName)
             logging.info('%s %s', ModuleName, str(self.devices))
             logging.info('%s', ModuleName)
+            self.configured = True
         return success
 
     def downloadElement(self, el):
@@ -320,17 +321,32 @@ class ManageBridge:
             logging.error('%s Cannot access Dropbox to update apps/adaptors', ModuleName)
             upgradeStat = "Cannot access Dropbox to update apps/adaptors"
         else:
-            f, metadata = self.client.get_file_and_metadata(el"url" + "tgz")
-            tarFile = CB_HOME + "/" + el["type"] + el["url"] + ".tgz"
+            f, metadata = self.client.get_file_and_metadata(el["url"] + ".tgz")
+            tarDir = CB_HOME + "/" + el["type"]
+            tarFile =  tarDir + "/" + el["url"] + ".tgz"
+            logging.debug('%s tarFile = %s', ModuleName, tarFile)
             out = open(tarFile, 'wb')
             out.write(f.read())
             out.close()
             try:
                 # By default tar xf overwrites existing files
-                subprocess.check_call(["tar", "xfz", tarFile])
-                logging.info('%s Extracted %s', ModuleName, tarfile)
-            except CalledProcessError:
-                logging.warning('%s Error extracted %s', ModuleName, tarfile)
+                subprocess.check_call(["tar", "xfz",  tarFile, "--overwrite", "-C", tarDir])
+                logging.info('%s Extracted %s', ModuleName, tarFile)
+            except:
+                logging.warning('%s Error extracting %s', ModuleName, tarFile)
+
+    def getVersion(self, elementDir):
+        try:
+            versionFile =  CB_HOME + elementDir + "/version"
+            logging.debug('%s versionFile: %s', ModuleName, versionFile)
+            with open(versionFile, 'r') as f:
+                v = f.read()
+            if v.endswith('\n'):
+                v = v[:-1]
+            return v
+        except:
+            logging.error('%s No version file for %s', ModuleName, elementDir)
+            return "error"
 
     def updateElements(self):
         """
@@ -338,26 +354,13 @@ class ManageBridge:
         Check if appname/adaptorname exist. If not, download app/adaptor.
         If directory does exist, check version file inside & download if changed.
         """
-
-        def getVersion(self, elementDir):
-            try:
-                versionFile =  CB_HOME + elementDir
-                with open(versionFile, 'r') as f:
-                    v = f.read()
-                if v.endswith('\n'):
-                    v = v[:-1]
-                return v
-            except:
-                logging.error('%s No version file for %s', ModuleName, elementDir)
-                return "error"
-            
         updateList = []
         dirs = os.listdir(CB_HOME + "/adaptors")
         for dev in self.devices:
             url = dev["adaptor"]["url"] 
             if url in dirs:
-                v =  self.getVersion(url)
-                if v != error:
+                v =  self.getVersion("/adaptors/" + url)
+                if v != "error":
                     if dev["adaptor"]["version"] != v:
                         updateList.append({"url": url,
                                            "type": "adaptors"})
@@ -368,42 +371,36 @@ class ManageBridge:
             dirs = os.listdir(CB_HOME + "/apps")
             url = app["app"]["url"]
             if url in dirs:
-                v =  self.getVersion(url)
-                if v != error:
-                    if dev["adaptor"]["version"] != v:
+                v =  self.getVersion("/apps/" + url)
+                logging.debug('%s updateElements. old version: %s, new: %s ', ModuleName, v, app["app"]["version"])
+                if v != "error":
+                    if app["app"]["version"] != v:
                         updateList.append({"url": url,
                                            "type": "apps"})
             else:
                 updateList.append({"url": url,
                                    "type": "apps"})
+
+        logging.debug('%s updateList: %s', ModuleName, updateList)
         for e in updateList:
             self.downloadElement(e)
+        if updateList == []:
+            return "Nothing to update"
+        else:
+            return "Updated"
 
     def updateConfig(self, msg):
         logging.debug('%s Config received from controller:', ModuleName)
         logging.debug('%s %s', ModuleName, str(msg))
-        if self.configured:
-            self.oldApps = self.apps
-            self.oldDevices = self.devices
         configFile = CB_CONFIG_DIR + "/bridge.config"
         with open(configFile, 'w') as configFile:
             json.dump(msg, configFile)
         success = self.readConfig()
-        logging.info('%s %s', ModuleName, status)
-        if self.configured:
-            if success:
-                self.updateElements()
-            else:
-                status = "Update failed. Reverting to previous configuration."
-                self.apps = self.oldApps
-                self.devices = self.oldDevices
+        logging.info('%s Update config, read config status: %s', ModuleName, success)
+        if success:
+            status = self.updateElements()
         else:
-            if success:
-                self.updateElements()
-                self.configured = True
-                status = "Configuration loaded."
-            else:
-                status = "Problem with loading configuration."
+            status = "Update failed"
         self.sendStatusMsg(status)
 
     def upgradeBridge(self):
