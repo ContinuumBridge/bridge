@@ -64,9 +64,9 @@ class SimValues():
 class Adaptor(CbAdaptor):
     def __init__(self, argv):
         logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(message)s')
-        #CbAdaptor methods processReq & cbAdtConfig MUST be subclassed
-        CbAdaptor.processReq = self.processReq
-        CbAdaptor.cbAdtConfigure = self.configure
+        #CbAdaptor methods processApp & cbAdtConfig MUST be subclassed
+        CbAdaptor.processApp = self.processApp
+        CbAdaptor.adaptorConfigure = self.configure
         # Override stopAdaptor if you need to be told when to stop
         CbAdaptor.stopAdaptor = self.stopAdaptor
         self.connected = False  # Indicates we are connected to SensorTag
@@ -510,13 +510,13 @@ class Adaptor(CbAdaptor):
         for a in self.magnetApps:
             reactor.callFromThread(self.cbSendMsg, msg, a)
 
-    def processReq(self, req):
+    def processApp(self, req):
         """
         Processes requests from apps.
         Called in a thread and so it is OK if it blocks.
         Called separately for every app that can make requests.
         """
-        logging.debug("%s %s %s processReq, req = %s", ModuleName, self.id, self.friendly_name, req)
+        logging.debug("%s %s %s processApp, req = %s", ModuleName, self.id, self.friendly_name, req)
         tagStatus = "ok"
         if req["req"] == "init":
             resp = {"name": self.name,

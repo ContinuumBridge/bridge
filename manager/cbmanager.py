@@ -202,7 +202,7 @@ class ManageBridge:
             self.appProcs.append(p)
             logging.info('%s App %s started', ModuleName, id)
         except:
-            logging.error('%s App %s failed to start', ModuleName, id)
+            logging.error('%s App %s failed to start. exe: %s, socket: %s', ModuleName, id, exe, mgrSoc)
 
     def doDiscover(self):
         self.discoveredDevices = {}
@@ -245,8 +245,12 @@ class ManageBridge:
         reactor.callInThread(self.doDiscover)
 
     def readConfig(self):
-        appRoot = CB_HOME + "/apps/"
-        adtRoot = CB_HOME + "/adaptors/"
+        if CB_DEV_BRIDGE:
+            appRoot = CB_HOME + "/apps_dev/"
+            adtRoot = CB_HOME + "/adaptors_dev/"
+        else:
+            appRoot = CB_HOME + "/apps/"
+            adtRoot = CB_HOME + "/adaptors/"
         self.concPath = CB_BRIDGE_ROOT + "/concentrator/concentrator.py"
         configFile = CB_CONFIG_DIR + "/bridge.config"
         configRead = False
@@ -319,21 +323,31 @@ class ManageBridge:
             self.client = DropboxClient(access_token)
         except:
             logging.error('%s Cannot access Dropbox to update apps/adaptors', ModuleName)
-            upgradeStat = "Cannot access Dropbox to update apps/adaptors"
-        else:
-            f, metadata = self.client.get_file_and_metadata(el["url"] + ".tgz")
+            return "Cannot access Dropbox to update apps/adaptors"
+        try:
+            fileName = el["url"] + ".tgz"
+            f, metadata = self.client.get_file_and_metadata(fileName)
+        except:
+            logging.warning('%s Cannot download file %s', ModuleName, fileName)
+            return "Cannot download file " + fileName 
+        try:
             tarDir = CB_HOME + "/" + el["type"]
             tarFile =  tarDir + "/" + el["url"] + ".tgz"
             logging.debug('%s tarFile = %s', ModuleName, tarFile)
             out = open(tarFile, 'wb')
             out.write(f.read())
             out.close()
-            try:
-                # By default tar xf overwrites existing files
-                subprocess.check_call(["tar", "xfz",  tarFile, "--overwrite", "-C", tarDir])
-                logging.info('%s Extracted %s', ModuleName, tarFile)
-            except:
-                logging.warning('%s Error extracting %s', ModuleName, tarFile)
+        except:
+            logging.warning('%s Problem downloading %s', ModuleName, fileName)
+            return "Problem downloading " + fileName 
+        try:
+            # By default tar xf overwrites existing files
+            subprocess.check_call(["tar", "xfz",  tarFile, "--overwrite", "-C", tarDir])
+            logging.info('%s Extracted %s', ModuleName, tarFile)
+            return "ok"
+        except:
+            logging.warning('%s Error extracting %s', ModuleName, tarFile)
+            return "Error extraxting " + fileName 
 
     def getVersion(self, elementDir):
         try:
@@ -383,7 +397,9 @@ class ManageBridge:
 
         logging.debug('%s updateList: %s', ModuleName, updateList)
         for e in updateList:
-            self.downloadElement(e)
+            status = self.downloadElement(e)
+            if status != "ok":
+                self.sendStatusMsg(status)
         if updateList == []:
             return "Nothing to update"
         else:
@@ -728,7 +744,7 @@ class ManageBridge:
                                 conc = c["appConcSoc"]
                                 response = {"cmd": "config",
                                             "sim": CB_SIM_LEVEL,
-                                            "config": {"adts": a["device_permissions"],
+                                            "config": {"adaptors": a["device_permissions"],
                                                        "concentrator": conc}}
                                 logging.debug('%s Response: %s %s', ModuleName, msg['id'], response)
                                 self.cbSendMsg(response, msg["id"])

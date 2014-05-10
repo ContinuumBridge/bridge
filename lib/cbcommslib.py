@@ -62,12 +62,16 @@ class CbAdaptor:
         reactor.callLater(TIME_TO_MONITOR_STATUS, self.sendStatus)
         reactor.run()
 
-    def cbAdtConfigure(self, config):
-        """The app should overwrite this and do all configuration in it."""
-        logging.warning("%s %s The wrong cbAdtConfigure method", ModuleName, self.id)
+    def adaptorConfigure(self, config):
+        """The adaptor should overwrite this and do all configuration in it."""
+        logging.warning("%s %s The wrong adaptorConfigure method", ModuleName, self.id)
+
+    def processApp(self, resp):
+        """This should be overridden by the actual adaptor."""
+        logging.warning("%s %s should subclass processApp method", ModuleName, self.id)
 
     def stopAdaptor(self):
-        """The app should overwrite this and do all configuration in it."""
+        """The adapotor should overwrite this and do all configuration in it."""
         pass
 
     def sendStatus(self):
@@ -77,7 +81,7 @@ class CbAdaptor:
         self.cbSendManagerMsg(msg)
         reactor.callLater(SEND_STATUS_INTERVAL, self.sendStatus)
 
-    def processConf(self, config):
+    def cbConfigure(self, config):
         """Config is based on what apps are available."""
         logging.debug("%s %s Configuration: %s ", ModuleName, self.id, config)
         self.name = config["name"]
@@ -88,13 +92,13 @@ class CbAdaptor:
         for app in config["apps"]:
             iName = app["id"]
             if iName not in self.appInstances:
-                # processConfig may be called again with updated config
+                # configureig may be called again with updated config
                 name = app["name"]
                 adtSoc = app["adtSoc"]
                 self.appInstances.append(iName)
-                self.cbFactory[iName] = CbServerFactory(self.processReq)
+                self.cbFactory[iName] = CbServerFactory(self.processApp)
                 reactor.listenUNIX(adtSoc, self.cbFactory[iName])
-        self.cbAdtConfigure(config)
+        self.adaptorConfigure(config)
         self.configured = True
 
     def processManager(self, cmd):
@@ -108,7 +112,7 @@ class CbAdaptor:
             reactor.callLater(REACTOR_STOP_DELAY, self.stopReactor)
         elif cmd["cmd"] == "config":
             #Call in thread in case user code hangs
-            reactor.callInThread(self.processConf, cmd["config"]) 
+            reactor.callInThread(self.cbConfigure, cmd["config"]) 
             msg = {"id": self.id,
                    "status": "ok"}
         else:
@@ -164,17 +168,17 @@ class CbApp:
         reactor.callLater(TIME_TO_MONITOR_STATUS, self.sendStatus)
         reactor.run()
 
-    def processResp(self, resp):
+    def processAdaptor(self, resp):
         """This should be overridden by the actual app."""
-        logging.warning("%s %s should subclass processResp method", ModuleName, self.id)
+        logging.warning("%s %s should subclass processAdaptor method", ModuleName, self.id)
 
-    def processConcResp(self, resp):
+    def processConcentrator(self, resp):
         """This should be overridden by the actual app."""
         logging.warning("%s %s should subclass processConcResp method", ModuleName, self.id)
 
-    def cbAppConfigure(self, config):
+    def appConfigure(self, config):
         """The app should overwrite this and do all configuration in it."""
-        logging.warning("%s %s should subclass cbAppConfigure method", ModuleName, self.id)
+        logging.warning("%s %s should subclass appConfigure method", ModuleName, self.id)
 
     def stopApp(self):
         """The app should overwrite this and do all configuration in it."""
@@ -187,11 +191,11 @@ class CbApp:
         self.cbSendManagerMsg(msg)
         reactor.callLater(SEND_STATUS_INTERVAL, self.sendStatus)
 
-    def processConf(self, config):
+    def cbConfigure(self, config):
         """Config is based on what adaptors are available."""
         logging.debug("%s %s Config: %s", ModuleName, self.id, config)
         # Connect to socket for each adaptor
-        for adaptor in config["adts"]:
+        for adaptor in config["adaptors"]:
             iName = adaptor["id"]
             if iName not in self.adtInstances:
                 # Allows for adding extra adaptors on the fly
@@ -203,7 +207,7 @@ class CbApp:
                 initMsg = {"id": self.id,
                            "appClass": self.appClass,
                            "req": "init"}
-                self.cbFactory[iName] = CbClientFactory(self.processResp, initMsg)
+                self.cbFactory[iName] = CbClientFactory(self.processAdaptor, initMsg)
                 reactor.connectUNIX(adtSoc, self.cbFactory[iName], timeout=10)
         # Connect to Concentrator socket
         if not self.configured:
@@ -212,11 +216,11 @@ class CbApp:
             initMsg = {"msg": "init",
                        "appID": self.id
                       }
-            self.cbFactory["conc"] = CbClientFactory(self.processConcResp, \
+            self.cbFactory["conc"] = CbClientFactory(self.processConcentrator, \
                                      initMsg)
             reactor.connectUNIX(concSocket, self.cbFactory["conc"], timeout=10)
             # Now call the app's configure method & set self.configured = True
-            self.cbAppConfigure(config)
+            self.appConfigure(config)
             self.configured = True
 
     def processManager(self, cmd):
@@ -230,7 +234,7 @@ class CbApp:
             reactor.callLater(REACTOR_STOP_DELAY, self.stopReactor)
         elif cmd["cmd"] == "config":
             #Call in thread in case user code hangs
-            reactor.callInThread(self.processConf, cmd["config"]) 
+            reactor.callInThread(self.cbConfigure, cmd["config"]) 
             msg = {"id": self.id,
                    "status": "ok"}
         else:

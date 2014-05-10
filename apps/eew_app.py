@@ -340,9 +340,9 @@ class App(CbApp):
     def __init__(self, argv):
         logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(message)s')
         # The following 3 declarations must be made
-        CbApp.processResp = self.processResp
-        CbApp.cbAppConfigure = self.configure
-        CbApp.processConcResp = self.processConcResp
+        CbApp.processAdaptor = self.processAdaptor
+        CbApp.appConfigure = self.configure
+        CbApp.processConcentrator = self.processConcentrator
         #
         self.appClass = "monitor"
         self.state = "stopped"
@@ -371,7 +371,7 @@ class App(CbApp):
                "state": self.state}
         self.cbSendManagerMsg(msg)
 
-    def processConcResp(self, resp):
+    def processConcentrator(self, resp):
         #logging.debug("%s resp from conc: %s", ModuleName, resp)
         if resp["resp"] == "config":
             msg = {
@@ -392,7 +392,7 @@ class App(CbApp):
                    "message": "unrecognised response from concentrator"}
             self.cbSendMsg(msg, "conc")
 
-    def processResp(self, resp):
+    def processAdaptor(self, resp):
         """
         This method is called in a thread by cbcommslib so it will not cause
         problems if it takes some time to complete (other than to itself).
