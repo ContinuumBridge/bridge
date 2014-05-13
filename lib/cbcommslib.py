@@ -62,28 +62,40 @@ class CbAdaptor:
         reactor.callLater(TIME_TO_MONITOR_STATUS, self.sendStatus)
         reactor.run()
 
-    def adaptorConfigure(self, config):
+    def onConfigureMessage(self, config):
         """The adaptor should overwrite this and do all configuration in it."""
-        logging.warning("%s %s The wrong adaptorConfigure method", ModuleName, self.id)
+        logging.info("%s %s does not have onConfigureMessage", ModuleName, self.id)
 
-    def processApp(self, resp):
+    def onAppInit(self, message):
         """This should be overridden by the actual adaptor."""
-        logging.warning("%s %s should subclass processApp method", ModuleName, self.id)
+        logging.warning("%s %s should subclass onAppInit method", ModuleName, self.id)
 
-    def stopAdaptor(self):
-        """The adapotor should overwrite this and do all configuration in it."""
+    def onAppRequest(self, message):
+        """This should be overridden by the actual adaptor."""
+        logging.warning("%s %s should subclass onAppRequest method", ModuleName, self.id)
+
+    def onAppMessage(self, message):
+        if message["request"] == "init":
+            self.onAppInit(message)
+        elif message["request"] == "functions": 
+            self.onAppRequest(message)
+        else:
+            logging.warning("%s %s Unexpected message from app: ", ModuleName, self.id, message)
+ 
+    def onStop(self):
+        """The adapotor should overwrite this if it needs to do any tidying-up before stopping"""
         pass
 
     def sendStatus(self):
         """ Send status to the manager at regular intervals as a heartbeat. """
         msg = {"id": self.id,
                "status": self.status}
-        self.cbSendManagerMsg(msg)
+        self.sendManagerMessage(msg)
         reactor.callLater(SEND_STATUS_INTERVAL, self.sendStatus)
 
     def cbConfigure(self, config):
         """Config is based on what apps are available."""
-        logging.debug("%s %s Configuration: %s ", ModuleName, self.id, config)
+        #logging.debug("%s %s Configuration: %s ", ModuleName, self.id, config)
         self.name = config["name"]
         self.friendly_name = config["friendly_name"]
         self.device = config["btAdpt"]
@@ -96,15 +108,15 @@ class CbAdaptor:
                 name = app["name"]
                 adtSoc = app["adtSoc"]
                 self.appInstances.append(iName)
-                self.cbFactory[iName] = CbServerFactory(self.processApp)
+                self.cbFactory[iName] = CbServerFactory(self.onAppMessage)
                 reactor.listenUNIX(adtSoc, self.cbFactory[iName])
-        self.adaptorConfigure(config)
+        self.onConfigureMessage(config)
         self.configured = True
 
     def processManager(self, cmd):
-        logging.debug("%s %s Received from manager: %s ", ModuleName, self.id, cmd)
+        #logging.debug("%s %s Received from manager: %s ", ModuleName, self.id, cmd)
         if cmd["cmd"] == "stop":
-            self.stopAdaptor()
+            self.onStop()
             self.doStop = True
             msg = {"id": self.id,
                    "status": "stopping"}
@@ -118,7 +130,7 @@ class CbAdaptor:
         else:
             msg = {"id": self.id,
                    "status": self.status}
-        self.cbSendManagerMsg(msg)
+        self.sendManagerMessage(msg)
         # The adaptor must set self.status back to "running" as a heartbeat
         if self.status == "running":
             self.status = "timeout"
@@ -131,10 +143,10 @@ class CbAdaptor:
         logging.debug("%s Bye from %s", ModuleName, self.id)
         sys.exit
 
-    def cbSendMsg(self, msg, iName):
+    def sendMessage(self, msg, iName):
         self.cbFactory[iName].sendMsg(msg)
 
-    def cbSendManagerMsg(self, msg):
+    def sendManagerMessage(self, msg):
         self.managerFactory.sendMsg(msg)
 
 class CbApp:
@@ -168,27 +180,37 @@ class CbApp:
         reactor.callLater(TIME_TO_MONITOR_STATUS, self.sendStatus)
         reactor.run()
 
-    def processAdaptor(self, resp):
+    def onConcMessage(self, message):
         """This should be overridden by the actual app."""
-        logging.warning("%s %s should subclass processAdaptor method", ModuleName, self.id)
+        logging.warning("%s %s should subclass onConcMessage method", ModuleName, self.id)
 
-    def processConcentrator(self, resp):
-        """This should be overridden by the actual app."""
-        logging.warning("%s %s should subclass processConcResp method", ModuleName, self.id)
-
-    def appConfigure(self, config):
+    def onConfigureMessage(self, config):
         """The app should overwrite this and do all configuration in it."""
-        logging.warning("%s %s should subclass appConfigure method", ModuleName, self.id)
+        logging.warning("%s %s should subclass onConfigureMessage method", ModuleName, self.id)
 
-    def stopApp(self):
+    def onStop(self):
         """The app should overwrite this and do all configuration in it."""
         pass
 
+    def onAdaptorFunctions(self, message):
+        """This should be overridden by the actual app."""
+        logging.warning("%s %s should subclass onAdaptorFunctions method", ModuleName, self.id)
+
+    def onAdaptorData(self, message):
+        """This should be overridden by the actual app."""
+        logging.warning("%s %s should subclass onAdaptorData method", ModuleName, self.id)
+
+    def onAdaptorMessage(self, message):
+        if message["content"] == "functions":
+            self.onAdaptorFunctions(message)
+        else:
+            self.onAdaptorData(message)
+ 
     def sendStatus(self):
         """ Send status to the manager at regular intervals as a heartbeat. """
         msg = {"id": self.id,
                "status": self.status}
-        self.cbSendManagerMsg(msg)
+        self.sendManagerMessage(msg)
         reactor.callLater(SEND_STATUS_INTERVAL, self.sendStatus)
 
     def cbConfigure(self, config):
@@ -206,8 +228,8 @@ class CbApp:
                 self.adtInstances.append(iName)
                 initMsg = {"id": self.id,
                            "appClass": self.appClass,
-                           "req": "init"}
-                self.cbFactory[iName] = CbClientFactory(self.processAdaptor, initMsg)
+                           "request": "init"}
+                self.cbFactory[iName] = CbClientFactory(self.onAdaptorMessage, initMsg)
                 reactor.connectUNIX(adtSoc, self.cbFactory[iName], timeout=10)
         # Connect to Concentrator socket
         if not self.configured:
@@ -216,17 +238,17 @@ class CbApp:
             initMsg = {"msg": "init",
                        "appID": self.id
                       }
-            self.cbFactory["conc"] = CbClientFactory(self.processConcentrator, \
+            self.cbFactory["conc"] = CbClientFactory(self.onConcMessage, \
                                      initMsg)
             reactor.connectUNIX(concSocket, self.cbFactory["conc"], timeout=10)
             # Now call the app's configure method & set self.configured = True
-            self.appConfigure(config)
+            self.onConfigureMessage(config)
             self.configured = True
 
     def processManager(self, cmd):
-        logging.debug("%s %s Received from manager: %s", ModuleName, self.id, cmd)
+        #logging.debug("%s %s Received from manager: %s", ModuleName, self.id, cmd)
         if cmd["cmd"] == "stop":
-            self.stopApp()
+            self.onStop()
             self.doStop = True
             msg = {"id": self.id,
                    "status": "stopping"}
@@ -240,7 +262,7 @@ class CbApp:
         else:
             msg = {"id": self.id,
                    "status": self.status}
-        self.cbSendManagerMsg(msg)
+        self.sendManagerMessage(msg)
         # The app must set self.status back to "running" as a heartbeat
         if self.status == "running":
             self.status = "timeout"
@@ -253,10 +275,10 @@ class CbApp:
         logging.info("%s Bye from %s", ModuleName, self.id)
         sys.exit
 
-    def cbSendMsg(self, msg, iName):
+    def sendMessage(self, msg, iName):
         self.cbFactory[iName].sendMsg(msg)
 
-    def cbSendManagerMsg(self, msg):
+    def sendManagerMessage(self, msg):
         self.managerFactory.sendMsg(msg)
 
 class CbClientProtocol(LineReceiver):

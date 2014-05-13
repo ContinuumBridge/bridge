@@ -20,6 +20,7 @@ import os
 import logging
 import subprocess
 import json
+import urllib
 from twisted.internet import threads
 from twisted.internet.protocol import Protocol, Factory
 from twisted.internet import reactor, defer
@@ -278,13 +279,27 @@ class ManageBridge:
                 d["id"] = "dev" + str(d["id"])
                 socket = CB_SOCKET_DIR + "skt-mgr-" + str(d["id"])
                 d["adaptor"]["mgrSoc"] = socket
-                d["adaptor"]["exe"] = adtRoot + d["adaptor"]["url"] + "/" + d["adaptor"]["exe"]
+                url = d["adaptor"]["url"]
+                split_url = url.split('/')
+                if CB_DEV_BRIDGE:
+                    dirName = split_url[-3]
+                else:
+                    dirName = (split_url[-3] + '-' + split_url[-1])[:-7]
+                d["adaptor"]["exe"] = adtRoot + dirName + "/" + d["adaptor"]["exe"]
+                logging.debug('%s exe: %s', ModuleName, d["adaptor"]["exe"])
                 # Add a apps list to each device adaptor
                 d["adaptor"]["apps"] = []
             # Add socket descriptors to apps and devices
             for a in self.apps:
                 a["app"]["id"] = "app" + str(a["app"]["id"])
-                a["app"]["exe"] = appRoot + a["app"]["url"] + "/" + a["app"]["exe"]
+                url = a["app"]["url"]
+                split_url = url.split('/')
+                if CB_DEV_BRIDGE:
+                    dirName = split_url[-3]
+                else:
+                    dirName = (split_url[-3] + '-' + split_url[-1])[:-7]
+                a["app"]["exe"] = appRoot + dirName + "/" + a["app"]["exe"]
+                logging.debug('%s exe: %s', ModuleName, a["app"]["exe"])
                 a["app"]["mgrSoc"] = CB_SOCKET_DIR + "skt-mgr-" + str(a["app"]["id"])
                 a["app"]["concSoc"] = CB_SOCKET_DIR + "skt-conc-" + str(a["app"]["id"])
                 for appDev in a["device_permissions"]:
@@ -306,43 +321,24 @@ class ManageBridge:
                             appDev["adtSoc"] = socket
                             break
         if success:
-            logging.info('%s Config information processed', ModuleName)
-            logging.info('%s Apps:', ModuleName)
-            logging.info('%s %s', ModuleName, str(self.apps))
-            logging.info('%s', ModuleName)
-            logging.info('%s Devices:', ModuleName)
-            logging.info('%s %s', ModuleName, str(self.devices))
-            logging.info('%s', ModuleName)
+            #logging.info('%s Config information processed', ModuleName)
+            #logging.info('%s Apps:', ModuleName)
+            #logging.info('%s %s', ModuleName, str(self.apps))
+            #logging.info('%s', ModuleName)
+            #logging.info('%s Devices:', ModuleName)
+            #logging.info('%s %s', ModuleName, str(self.devices))
+            #logging.info('%s', ModuleName)
             self.configured = True
         return success
 
     def downloadElement(self, el):
-        access_token = os.getenv('CB_DROPBOX_TOKEN', 'NO_TOKEN')
-        try:
-            logging.info('%s Dropbox access token = %s', ModuleName, access_token)
-            self.client = DropboxClient(access_token)
-        except:
-            logging.error('%s Cannot access Dropbox to update apps/adaptors', ModuleName)
-            return "Cannot access Dropbox to update apps/adaptors"
-        try:
-            fileName = el["url"] + ".tgz"
-            f, metadata = self.client.get_file_and_metadata(fileName)
-        except:
-            logging.warning('%s Cannot download file %s', ModuleName, fileName)
-            return "Cannot download file " + fileName 
-        try:
-            tarDir = CB_HOME + "/" + el["type"]
-            tarFile =  tarDir + "/" + el["url"] + ".tgz"
-            logging.debug('%s tarFile = %s', ModuleName, tarFile)
-            out = open(tarFile, 'wb')
-            out.write(f.read())
-            out.close()
-        except:
-            logging.warning('%s Problem downloading %s', ModuleName, fileName)
-            return "Problem downloading " + fileName 
+        tarDir = CB_HOME + "/" + el["type"]
+        tarFile =  tarDir + "/" + el["name"] + ".tar.gz"
+        logging.debug('%s tarDir: %s, tarFile: %s', ModuleName, tarDir, tarFile)
+        urllib.urlretrieve(el["url"], tarFile)
         try:
             # By default tar xf overwrites existing files
-            subprocess.check_call(["tar", "xfz",  tarFile, "--overwrite", "-C", tarDir])
+            subprocess.check_call(["tar", "xfz",  tarFile, "--overwrite", "-C", tarDir, "--transform", "s/-/-v/"])
             logging.info('%s Extracted %s', ModuleName, tarFile)
             return "ok"
         except:
@@ -372,28 +368,23 @@ class ManageBridge:
         dirs = os.listdir(CB_HOME + "/adaptors")
         for dev in self.devices:
             url = dev["adaptor"]["url"] 
-            if url in dirs:
-                v =  self.getVersion("/adaptors/" + url)
-                if v != "error":
-                    if dev["adaptor"]["version"] != v:
-                        updateList.append({"url": url,
-                                           "type": "adaptors"})
-            else:
-                updateList.append({"url": url,
-                                   "type": "adaptors"})
+            split_url = url.split('/')
+            logging.debug('%s updateElements. split_url: %s', ModuleName, split_url)
+            logging.debug('%s updateElements. split_url[-3]: %s', ModuleName, split_url[-3])
+            name = (split_url[-3] + '-' + split_url[-1])[:-7]
+            logging.debug('%s updateElements. name: %s', ModuleName, name)
+            if name not in dirs:
+                updateList.append({"url": url, "type": "adaptors", "name": name})
         for app in self.apps:
             dirs = os.listdir(CB_HOME + "/apps")
             url = app["app"]["url"]
-            if url in dirs:
-                v =  self.getVersion("/apps/" + url)
-                logging.debug('%s updateElements. old version: %s, new: %s ', ModuleName, v, app["app"]["version"])
-                if v != "error":
-                    if app["app"]["version"] != v:
-                        updateList.append({"url": url,
-                                           "type": "apps"})
-            else:
-                updateList.append({"url": url,
-                                   "type": "apps"})
+            split_url = url.split('/')
+            logging.debug('%s updateElements. split_url: %s', ModuleName, split_url)
+            logging.debug('%s updateElements. split_url[-3]: %s', ModuleName, split_url[-3])
+            name = (split_url[-3] + '-' + split_url[-1])[:-7]
+            logging.debug('%s updateElements. name: %s', ModuleName, name)
+            if name not in dirs:
+                updateList.append({"url": url, "type": "apps", "name": name})
 
         logging.debug('%s updateList: %s', ModuleName, updateList)
         for e in updateList:
@@ -401,7 +392,7 @@ class ManageBridge:
             if status != "ok":
                 self.sendStatusMsg(status)
         if updateList == []:
-            return "Nothing to update"
+            return "All apps & adaptors at latest versions. Nothing updated"
         else:
             return "Updated"
 
@@ -486,7 +477,7 @@ class ManageBridge:
             else:
                 try:
                     response = self.client.put_file(dropboxPlace, f)
-                    logging.debug('%s Dropbox log upload response: %s', ModuleName, response)
+                    #logging.debug('%s Dropbox log upload response: %s', ModuleName, response)
                 except:
                     status = "Could not upload log file: " + logFile
         self.sendStatusMsg(status)
@@ -746,7 +737,7 @@ class ManageBridge:
                                             "sim": CB_SIM_LEVEL,
                                             "config": {"adaptors": a["device_permissions"],
                                                        "concentrator": conc}}
-                                logging.debug('%s Response: %s %s', ModuleName, msg['id'], response)
+                                #logging.debug('%s Response: %s %s', ModuleName, msg['id'], response)
                                 self.cbSendMsg(response, msg["id"])
                                 break
                         break
@@ -764,7 +755,7 @@ class ManageBridge:
                              "sim": CB_SIM_LEVEL
                             }
                         }
-                        logging.debug('%s Response: %s %s', ModuleName, msg['id'], response)
+                        #logging.debug('%s Response: %s %s', ModuleName, msg['id'], response)
                         self.cbSendMsg(response, msg["id"])
                         break
             elif msg["type"] == "conc":
@@ -781,7 +772,7 @@ class ManageBridge:
                     response = {"cmd": "config",
                                 "config": "no_apps"
                                }
-                logging.debug('%s Sending config to conc:  %s', ModuleName, response)
+                #logging.debug('%s Sending config to conc:  %s', ModuleName, response)
                 self.cbSendConcMsg(response)
             else:
                 logging.warning('%s Config req from unknown instance type: %s', ModuleName, msg['id'])

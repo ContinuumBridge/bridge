@@ -21,4 +21,4 @@ CB_BRIDGE_EMAIL = os.getenv('CB_BRIDGE_EMAIL', 'noanemail')
 CB_BRIDGE_PASSWORD = os.getenv('CB_BRIDGE_PASSWORD', 'notapassword')
 CB_LOGGING_LEVEL = getattr(logging, os.getenv('CB_LOG_ENVIRONMENT', 'INFO'))
 CB_LOGFILE = CB_CONFIG_DIR + 'bridge.log'
-CB_DEV_BRIDGE = os.getenv('CB_DEV_BRIDGE', 'False')
+CB_DEV_BRIDGE = os.getenv('CB_DEV_BRIDGE', False)
