@@ -246,7 +246,7 @@ class ManageBridge:
         reactor.callInThread(self.doDiscover)
 
     def readConfig(self):
-        if CB_DEV_BRIDGE:
+        if CB_DEV_BRIDGE == 'True':
             appRoot = CB_HOME + "/apps_dev/"
             adtRoot = CB_HOME + "/adaptors_dev/"
         else:
@@ -281,7 +281,7 @@ class ManageBridge:
                 d["adaptor"]["mgrSoc"] = socket
                 url = d["adaptor"]["url"]
                 split_url = url.split('/')
-                if CB_DEV_BRIDGE:
+                if CB_DEV_BRIDGE == 'True':
                     dirName = split_url[-3]
                 else:
                     dirName = (split_url[-3] + '-' + split_url[-1])[:-7]
@@ -294,7 +294,7 @@ class ManageBridge:
                 a["app"]["id"] = "app" + str(a["app"]["id"])
                 url = a["app"]["url"]
                 split_url = url.split('/')
-                if CB_DEV_BRIDGE:
+                if CB_DEV_BRIDGE == 'True':
                     dirName = split_url[-3]
                 else:
                     dirName = (split_url[-3] + '-' + split_url[-1])[:-7]
@@ -373,7 +373,15 @@ class ManageBridge:
             logging.debug('%s updateElements. split_url[-3]: %s', ModuleName, split_url[-3])
             name = (split_url[-3] + '-' + split_url[-1])[:-7]
             logging.debug('%s updateElements. name: %s', ModuleName, name)
+            logging.debug('%s updateElements. Current updateList: %s', ModuleName, updateList)
+            update = False
             if name not in dirs:
+                update = True
+                for u in updateList:
+                    logging.debug('%s updateElements. u["name"]: %s', ModuleName, u["name"])
+                    if u["name"] == name: 
+                        update = False
+            if update:
                 updateList.append({"url": url, "type": "adaptors", "name": name})
         for app in self.apps:
             dirs = os.listdir(CB_HOME + "/apps")
@@ -383,7 +391,13 @@ class ManageBridge:
             logging.debug('%s updateElements. split_url[-3]: %s', ModuleName, split_url[-3])
             name = (split_url[-3] + '-' + split_url[-1])[:-7]
             logging.debug('%s updateElements. name: %s', ModuleName, name)
+            update = False
             if name not in dirs:
+                update = True
+                for u in updateList:
+                    if u["name"] == name: 
+                        update = False
+            if update:
                 updateList.append({"url": url, "type": "apps", "name": name})
 
         logging.debug('%s updateList: %s', ModuleName, updateList)
