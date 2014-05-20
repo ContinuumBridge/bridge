@@ -343,7 +343,7 @@ class ManageBridge:
             return "ok"
         except:
             logging.warning('%s Error extracting %s', ModuleName, tarFile)
-            return "Error extraxting " + fileName 
+            return "Error extraxting " + tarFile 
 
     def getVersion(self, elementDir):
         try:

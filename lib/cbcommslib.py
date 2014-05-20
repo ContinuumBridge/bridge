@@ -42,6 +42,7 @@ class CbAdaptor:
     def __init__(self, argv):
         logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(message)s')
         self.doStop = False
+        self.status = "ok"
         self.configured = False
         self.cbFactory = {}
         self.appInstances = []
@@ -75,12 +76,17 @@ class CbAdaptor:
         logging.warning("%s %s should subclass onAppRequest method", ModuleName, self.id)
 
     def onAppMessage(self, message):
-        if message["request"] == "init":
-            self.onAppInit(message)
-        elif message["request"] == "functions": 
-            self.onAppRequest(message)
+        if "request" in message:
+            if message["request"] == "init":
+                self.onAppInit(message)
+            elif message["request"] == "functions": 
+                self.onAppRequest(message)
+            elif message["request"] == "command": 
+                self.onAppCommand(message)
+            else:
+                logging.warning("%s %s Unexpected message from app: %s", ModuleName, self.id, message)
         else:
-            logging.warning("%s %s Unexpected message from app: ", ModuleName, self.id, message)
+            logging.warning("%s %s No request field in message from app: %s", ModuleName, self.id, message)
  
     def onStop(self):
         """The adapotor should overwrite this if it needs to do any tidying-up before stopping"""
@@ -157,6 +163,7 @@ class CbApp:
 
     def __init__(self, argv):
         logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(message)s')
+        self.appClass = "none"       # Should be overwritten by app
         self.cbFactory = {}
         self.adtInstances = []
         self.doStop = False
