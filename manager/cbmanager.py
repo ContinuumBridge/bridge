@@ -406,12 +406,15 @@ class ManageBridge:
             if status != "ok":
                 self.sendStatusMsg(status)
         if updateList == []:
-            return "All apps & adaptors at latest versions. Nothing updated"
+            return "Updated. All apps and adaptors already at latest versions"
         else:
-            return "Updated"
+            feedback = "Updated: "
+            for a in updateList:
+                feedback += " " + a["name"]
+            return feedback
 
     def updateConfig(self, msg):
-        logging.debug('%s Config received from controller:', ModuleName)
+        logging.info('%s Config update received from controller:', ModuleName)
         logging.debug('%s %s', ModuleName, str(msg))
         configFile = CB_CONFIG_DIR + "/bridge.config"
         with open(configFile, 'w') as configFile:
