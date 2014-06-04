@@ -68,22 +68,26 @@ if __name__ == '__main__':
             try:
                 p.expect('.*', timeout=10)
                 raw = p.after.split()
+                logging.debug('%s raw data: %s', ModuleName, raw)
                 addr = raw[0]
-                found = False
-                if len(discoveredAddresses) == 0:
-                    discoveredAddresses.append(addr)
-                    names.append("SensorTag")
-                    protocols.append("btle")
-                    manufacturers.append("Texas Instruments")
-                else:
-                    for a in discoveredAddresses:
-                        if addr == a:
-                            found = True
-                    if found == False:
+                name = raw[1]
+                if name != "(unknown)":
+                    logging.debug('%s name: %s', ModuleName, name)
+                    found = False
+                    if len(discoveredAddresses) == 0:
                         discoveredAddresses.append(addr)
-                        names.append("SensorTag")
+                        names.append(name)
                         protocols.append("btle")
-                        manufacturers.append("Texas Instruments")
+                        #manufacturers.append("Texas Instruments")
+                    else:
+                        for a in discoveredAddresses:
+                            if addr == a:
+                                found = True
+                        if found == False:
+                            discoveredAddresses.append(addr)
+                            names.append(name)
+                            protocols.append("btle")
+                            #manufacturers.append("Texas Instruments")
             except:
                 logging.debug('%s lescan skip', ModuleName)
         try:
@@ -92,8 +96,8 @@ if __name__ == '__main__':
             logging.debug('%s Could not kill lescan process', ModuleName)
     else: 
         # Simulation without real devices - just supply some sample data
-        names = ["SensorTag", "SensorTag", "SensorTag"]
-        manufacturers = ["Texas Instruments", "Texas Instruments", "Shenzhen Youhong Technology Co."]
+        names = ["Continuum", "Tempo", "Continuum"]
+        #manufacturers = ["Texas Instruments", "Texas Instruments", "Shenzhen Youhong Technology Co."]
         protocols = ["btle", "btle", "btle"]
         if simStep == 0:
             discoveredAddresses = ["22.22.22.22.22.22"]
@@ -119,7 +123,7 @@ if __name__ == '__main__':
     for a in range (len(discoveredAddresses)):
         d["body"].append({"protocol": "btle",
                           "name": names[a], 
-                          "manufacturer_name": manufacturers[a], 
+                          #"manufacturer_name": manufacturers[a], 
                           "protocol": protocols[a],
                           "mac_addr": discoveredAddresses[a]})
     print json.dumps(d)
