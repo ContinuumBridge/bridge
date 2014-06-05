@@ -14,11 +14,12 @@ MAX_NO_SERVER_COUNT = 10       # Used when making decisions about rebooting
 MIN_TIME_BETWEEN_REBOOTS = 600 # Stops constant rebooting (secs)
 REBOOT_WAIT = 10               # Time to allow bridge to stop before rebooting
 RESTART_INTERVAL = 8           # Time between telling manager to stop and starting it again
+MAX_INTERFACE_CHECKS = 10      # No times to check interface before rebooting
 
 import sys
 import time
 import os
-from wifisetup import WiFiSetup
+import wifisetup
 from subprocess import call
 from subprocess import Popen
 from twisted.internet import threads
@@ -46,9 +47,9 @@ class Supervisor:
         self.starting = True    # Don't check manager watchdog when manager not running
         self.connecting = True  # Ignore conduit not connected messages if trying to connect
         self.timeStamp = time.time()
-        self.wiFiSetup = WiFiSetup()
         self.beginningOfTime = time.time() # Used when making decisions about rebooting
         self.noServerCount = 0             # Used when making decisions about rebooting
+        self.interfaceChecks = 0
         try:
             reactor.callLater(TIME_TO_IFUP, self.checkInterface)
         except:
@@ -100,7 +101,7 @@ class Supervisor:
             if msg["status"] == "disconnected":
                 logging.info("%s status = %s, connecting = %s", ModuleName, msg["status"], self.connecting)
                 if not self.connecting:
-                    if self.wiFiSetup.clientConnected():
+                    if wifisetup.clientConnected():
                         logging.info("%s Connected to Internet but not to server", ModuleName)
                         self.noServerCount += 1
                     if time.time() - self.beginningOfTime > MIN_TIME_BETWEEN_REBOOTS or \
@@ -148,25 +149,28 @@ class Supervisor:
     def checkInterface(self):
         # Defer to thread - it could take several seconds
         logging.debug("%s checkInterface called", ModuleName)
-        self.wiFiSetup.checkInterface()
-        d1 = threads.deferToThread(self.wiFiSetup.checkInterface)
+        d1 = threads.deferToThread(wifisetup.checkInterface)
         d1.addCallback(self.interfaceChecked)
 
     def interfaceChecked(self, mode):
         logging.info("%s Connected by %s", ModuleName, mode)
         if mode == "none":
-            d = threads.deferToThread(self.wiFiSetup.getConnected)
-            d.addCallback(self.checkReconnected)
+            d = threads.deferToThread(wifisetup.getConnected)
+            d.addCallback(self.checkConnected)
         else:
             self.connecting = False
 
-    def checkReconnected(self, connected):
-        """ Detected we were not connected. Tried to reconnect. If not connected, reboot. """
+    def checkConnected(self, connected):
         if connected:
             self.connecting = False
         else:
-            logging.info("%s Unable to reconnect to a network. Rebooting ...", ModuleName)
-            self.doReboot()
+            if self.interfaceChecks > MAX_INTERFACE_CHECKS:
+                logging.info("%s Unable to connect to a network. Rebooting ...", ModuleName)
+                self.doReboot()
+            else:
+                self.interfaceChecks += 1
+                logging.debug("%s checkConnected. interfaceChecks = %s", ModuleName, self.interfaceChecks)
+                self.checkInterface()
 
     def doReboot(self):
         """ Give bridge manager a chance to tidy up nicely before rebooting. """

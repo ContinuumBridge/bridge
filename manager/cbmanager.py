@@ -246,7 +246,7 @@ class ManageBridge:
         reactor.callInThread(self.doDiscover)
 
     def readConfig(self):
-        if CB_DEV_BRIDGE == 'True':
+        if CB_DEV_BRIDGE:
             appRoot = CB_HOME + "/apps_dev/"
             adtRoot = CB_HOME + "/adaptors_dev/"
         else:
@@ -281,7 +281,7 @@ class ManageBridge:
                 d["adaptor"]["mgrSoc"] = socket
                 url = d["adaptor"]["url"]
                 split_url = url.split('/')
-                if CB_DEV_BRIDGE == 'True':
+                if CB_DEV_BRIDGE:
                     dirName = split_url[-3]
                 else:
                     dirName = (split_url[-3] + '-' + split_url[-1])[:-7]
@@ -294,7 +294,7 @@ class ManageBridge:
                 a["app"]["id"] = "app" + str(a["app"]["id"])
                 url = a["app"]["url"]
                 split_url = url.split('/')
-                if CB_DEV_BRIDGE == 'True':
+                if CB_DEV_BRIDGE:
                     dirName = split_url[-3]
                 else:
                     dirName = (split_url[-3] + '-' + split_url[-1])[:-7]
@@ -519,12 +519,12 @@ class ManageBridge:
             reactor.callLater(APP_STOP_DELAY, self.killAppProcs)
             reactor.callLater(APP_STOP_DELAY + MIN_DELAY, self.stopAll)
         else:
-            if time.time() - self.timeLastConduitMsg > CONDUIT_WATCHDOG_MAXTIME and CB_NO_CLOUD != "True": 
+            if time.time() - self.timeLastConduitMsg > CONDUIT_WATCHDOG_MAXTIME and not CB_NO_CLOUD: 
                 logging.info('%s Not heard from conduit for %s. Notifyinng supervisor', ModuleName, CONDUIT_WATCHDOG_MAXTIME)
                 resp = {"msg": "status",
                         "status": "disconnected"
                        }
-            elif self.disconnectedCount > CONDUIT_MAX_DISCONNECT_COUNT and CB_NO_CLOUD != "True":
+            elif self.disconnectedCount > CONDUIT_MAX_DISCONNECT_COUNT and not CB_NO_CLOUD:
                 logging.info('%s Disconnected from bridge controller. Notifying supervisor', ModuleName)
                 resp = {"msg": "status",
                         "status": "disconnected"
