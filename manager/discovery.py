@@ -76,18 +76,20 @@ if __name__ == '__main__':
                     found = False
                     if len(discoveredAddresses) == 0:
                         discoveredAddresses.append(addr)
-                        names.append(name)
+                        names.append("SensorTag")
+                        #names.append(name)
                         protocols.append("btle")
-                        #manufacturers.append("Texas Instruments")
+                        manufacturers.append("Texas Instruments")
                     else:
                         for a in discoveredAddresses:
                             if addr == a:
                                 found = True
                         if found == False:
                             discoveredAddresses.append(addr)
-                            names.append(name)
+                            #names.append(name)
+                            names.append("SensorTag")
                             protocols.append("btle")
-                            #manufacturers.append("Texas Instruments")
+                            manufacturers.append("Texas Instruments")
             except:
                 logging.debug('%s lescan skip', ModuleName)
         try:

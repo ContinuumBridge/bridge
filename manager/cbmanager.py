@@ -544,7 +544,6 @@ class ManageBridge:
             if msg["body"]["connected"] == True:
                 self.disconnectedCount = 0
             else:
-                logging.info('%s Disconnected message received from conduit', ModuleName)
                 self.disconnectedCount += 1
  
     def processControlMsg(self, msg):
