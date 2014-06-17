@@ -21,6 +21,7 @@ import logging
 import subprocess
 import json
 import urllib
+import pexpect
 from twisted.internet import threads
 from twisted.internet.protocol import Protocol, Factory
 from twisted.internet import reactor, defer
@@ -184,6 +185,8 @@ class ManageBridge:
             delay += START_DELAY
         # Start watchdog to monitor apps and adaptors
         reactor.callLater(delay+ELEMENT_WATCHDOG_INTERVAL, self.elementWatchdog)
+        # Monitor Bluetooth LE
+        reactor.callInThread(self.monitorLescan)
         # Give time for everything to start before we consider ourselves running
         reactor.callLater(delay+START_DELAY, self.setRunning)
         logging.info('%s All adaptors and apps set to start', ModuleName)
@@ -205,6 +208,44 @@ class ManageBridge:
         except:
             logging.error('%s App %s failed to start. exe: %s, socket: %s', ModuleName, id, exe, mgrSoc)
 
+    def monitorLescan(self):
+        """ 
+            This method is assumed to be called in a Twisted thread.
+            It may taken up to LESCAN_TIMEOUT seconds before the thread realises that it should end,
+            so this should be set to a fairly small number, certain less than about 6 seconds.
+        """
+        logging.debug('%s Starting monitorLescan, state = %s', ModuleName, self.state)
+        LESCAN_TIMEOUT = 2
+        LESCAN_MAX_LOOPS = 20
+        while self.state != "stopping":
+            time.sleep(2)
+            try:
+                lescan = pexpect.spawn("hcitool lescan")
+            except:
+                logging.warning('%s Could not launch lescan pexpect', ModuleName)
+            loop = 0
+            while self.state != "stopping" and loop < LESCAN_MAX_LOOPS: 
+                index = lescan.expect(['.*', pexpect.TIMEOUT, pexpect.EOF], timeout=LESCAN_TIMEOUT)
+                #logging.debug('%s monitorLescan. loop:: %s, index %s', ModuleName, str(loop), str(index))
+                if index == 0:
+                    a = lescan.after.split()
+                    logging.debug('%s : monitorLescan found: %s', ModuleName, a)
+                    # a[0] is normally the BT addr. If things have gone wrong it will be the first word of:
+                    # "Set scan parameters, failed: Connection timed out". This is pretty fatal, so just 
+                    # exit this thread and let any adaptors that care sort out their error conditions.
+                    if a[0] == "Set":
+                        logging.warning('%s monitorLescan fatal error', ModuleName)
+                        lescan.sendcontrol("c")
+                        time.sleep(1)
+                        lescan.kill(9)
+                        return 
+                    loop = 0
+                else:
+                    loop += 1
+            lescan.sendcontrol("c")
+            time.sleep(1)
+            lescan.kill(9)
+ 
     def doDiscover(self):
         self.discoveredDevices = {}
         exe = CB_BRIDGE_ROOT + "/manager/discovery.py"
