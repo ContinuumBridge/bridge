@@ -233,13 +233,14 @@ class ManageBridge:
                     # a[0] is normally the BT addr. If things have gone wrong it will be the first word of:
                     # "Set scan parameters, failed: Connection timed out". This is pretty fatal, so just 
                     # exit this thread and let any adaptors that care sort out their error conditions.
-                    if a[0] == "Set":
-                        logging.warning('%s monitorLescan fatal error', ModuleName)
-                        lescan.sendcontrol("c")
-                        time.sleep(1)
-                        lescan.kill(9)
-                        return 
-                    loop = 0
+                    if a != []:
+                        if a[0] == "Set":
+                            logging.warning('%s monitorLescan fatal error', ModuleName)
+                            lescan.sendcontrol("c")
+                            time.sleep(1)
+                            lescan.kill(9)
+                            return 
+                        loop = 0
                 else:
                     loop += 1
             lescan.sendcontrol("c")
@@ -268,7 +269,7 @@ class ManageBridge:
                     if d["protocol"] == "btle":
                         for oldDev in self.devices:
                            if oldDev["adaptor"]["protocol"] == "btle": 
-                               if d["mac_addr"] == oldDev["mac_addr"]:
+                               if d["mac_addr"] == oldDev["address"]:
                                    addrFound = True
                     if addrFound == False:
                         self.discoveredDevices["body"].append(d)  
@@ -807,7 +808,7 @@ class ManageBridge:
                             {"apps": d["adaptor"]["apps"], 
                              "name": d["adaptor"]["name"],
                              "friendly_name": d["friendly_name"],
-                             "btAddr": d["mac_addr"],
+                             "btAddr": d["address"],
                              "btAdpt": "hci0", 
                              "sim": CB_SIM_LEVEL
                             }
