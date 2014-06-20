@@ -98,7 +98,7 @@ if __name__ == '__main__':
             logging.debug('%s Could not kill lescan process', ModuleName)
     else: 
         # Simulation without real devices - just supply some sample data
-        names = ["Continuum", "Tempo", "Continuum"]
+        names = ["SensorTag", "SensorTag", "Continuum"]
         #manufacturers = ["Texas Instruments", "Texas Instruments", "Shenzhen Youhong Technology Co."]
         protocols = ["btle", "btle", "btle"]
         if simStep == 0:

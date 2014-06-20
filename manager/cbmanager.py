@@ -308,7 +308,7 @@ class ManageBridge:
     def onBLEDiscovered(self):
         logging.debug('%s onBLEDiscovered', ModuleName)
         self.bleDiscovered = True
-        if self.zwaveDiscovered:
+        if (CB_ZWAVE_BRIDGE and self.zwaveDiscovered) or CB_SIM_LEVEL == '1':
             self.gatherDiscovered()
 
     def gatherDiscovered(self):
@@ -323,14 +323,24 @@ class ManageBridge:
         d["body"] = []
         for b in self.bleDiscoveredData:
             d["body"].append(b)
-        for b in self.zwaveDiscoveredData:
+        if CB_ZWAVE_BRIDGE:
+            for b in self.zwaveDiscoveredData:
+                d["body"].append(b)
+        elif CB_SIM_LEVEL == '1':
+            b = {'manufacturer_name': 0, 
+                 'protocol': 'zwave', 
+                 'mac_addr': '40', 
+                 'name': 'Binary Power Switch', 
+                 'model_number': 0
+                }
             d["body"].append(b)
         msg = {"cmd": "msg",
                "msg": d}
         self.cbSendConcMsg(msg)
 
     def discover(self):
-        self.elFactory["zwave"].sendMsg({"cmd": "discover"})
+        if CB_ZWAVE_BRIDGE:
+            self.elFactory["zwave"].sendMsg({"cmd": "discover"})
         reactor.callInThread(self.bleDiscover)
 
     def readConfig(self):
@@ -752,7 +762,8 @@ class ManageBridge:
     def stopAll(self):
         self.sendStatusMsg("Disconnecting. Goodbye, back soon ...")
         logging.info('%s Stopping concentrator', ModuleName)
-        self.elFactory["zwave"].sendMsg({"cmd": "stop"})
+        if CB_ZAVE_BRIDGE:
+            self.elFactory["zwave"].sendMsg({"cmd": "stop"})
         self.cbSendConcMsg({"cmd": "stop"})
         # Give concentrator a change to stop before killing it and its sockets
         reactor.callLater(MIN_DELAY, self.stopManager)
