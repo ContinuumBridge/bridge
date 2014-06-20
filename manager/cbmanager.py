@@ -39,6 +39,9 @@ from dropbox.client import DropboxClient, DropboxOAuth2Flow, DropboxOAuth2FlowNo
 from dropbox.rest import ErrorResponse, RESTSocketError
 from dropbox.datastore import DatastoreError, DatastoreManager, Date, Bytes
 
+CONCENTRATOR_PATH = CB_BRIDGE_ROOT + "/concentrator/concentrator.py"
+ZWAVE_PATH = CB_BRIDGE_ROOT + "/manager/z-wave-ctrl.py"
+
 class ManageBridge:
 
     def __init__(self):
@@ -49,7 +52,8 @@ class ManageBridge:
         self.bridgeStatus = "ok" # Used to set status for sending to supervisor
         self.timeLastConduitMsg = time.time()  # For watchdog
         self.disconnectedCount = 0  # Used to count "disconnected" messages from conduit
-        self.discovered = False
+        self.zwaveDiscovered = False
+        self.bleDiscovered = False
         self.configured = False
         self.reqSync = False
         self.state = "stopped"
@@ -59,6 +63,11 @@ class ManageBridge:
         self.concConfig = []
         self.cbFactory = {} 
         self.appListen = {}
+        self.zwaveDevices = []
+        self.elFactory = {}
+        self.elListen = {}
+        self.elProc = {}
+
         status = self.readConfig()
         logging.info('%s Read config status: %s', ModuleName, status)
         self.initBridge()
@@ -91,7 +100,7 @@ class ManageBridge:
             logging.warning("%s %s %s Unable to bring up hci0", ModuleName, self.id, self.friendly_name)
 
         # Give time for node interface to start
-        reactor.callLater(START_DELAY, self.startConcentrator)
+        reactor.callLater(START_DELAY, self.startElements)
         if self.configured:
             reactor.callLater(START_DELAY*2, self.startAll)
         reactor.run()
@@ -104,30 +113,38 @@ class ManageBridge:
             mgrSocs[a["app"]["id"]] = a["app"]["mgrSoc"]
         return mgrSocs
 
-    def startConcentrator(self):
-        # Open a socket for communicating with the concentrator
-        s = CB_SOCKET_DIR + "skt-mgr-conc"
-        try:
-            os.remove(s)
-        except:
-            logging.debug('%s Conc socket was not present: %s', ModuleName, s)
-        try:
-            self.cbConcFactory = CbServerFactory(self.processClient)
-            self.concListen = reactor.listenUNIX(s, self.cbConcFactory, backlog=4)
-            logging.debug('%s Opened manager socket: %s', ModuleName, s)
-        except:
-            logging.error('%s Failed to open manager-conc socket: %s', ModuleName, s)
-
-        # Now start the concentrator in a subprocess
-        exe = self.concPath
-        id = "conc"
-        mgrSoc = CB_SOCKET_DIR + "skt-mgr-conc"
-        try:
-            self.concProc = subprocess.Popen([exe, mgrSoc, id])
-            logging.debug('%s Started concentrator', ModuleName)
-        except:
-            logging.error('%s Failed to start concentrator', ModuleName)
-
+    def startElements(self):
+        els = [{"id": "conc",
+                "socket": "skt-mgr-conc",
+                "exe": CONCENTRATOR_PATH
+               }]
+        if CB_ZWAVE_BRIDGE:
+            els.append(
+               {"id": "zwave",
+                "socket": "skt-mgr-zwave",
+                "exe": ZWAVE_PATH
+               })
+        for el in els:
+            s = CB_SOCKET_DIR + el["socket"]
+            try:
+                os.remove(s)
+            except:
+                logging.debug('%s Socket was not present: %s', ModuleName, s)
+            #try:
+            if True:
+                self.elFactory[el["id"]] = CbServerFactory(self.processClient)
+                self.elListen[el["id"]] = reactor.listenUNIX(s, self.elFactory[el["id"]], backlog=4)
+                logging.debug('%s Opened manager socket: %s', ModuleName, s)
+            #except:
+                #logging.error('%s Failed to open socket: %s', ModuleName, s)
+    
+            # Now start the element in a subprocess
+            try:
+                self.elProc[el["id"]] = subprocess.Popen([el["exe"], s, el["id"]])
+                logging.debug('%s Started %s', ModuleName, el["id"])
+            except:
+                logging.error('%s Failed to start %s', ModuleName, el["id"])
+    
         # Initiate comms with supervisor, which started the manager in the first place
         s = CB_SOCKET_DIR + "skt-super-mgr"
         initMsg = {"id": "manager",
@@ -247,8 +264,8 @@ class ManageBridge:
             time.sleep(1)
             lescan.kill(9)
  
-    def doDiscover(self):
-        self.discoveredDevices = {}
+    def bleDiscover(self):
+        self.bleDiscoveredData = [] 
         exe = CB_BRIDGE_ROOT + "/manager/discovery.py"
         protocol = "btle"
         output = subprocess.check_output([exe, protocol, str(CB_SIM_LEVEL), CB_CONFIG_DIR])
@@ -259,33 +276,62 @@ class ManageBridge:
             logging.error('%s Unable to load output from discovery.py', ModuleName)
             reactor.callFromThread(self.sendStatusMsg, "Error. Unable to load output from discovery.py")
         else:   
-            self.discoveredDevices["type"] = "request"
-            self.discoveredDevices["verb"] = "post"
-            self.discoveredDevices["url"] = "/api/bridge/v1/device_discovery/"
-            self.discoveredDevices["body"] = []
-            if self.configured:
-                for d in discOutput["body"]:
-                    addrFound = False
-                    if d["protocol"] == "btle":
-                        for oldDev in self.devices:
-                           if oldDev["adaptor"]["protocol"] == "btle": 
-                               if d["mac_addr"] == oldDev["address"]:
-                                   addrFound = True
-                    if addrFound == False:
-                        self.discoveredDevices["body"].append(d)  
+            if discOutput["status"] == "discovered":
+                if self.configured:
+                    for d in discOutput["body"]:
+                        addrFound = False
+                        if d["protocol"] == "btle":
+                            for oldDev in self.devices:
+                               if oldDev["adaptor"]["protocol"] == "btle": 
+                                   if d["mac_addr"] == oldDev["address"]:
+                                       addrFound = True
+                        if addrFound == False:
+                            self.bleDiscoveredData.append(d)  
+                else:
+                    for d in discOutput["body"]:
+                        self.bleDiscoveredData.append(d)  
             else:
-                for d in discOutput["body"]:
-                    self.discoveredDevices["body"].append(d)  
+                logging.warning('%s Error in ble discovery', ModuleName)
             logging.info('%s Discovered devices:', ModuleName)
-            logging.info('%s %s', ModuleName, self.discoveredDevices)
-            msg = {"cmd": "msg",
-                   "msg": self.discoveredDevices}
-            reactor.callFromThread(self.cbSendConcMsg, msg)
+            logging.info('%s %s', ModuleName, self.bleDiscoveredData)
+            reactor.callFromThread(self.onBLEDiscovered)
             self.discovered = True
+            return
     
+    def onZwaveDiscovered(self, msg):
+        logging.debug('%s onZwaveDiscovered', ModuleName)
+        self.zwaveDiscoveredData = msg["body"]
+        self.zwaveDiscovered = True
+        if self.bleDiscovered:
+            self.gatherDiscovered()
+
+    def onBLEDiscovered(self):
+        logging.debug('%s onBLEDiscovered', ModuleName)
+        self.bleDiscovered = True
+        if self.zwaveDiscovered:
+            self.gatherDiscovered()
+
+    def gatherDiscovered(self):
+        logging.debug('%s gatherDiscovered', ModuleName)
+        self.zwaveDiscovered = False
+        self.bleDiscovered = False
+        d = {}
+        d["type"] = "request"
+        d["verb"] = "post"
+        d["url"] = "/api/bridge/v1/device_discovery/"
+        d["channel"] = "bridge_manager"
+        d["body"] = []
+        for b in self.bleDiscoveredData:
+            d["body"].append(b)
+        for b in self.zwaveDiscoveredData:
+            d["body"].append(b)
+        msg = {"cmd": "msg",
+               "msg": d}
+        self.cbSendConcMsg(msg)
+
     def discover(self):
-        # Call in thread so that manager can still process other messages
-        reactor.callInThread(self.doDiscover)
+        self.elFactory["zwave"].sendMsg({"cmd": "discover"})
+        reactor.callInThread(self.bleDiscover)
 
     def readConfig(self):
         if CB_DEV_BRIDGE:
@@ -294,7 +340,6 @@ class ManageBridge:
         else:
             appRoot = CB_HOME + "/apps/"
             adtRoot = CB_HOME + "/adaptors/"
-        self.concPath = CB_BRIDGE_ROOT + "/concentrator/concentrator.py"
         configFile = CB_CONFIG_DIR + "/bridge.config"
         configRead = False
         try:
@@ -329,6 +374,8 @@ class ManageBridge:
                     dirName = (split_url[-3] + '-' + split_url[-1])[:-7]
                 d["adaptor"]["exe"] = adtRoot + dirName + "/" + d["adaptor"]["exe"]
                 logging.debug('%s exe: %s', ModuleName, d["adaptor"]["exe"])
+                if d["adaptor"]["protocol"] == "zwave":
+                    d["adaptor"]["zwave_socket"] =  CB_SOCKET_DIR + "skt-" + d["id"] + "zwave"
                 # Add a apps list to each device adaptor
                 d["adaptor"]["apps"] = []
             # Add socket descriptors to apps and devices
@@ -705,16 +752,19 @@ class ManageBridge:
     def stopAll(self):
         self.sendStatusMsg("Disconnecting. Goodbye, back soon ...")
         logging.info('%s Stopping concentrator', ModuleName)
+        self.elFactory["zwave"].sendMsg({"cmd": "stop"})
         self.cbSendConcMsg({"cmd": "stop"})
         # Give concentrator a change to stop before killing it and its sockets
         reactor.callLater(MIN_DELAY, self.stopManager)
 
     def stopManager(self):
-        self.concListen.stopListening()
-        try:
-            self.concProc.kill()
-        except:
-            logging.debug('%s No concentrator process to kill', ModuleName)
+        for el in self.elListen:
+            el.stopListening()
+        for el in self.elProc:
+            try:
+                el.kill()
+            except:
+                logging.debug('%s No element process to kill', ModuleName)
         try:
             self.nodejsProc.kill()
         except:
@@ -745,7 +795,7 @@ class ManageBridge:
 
     def cbSendConcMsg(self, msg):
         try:
-            self.cbConcFactory.sendMsg(msg)
+            self.elFactory["conc"].sendMsg(msg)
         except:
             logging.warning('%s Appear to be trying to send a message to concentrator before connected', ModuleName)
 
@@ -809,21 +859,23 @@ class ManageBridge:
                              "name": d["adaptor"]["name"],
                              "friendly_name": d["friendly_name"],
                              "btAddr": d["address"],
+                             "address": d["address"],
                              "btAdpt": "hci0", 
                              "sim": CB_SIM_LEVEL
                             }
                         }
+                        if d["adaptor"]["protocol"] == "zwave":
+                            cmd["config"]["zwave_socket"] = d["adaptor"]["zwave_socket"]
                         #logging.debug('%s Response: %s %s', ModuleName, msg['id'], response)
                         self.cbSendMsg(response, msg["id"])
                         break
             elif msg["type"] == "conc":
-                self.concConfig = []
+                concConfig = []
                 if self.configured:
                     for a in self.apps:
-                        self.concConfig.append({"id": a["app"]["id"],
-                                           "appConcSoc": a["app"]["concSoc"]})
+                        concConfig.append({"id": a["app"]["id"], "appConcSoc": a["app"]["concSoc"]})
                     response = {"cmd": "config",
-                                "config": self.concConfig 
+                                "config": concConfig 
                                }
                 else:
                     self.concNoApps = True
@@ -832,6 +884,23 @@ class ManageBridge:
                                }
                 #logging.debug('%s Sending config to conc:  %s', ModuleName, response)
                 self.cbSendConcMsg(response)
+            elif msg["type"] == "zwave":
+                zwaveConfig = []
+                response = {"cmd": "config",
+                            "config": "no_zwave"
+                           }
+                if self.configured:
+                    for d in self.devices:
+                        if d["adaptor"]["protocol"] == "zwave":
+                            zwaveConfig.append({"id": d["id"], 
+                                                "socket": d["adaptor"]["zwave_socket"],
+                                                "address": d["address"]
+                                              })
+                            response["config"] = zwaveConfig 
+                else:
+                    self.noZwave = True
+                #logging.debug('%s Sending config to conc:  %s', ModuleName, response)
+                self.elFactory["zwave"].sendMsg(response)
             else:
                 logging.warning('%s Config req from unknown instance type: %s', ModuleName, msg['id'])
                 response = {"cmd": "error"}
@@ -843,6 +912,11 @@ class ManageBridge:
                 log = "log " + msg["id"] + ": No log message provided" 
             logging.warning('%s %s', ModuleName, log)
             self.sendStatusMsg(log)
+        elif msg["status"] == "discovered":
+            if msg["id"] == "zwave":
+                self.onZwaveDiscovered(msg)
+            else:
+                logging.warning('%s Discovered message from unexpected source: %s', ModuleName, msg["id"])
         elif msg["status"] == "state":
             if "state" in msg:
                 logging.debug('%s %s %s', ModuleName, msg["id"], msg["state"])
