@@ -26,7 +26,7 @@ from cbcommslib import CbServerFactory
 
 DISCOVER_TIME        = 20.0
 IPADDRESS            = 'localhost'
-MIN_DELAY            = 1.0
+MIN_DELAY            = 0.25
 PORT                 = "8083"
 baseUrl              = "http://" + IPADDRESS + ":" + PORT +"/"
 dataUrl              = baseUrl + 'ZWaveAPI/Data/'
@@ -34,6 +34,8 @@ startIncludeUrl      = baseUrl + "/ZWaveAPI/Run/controller.AddNodeToNetwork(1)"
 stopIncludeUrl       = baseUrl + "/ZWaveAPI/Run/controller.AddNodeToNetwork(0)"
 startExcludeUrl      = baseUrl + "/ZWaveAPI/Run/controller.RemoveNodeFromNetwork(1)"
 stopExcludeUrl       = baseUrl + "/ZWaveAPI/Run/controller.RemoveNodeFromNetwork(0)"
+postUrl              = baseUrl + "ZwaveAPI/Run/devices["
+getURL               = baseUrl + "Run/devices[DDD].instances[III].commandClasses[CCC].Get()"
  
 class ZwaveCtrl():
     def __init__(self, argv):
@@ -42,6 +44,8 @@ class ZwaveCtrl():
         self.state = "stopped"
         self.include = False
         self.exclude = False
+        self.posting = False
+        self.getting = False
         self.cbFactory = {}
         self.adaptors = [] 
         self.found = []
@@ -102,7 +106,7 @@ class ZwaveCtrl():
         found = []
         h = httplib2.Http()
         while self.state != "stopping":
-            URL = dataUrl + self.fromTime
+            doIt = True
             if self.include:
                 if not including:
                     including = True
@@ -112,13 +116,20 @@ class ZwaveCtrl():
             elif including:
                 including = False
                 URL = stopIncludeUrl
-            if self.exclude:
+            elif self.exclude:
                 if not excluding:
                     excluding = True
                     URL = startExcludeUrl
             elif excluding:
                 excluding = False
                 URL = stopExcludeUrl
+            elif self.posting:
+                self.posting = False
+                URL = self.postToUrl 
+            elif self.getting:
+                self.getting = False
+            else:
+                URL = dataUrl + self.fromTime
             resp, content = h.request(URL,
                                       'POST',
                                       headers={'Content-Type': 'application/json'})
@@ -193,11 +204,28 @@ class ZwaveCtrl():
     def stopDiscover(self):
         logging.debug("%s stopDiscover", ModuleName)
         self.include = False
-        reactor.callLater(2*MIN_DELAY, self.sendDiscoverResults)
+        reactor.callLater(4*MIN_DELAY, self.sendDiscoverResults)
 
     def discover(self):
         self.include = True
         reactor.callLater(DISCOVER_TIME, self.stopDiscover)
+
+    def onAdaptorMessage(self, msg):
+        logging.debug("%s onAdaptorMessage: %s", ModuleName, msg)
+        if "request" in msg:
+            if msg["request"] == "init":
+                pass
+            elif msg["request"] == "post":
+                self.postToUrl = postUrl + msg["address"] + "].instances[" + msg["instance"] + \
+                                 "].commandClasses[" + msg["commandClass"] + "].Set(" + \
+                                 msg["value"] + ")"
+                logging.debug("%s postToUrl: %s", ModuleName, str(self.postToUrl))
+                self.posting = True
+            elif msg["request"] == "get":
+                pass
+                #self.getting = True
+        else:
+            logging.debug("%s onAdaptorMessage without request: %s", ModuleName, str(msg))
 
     def processConfig(self, config):
         logging.debug("%s processConf: %s", ModuleName, config)
@@ -205,13 +233,21 @@ class ZwaveCtrl():
             for a in config:
                 if a["id"] not in self.adaptors:
                     # Allows for reconfig on the fly
-                    self.adaptors.append({"AID": a["id"],
+                    self.adaptors.append({"adt": a["id"],
                                           "address": a["address"]
                                         })
                     self.cbFactory[a["id"]] = CbServerFactory(self.onAdaptorMessage)
-                    reactor.listenUNIX(adaptor["socket"], self.cbFactory[a["id"]])
+                    reactor.listenUNIX(a["socket"], self.cbFactory[a["id"]])
         # Start zway even if there are no zway devices, in case we want to discover some
         reactor.callInThread(self.zway)
+
+    def doStop(self):
+        try:
+            reactor.stop()
+        except:
+            logging.warning("%s %s stopReactor when reactor not running", ModuleName, self.id)
+        logging.info("%s Bye from %s", ModuleName, self.id)
+        exit()
 
     def onManagerMessage(self, cmd):
         logging.debug("%s Received from manager: %s", ModuleName, cmd)
@@ -223,17 +259,14 @@ class ZwaveCtrl():
             msg = {"id": self.id,
                    "status": "stopping"}
             self.setState("stopping")
-            reactor.callLater(0.2, self.doStop)
+            reactor.callLater(2, self.doStop)
         elif cmd["cmd"] == "config":
             self.processConfig(cmd["config"])
             msg = {"id": self.id,
                    "status": "ready"}
-        elif cmd["cmd"] != "ok":
-            msg = {"id": self.id,
-                   "status": "unknown"}
         else:
             msg = {"id": self.id,
-                   "status": "none"}
+                   "status": "ok"}
         self.cbSendManagerMsg(msg)
 
 if __name__ == '__main__':

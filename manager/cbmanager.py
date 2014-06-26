@@ -101,8 +101,6 @@ class ManageBridge:
 
         # Give time for node interface to start
         reactor.callLater(START_DELAY, self.startElements)
-        if self.configured:
-            reactor.callLater(START_DELAY*2, self.startAll)
         reactor.run()
 
     def listMgrSocs(self):
@@ -246,7 +244,7 @@ class ManageBridge:
                 #logging.debug('%s monitorLescan. loop:: %s, index %s', ModuleName, str(loop), str(index))
                 if index == 0:
                     a = lescan.after.split()
-                    logging.debug('%s : monitorLescan found: %s', ModuleName, a)
+                    #logging.debug('%s : monitorLescan found: %s', ModuleName, a)
                     # a[0] is normally the BT addr. If things have gone wrong it will be the first word of:
                     # "Set scan parameters, failed: Connection timed out". This is pretty fatal, so just 
                     # exit this thread and let any adaptors that care sort out their error conditions.
@@ -385,7 +383,7 @@ class ManageBridge:
                 d["adaptor"]["exe"] = adtRoot + dirName + "/" + d["adaptor"]["exe"]
                 logging.debug('%s exe: %s', ModuleName, d["adaptor"]["exe"])
                 if d["adaptor"]["protocol"] == "zwave":
-                    d["adaptor"]["zwave_socket"] =  CB_SOCKET_DIR + "skt-" + d["id"] + "zwave"
+                    d["adaptor"]["zwave_socket"] =  CB_SOCKET_DIR + "skt-" + d["id"] + "-zwave"
                 # Add a apps list to each device adaptor
                 d["adaptor"]["apps"] = []
             # Add socket descriptors to apps and devices
@@ -762,7 +760,7 @@ class ManageBridge:
     def stopAll(self):
         self.sendStatusMsg("Disconnecting. Goodbye, back soon ...")
         logging.info('%s Stopping concentrator', ModuleName)
-        if CB_ZAVE_BRIDGE:
+        if CB_ZWAVE_BRIDGE:
             self.elFactory["zwave"].sendMsg({"cmd": "stop"})
         self.cbSendConcMsg({"cmd": "stop"})
         # Give concentrator a change to stop before killing it and its sockets
@@ -808,7 +806,7 @@ class ManageBridge:
         try:
             self.elFactory["conc"].sendMsg(msg)
         except:
-            logging.warning('%s Appear to be trying to send a message to concentrator before connected', ModuleName)
+            logging.warning('%s Appear to be trying to send a message to concentrator before connected: %s', ModuleName, msg)
 
     def cbSendSuperMsg(self, msg):
         self.cbSupervisorFactory.sendMsg(msg)
@@ -876,17 +874,16 @@ class ManageBridge:
                             }
                         }
                         if d["adaptor"]["protocol"] == "zwave":
-                            cmd["config"]["zwave_socket"] = d["adaptor"]["zwave_socket"]
+                            response["config"]["zwave_socket"] = d["adaptor"]["zwave_socket"]
                         #logging.debug('%s Response: %s %s', ModuleName, msg['id'], response)
                         self.cbSendMsg(response, msg["id"])
                         break
             elif msg["type"] == "conc":
-                concConfig = []
                 if self.configured:
                     for a in self.apps:
-                        concConfig.append({"id": a["app"]["id"], "appConcSoc": a["app"]["concSoc"]})
+                        self.concConfig.append({"id": a["app"]["id"], "appConcSoc": a["app"]["concSoc"]})
                     response = {"cmd": "config",
-                                "config": concConfig 
+                                "config": self.concConfig 
                                }
                 else:
                     self.concNoApps = True
@@ -895,6 +892,9 @@ class ManageBridge:
                                }
                 #logging.debug('%s Sending config to conc:  %s', ModuleName, response)
                 self.cbSendConcMsg(response)
+                # Only start apps & adaptors after concentrator has responded
+                if self.configured:
+                    reactor.callLater(MIN_DELAY, self.startAll)
             elif msg["type"] == "zwave":
                 zwaveConfig = []
                 response = {"cmd": "config",

@@ -75,6 +75,10 @@ class CbAdaptor:
         """This should be overridden by the actual adaptor."""
         logging.warning("%s %s should subclass onAppRequest method", ModuleName, self.id)
 
+    def onZwaveMessage(self, message):
+        """This should be overridden by a Z-wave adaptor."""
+        pass
+
     def onAppMessage(self, message):
         if "request" in message:
             if message["request"] == "init":
@@ -116,6 +120,11 @@ class CbAdaptor:
                 self.appInstances.append(iName)
                 self.cbFactory[iName] = CbServerFactory(self.onAppMessage)
                 reactor.listenUNIX(adtSoc, self.cbFactory[iName])
+        if "zwave_socket" in config:
+            initMsg = {"id": self.id,
+                       "request": "init"}
+            self.zwaveFactory = CbClientFactory(self.onZwaveMessage, initMsg)
+            reactor.connectUNIX(config["zwave_socket"], self.zwaveFactory, timeout=10)
         self.onConfigureMessage(config)
         self.configured = True
 
@@ -154,6 +163,9 @@ class CbAdaptor:
 
     def sendManagerMessage(self, msg):
         self.managerFactory.sendMsg(msg)
+
+    def sendZwaveMessage(self, msg):
+        self.zwaveFactory.sendMsg(msg)
 
 class CbApp:
     """
@@ -222,7 +234,7 @@ class CbApp:
 
     def cbConfigure(self, config):
         """Config is based on what adaptors are available."""
-        logging.debug("%s %s Config: %s", ModuleName, self.id, config)
+        #logging.debug("%s %s Config: %s", ModuleName, self.id, config)
         # Connect to socket for each adaptor
         for adaptor in config["adaptors"]:
             iName = adaptor["id"]

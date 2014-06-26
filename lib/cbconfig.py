@@ -27,4 +27,4 @@ CB_LOGFILE = CB_CONFIG_DIR + 'bridge.log'
 CB_DEV_BRIDGE = str2bool(os.getenv('CB_DEV_BRIDGE', 'False'))
 CB_WLAN_TEST = str2bool(os.getenv('CB_WLAN_TEST', 'False'))
 CB_GET_SSID_TIMEOUT = int(os.getenv('CB_GET_SSID_TIMEOUT', '300'))
-
+CB_ZWAVE_BRIDGE = str2bool(os.getenv('CB_ZWAVE_BRIDGE', 'False'))
