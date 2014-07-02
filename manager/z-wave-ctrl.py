@@ -26,7 +26,7 @@ from cbcommslib import CbServerFactory
 
 DISCOVER_TIME        = 20.0
 IPADDRESS            = 'localhost'
-MIN_DELAY            = 0.25
+MIN_DELAY            = 1.0
 PORT                 = "8083"
 baseUrl              = "http://" + IPADDRESS + ":" + PORT +"/"
 dataUrl              = baseUrl + 'ZWaveAPI/Data/'
@@ -79,7 +79,7 @@ class ZwaveCtrl():
         msg = {"id": self.id,
                "status": "state",
                "state": self.state}
-        self.sendManagerMsg(msg)
+        self.cbSendManagerMsg(msg)
 
     def sendParameter(self, parameter, data, timeStamp):
         msg = {"id": self.id,
@@ -131,7 +131,7 @@ class ZwaveCtrl():
             else:
                 URL = dataUrl + self.fromTime
             resp, content = h.request(URL,
-                                      'POST',
+                                     'POST',
                                       headers={'Content-Type': 'application/json'})
             if "value" in resp:
                 if resp["value"] != "200":
@@ -228,7 +228,7 @@ class ZwaveCtrl():
             logging.debug("%s onAdaptorMessage without request: %s", ModuleName, str(msg))
 
     def processConfig(self, config):
-        logging.debug("%s processConf: %s", ModuleName, config)
+        #logging.debug("%s processConf: %s", ModuleName, config)
         if config != "no_zwave":
             for a in config:
                 if a["id"] not in self.adaptors:
@@ -247,7 +247,7 @@ class ZwaveCtrl():
         except:
             logging.warning("%s %s stopReactor when reactor not running", ModuleName, self.id)
         logging.info("%s Bye from %s", ModuleName, self.id)
-        exit()
+        sys.exit
 
     def onManagerMessage(self, cmd):
         logging.debug("%s Received from manager: %s", ModuleName, cmd)

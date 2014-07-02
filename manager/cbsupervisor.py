@@ -15,8 +15,10 @@ MIN_TIME_BETWEEN_REBOOTS = 600 # Stops constant rebooting (secs)
 REBOOT_WAIT = 10               # Time to allow bridge to stop before rebooting
 RESTART_INTERVAL = 8           # Time between telling manager to stop and starting it again
 MAX_INTERFACE_CHECKS = 10      # No times to check interface before rebooting
+EXIT_WAIT = 2                  # On SIGINT, time to wait before exit after manager signalled to stop
 
 import sys
+import signal
 import time
 import os
 import wifisetup
@@ -50,6 +52,9 @@ class Supervisor:
         self.beginningOfTime = time.time() # Used when making decisions about rebooting
         self.noServerCount = 0             # Used when making decisions about rebooting
         self.interfaceChecks = 0
+        self.managerStopped = False
+        signal.signal(signal.SIGINT, self.signalHandler)  # For catching SIGINT
+        signal.signal(signal.SIGTERM, self.signalHandler)  # For catching SIGTERM
         try:
             reactor.callLater(TIME_TO_IFUP, self.checkInterface)
         except:
@@ -59,6 +64,9 @@ class Supervisor:
         reactor.run()
 
     def startManager(self, restart):
+        # Remove file that signifies that manager has exited 
+        if os.path.exists(CB_MANAGER_EXIT):
+            os.remove(CB_MANAGER_EXIT)
         # Open a socket for communicating with the bridge manager
         s = CB_SOCKET_DIR + "skt-super-mgr"
         # Try to remove socket in case of prior crash & no clean-up
@@ -92,11 +100,13 @@ class Supervisor:
             logging.info("%s processManager restarting", ModuleName)
             self.cbSendManagerMsg({"msg": "stopall"})
             self.starting = True
-            reactor.callLater(RESTART_INTERVAL, self.startManager, True)
+            reactor.callLater(RESTART_INTERVAL, self.checkManagerStopped, 0)
         elif msg["msg"] == "reboot":
             logging.info("%s Reboot message received from manager", ModuleName)
             self.starting = True
             self.doReboot()
+        elif msg["msg"] == "stopped":
+            self.managerStopped = True
         elif msg["msg"] == "status":
             if msg["status"] == "disconnected":
                 logging.info("%s status = %s, connecting = %s", ModuleName, msg["status"], self.connecting)
@@ -109,6 +119,18 @@ class Supervisor:
                         self.doReboot()
             else:
                 self.noServerCount = 0
+
+    def checkManagerStopped(self, count):
+        if os.path.exists(CB_MANAGER_EXIT):
+            logging.debug("%s checkManagerStopped. Manager stopped", ModuleName)
+            os.remove(CB_MANAGER_EXIT)
+            self.startManager(True)
+        elif count < 3:
+            reactor.callLater(RESTART_INTERVAL, self.checkManagerStopped, count + 1)
+            logging.info("%s checkManagerStopped. Manager not stopped yet, count: %s", ModuleName, count)
+        else:
+            logging.warning("%s checkManagerStopped. Manager not stopped after count %s, rebooting", ModuleName, count)
+            self.reboot()
 
     def checkManager(self, startTime):
         if not self.starting:
@@ -131,6 +153,7 @@ class Supervisor:
                     self.killBridge()
 
     def recheckManager(self, startTime):
+        logging.debug("%s recheckManager", ModuleName)
         # Whatever happened, stop listening on manager port.
         self.mgrPort.stopListening()
         if self.timeStamp > startTime - 1:
@@ -197,5 +220,15 @@ class Supervisor:
         else:
             logging.info("%s Would have rebooted if not in sim mode", ModuleName)
 
+    def signalHandler(self, signal, frame):
+        logging.debug("%s signalHandler received signal", ModuleName)
+        self.cbSendManagerMsg({"msg": "stopall"})
+        reactor.callLater(EXIT_WAIT, self.exitSupervisor)
+
+    def exitSupervisor(self):
+        logging.info("%s exiting", ModuleName)
+        reactor.stop()
+        sys.exit
+        
 if __name__ == '__main__':
     s = Supervisor()

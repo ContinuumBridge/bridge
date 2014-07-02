@@ -9,6 +9,7 @@ START_DELAY = 2.0                  # Delay between starting each adaptor or app
 CONDUIT_WATCHDOG_MAXTIME = 600     # Max time with no message before reboot
 CONDUIT_MAX_DISCONNECT_COUNT = 600 # Max number of messages before reboot
 ELEMENT_WATCHDOG_INTERVAL = 120    # Interval at which to check apps/adaptors have communicated
+ELEMENT_POLL_INTERVAL = 3          # Delay between polling each element
 APP_STOP_DELAY = 3                 # Time to allow apps/adaprts to stop before killing them
 MIN_DELAY = 1                      # Min time to wait when a delay is needed
 ModuleName = "Manager"
@@ -58,6 +59,7 @@ class ManageBridge:
         self.reqSync = False
         self.state = "stopped"
         self.concNoApps = False
+        self.firstWatchdog = True
         self.elements = {}
         self.appProcs = []
         self.concConfig = []
@@ -306,7 +308,7 @@ class ManageBridge:
     def onBLEDiscovered(self):
         logging.debug('%s onBLEDiscovered', ModuleName)
         self.bleDiscovered = True
-        if (CB_ZWAVE_BRIDGE and self.zwaveDiscovered) or CB_SIM_LEVEL == '1':
+        if (CB_ZWAVE_BRIDGE and self.zwaveDiscovered) or CB_SIM_LEVEL == '1' or not CB_ZWAVE_BRIDGE:
             self.gatherDiscovered()
 
     def gatherDiscovered(self):
@@ -321,7 +323,7 @@ class ManageBridge:
         d["body"] = []
         for b in self.bleDiscoveredData:
             d["body"].append(b)
-        if CB_ZWAVE_BRIDGE:
+        if CB_ZWAVE_BRIDGE and CB_SIM_LEVEL == '0':
             for b in self.zwaveDiscoveredData:
                 d["body"].append(b)
         elif CB_SIM_LEVEL == '1':
@@ -732,6 +734,7 @@ class ManageBridge:
                     logging.info('%s Stopping %s', ModuleName, a)
                 except:
                     logging.info('%s Could not send stop message to  %s', ModuleName, a)
+        self.cbSendSuperMsg({"msg": "end of stopApps"})
 
     def killAppProcs(self):
         # Stop listing on sockets
@@ -767,17 +770,21 @@ class ManageBridge:
         reactor.callLater(MIN_DELAY, self.stopManager)
 
     def stopManager(self):
+        logging.debug('%s stopManager', ModuleName)
+        logging.debug('%s stopManager send stopped message to supervisor', ModuleName)
         for el in self.elListen:
-            el.stopListening()
+            self.elListen[el].stopListening()
         for el in self.elProc:
             try:
                 el.kill()
             except:
                 logging.debug('%s No element process to kill', ModuleName)
+        logging.debug('%s stopManager, killed app processes', ModuleName)
         try:
             self.nodejsProc.kill()
         except:
             logging.debug('%s No node  process to kill', ModuleName)
+        logging.debug('%s stopManager, stopped node', ModuleName)
         for soc in self.concConfig:
             socket = soc["appConcSoc"]
             try:
@@ -785,9 +792,11 @@ class ManageBridge:
                 logging.debug('%s Socket %s renoved', ModuleName, socket)
             except:
                 logging.debug('%s Socket %s already renoved', ModuleName, socket)
-        self.cbSendSuperMsg({"msg": "stopped"})
         logging.info('%s Stopping reactor', ModuleName)
         reactor.stop()
+        # touch a file so that supervisor can see we have finished
+        if not os.path.exists(CB_MANAGER_EXIT):
+            open(CB_MANAGER_EXIT, 'w').close()
         sys.exit
 
     def sendStatusMsg(self, status):
@@ -813,9 +822,10 @@ class ManageBridge:
 
     def elementWatchdog(self):
         """ Checks that all apps and adaptors have communicated within the designated interval. """
+        #logging.debug('%s elementWatchdog, elements: %s', ModuleName, str(self.elements))
         if self.state == "running":
             for e in self.elements:
-                if self.elements[e]== False:
+                if self.elements[e] == False:
                     if e != "conc":
                         logging.warning('%s %s has not communicated within watchdog interval', ModuleName, e)
                         self.sendStatusMsg("Watchdog timeout for " + e + " - Restarting")
@@ -824,6 +834,23 @@ class ManageBridge:
                 else:
                     self.elements[e] = False
         reactor.callLater(ELEMENT_WATCHDOG_INTERVAL, self.elementWatchdog)
+        if self.firstWatchdog:
+            reactor.callLater(ELEMENT_POLL_INTERVAL, self.pollElement)
+        else:
+            self.firstWatchdog = False
+
+    def pollElement(self):
+        for e in self.elements:
+            if self.elements[e] == False:
+                #logging.debug('%s pollElement, elements: %s', ModuleName, e)
+                if e == "conc":
+                    self.cbSendConcMsg({"cmd": "status"})
+                elif e == "zwave":
+                    self.elFactory["zwave"].sendMsg({"cmd": "status"})
+                else:
+                    self.cbSendMsg({"cmd": "status"}, e)
+                break
+        reactor.callLater(ELEMENT_POLL_INTERVAL, self.pollElement)
 
     def processClient(self, msg):
         #logging.debug('%s Received msg; %s', ModuleName, msg)
