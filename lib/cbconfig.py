@@ -17,6 +17,7 @@ CB_BRIDGE_ROOT = os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..')
 CB_HOME = os.path.abspath(os.path.join(os.path.dirname( __file__ ), '../..'))
 CB_SOCKET_DIR = CB_HOME + "/thisbridge/"
 CB_CONFIG_DIR = CB_HOME + "/thisbridge/"
+CB_MANAGER_EXIT = CB_CONFIG_DIR + "/manager_exit"
 CB_SIM_LEVEL = os.getenv('CB_SIM_LEVEL', '0')
 CB_NO_CLOUD = str2bool(os.getenv('CB_NO_CLOUD', 'False'))
 CB_CONTROLLER_ADDR = os.getenv('CB_CONTROLLER_ADDR', '54.194.28.63')

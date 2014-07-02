@@ -193,12 +193,9 @@ class Concentrator():
             self.processConf(cmd["config"])
             msg = {"id": self.id,
                    "status": "ready"}
-        elif cmd["cmd"] != "ok":
-            msg = {"id": self.id,
-                   "status": "unknown"}
         else:
             msg = {"id": self.id,
-                   "status": "none"}
+                   "status": "ok"}
         self.cbSendManagerMsg(msg)
 
     def doStop(self):
