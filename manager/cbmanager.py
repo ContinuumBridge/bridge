@@ -371,7 +371,7 @@ class ManageBridge:
 
         if success:
             # Process config to determine routing:
-            logging.info('%s Success. Processing config', ModuleName)
+            logging.info('%s Config file read successfully. Processing', ModuleName)
             for d in self.devices:
                 d["id"] = "dev" + str(d["id"])
                 socket = CB_SOCKET_DIR + "skt-mgr-" + str(d["id"])
@@ -464,7 +464,10 @@ class ManageBridge:
         If directory does exist, check version file inside & download if changed.
         """
         updateList = []
-        dirs = os.listdir(CB_HOME + "/adaptors")
+        d = CB_HOME + "/adaptors"
+        if not os.path.exists(d):
+            os.makedirs(d)
+        dirs = os.listdir(d)
         for dev in self.devices:
             url = dev["adaptor"]["url"] 
             split_url = url.split('/')
@@ -482,8 +485,11 @@ class ManageBridge:
                         update = False
             if update:
                 updateList.append({"url": url, "type": "adaptors", "name": name})
+        d = CB_HOME + "/apps"
+        if not os.path.exists(d):
+            os.makedirs(d)
+        dirs = os.listdir(d)
         for app in self.apps:
-            dirs = os.listdir(CB_HOME + "/apps")
             url = app["app"]["url"]
             split_url = url.split('/')
             logging.debug('%s updateElements. split_url: %s', ModuleName, split_url)
@@ -499,7 +505,7 @@ class ManageBridge:
             if update:
                 updateList.append({"url": url, "type": "apps", "name": name})
 
-        logging.debug('%s updateList: %s', ModuleName, updateList)
+        logging.info('%s updateList: %s', ModuleName, updateList)
         for e in updateList:
             status = self.downloadElement(e)
             if status != "ok":
@@ -521,9 +527,14 @@ class ManageBridge:
         success = self.readConfig()
         logging.info('%s Update config, read config status: %s', ModuleName, success)
         if success:
-            status = self.updateElements()
+            try:
+                status = self.updateElements()
+            except:
+                logging.info('%s Update config. Something went badly wrong updating apps and adaptors', ModuleName)
+                status = "Something went badly wrong updating apps and adaptors"
         else:
             status = "Update failed"
+            logging.warning('%s Update config. Failed to update ', ModuleName)
         self.sendStatusMsg(status)
 
     def upgradeBridge(self):
@@ -567,6 +578,19 @@ class ManageBridge:
         if okToReboot:
             self.cbSendSuperMsg({"msg": "reboot"})
 
+    def uploadLog(self, logFile, dropboxPlace, status):
+        try:
+            f = open(logFile, 'rb')
+        except:
+            status = "Could not open log file for upload: " + logFile
+        else:
+            try:
+                response = self.client.put_file(dropboxPlace, f)
+                #logging.debug('%s Dropbox log upload response: %s', ModuleName, response)
+            except:
+                status = "Could not upload log file: " + logFile
+        reactor.callFromThread(self.sendStatusMsg, status)
+
     def sendLog(self):
         status = "Logfile upload failed"
         access_token = os.getenv('CB_DROPBOX_TOKEN', 'NO_TOKEN')
@@ -586,16 +610,7 @@ class ManageBridge:
             dropboxPlace = '/' + hostname +'.log'
             logFile = CB_CONFIG_DIR + '/bridge.log'
             logging.info('%s Uploading %s to %s', ModuleName, logFile, dropboxPlace)
-            try:
-                f = open(logFile, 'rb')
-            except:
-                status = "Could not open log file for upload: " + logFile
-            else:
-                try:
-                    response = self.client.put_file(dropboxPlace, f)
-                    #logging.debug('%s Dropbox log upload response: %s', ModuleName, response)
-                except:
-                    status = "Could not upload log file: " + logFile
+            status = reactor.callInThread(self.uploadLog, logFile, dropboxPlace, status)
         self.sendStatusMsg(status)
 
     def doCall(self, cmd):
