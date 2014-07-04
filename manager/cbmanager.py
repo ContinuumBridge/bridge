@@ -114,6 +114,7 @@ class ManageBridge:
         return mgrSocs
 
     def startElements(self):
+        self.removeSecondarySockets()
         els = [{"id": "conc",
                 "socket": "skt-mgr-conc",
                 "exe": CONCENTRATOR_PATH
@@ -187,7 +188,6 @@ class ManageBridge:
                 pass
         # Clear dictionary so that we can recreate sockets
         self.cbFactory.clear()
-        self.removeSecondarySockets()
 
         # Open sockets for communicating with all apps and adaptors
         for s in mgrSocs:
@@ -869,7 +869,7 @@ class ManageBridge:
     def pollElement(self):
         for e in self.elements:
             if self.elements[e] == False:
-                logging.debug('%s pollElement, elements: %s', ModuleName, e)
+                #logging.debug('%s pollElement, elements: %s', ModuleName, e)
                 if e == "conc":
                     self.cbSendConcMsg({"cmd": "status"})
                 elif e == "zwave":
