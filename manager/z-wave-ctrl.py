@@ -250,7 +250,7 @@ class ZwaveCtrl():
         sys.exit
 
     def onManagerMessage(self, cmd):
-        logging.debug("%s Received from manager: %s", ModuleName, cmd)
+        #logging.debug("%s Received from manager: %s", ModuleName, cmd)
         if cmd["cmd"] == "discover":
             self.discover()
             msg = {"id": self.id,

@@ -130,13 +130,12 @@ class ManageBridge:
                 os.remove(s)
             except:
                 logging.debug('%s Socket was not present: %s', ModuleName, s)
-            #try:
-            if True:
+            try:
                 self.elFactory[el["id"]] = CbServerFactory(self.processClient)
                 self.elListen[el["id"]] = reactor.listenUNIX(s, self.elFactory[el["id"]], backlog=4)
                 logging.debug('%s Opened manager socket: %s', ModuleName, s)
-            #except:
-                #logging.error('%s Failed to open socket: %s', ModuleName, s)
+            except:
+                logging.error('%s Failed to open socket: %s', ModuleName, s)
     
             # Now start the element in a subprocess
             try:
@@ -160,6 +159,23 @@ class ManageBridge:
     def setRunning(self):
         self.states("running")
 
+    def removeSecondarySockets(self):
+        for a in self.apps:
+            for appDev in a["device_permissions"]:
+                socket = appDev["adtSoc"]
+                try:
+                    os.remove(socket) 
+                    logging.debug('%s Socket %s removed', ModuleName, socket)
+                except:
+                    logging.debug('%s Socket %s already removed', ModuleName, socket)
+        for d in self.devices:
+            if d["adaptor"]["protocol"] == "zwave":
+                socket = d["adaptor"]["zwave_socket"]
+                try:
+                    os.remove(socket) 
+                except:
+                    logging.debug('%s Socket %s already removed', ModuleName, socket)
+
     def startAll(self):
         self.states("starting")
         # Manager sockets may already exist. If so, delete them
@@ -171,6 +187,7 @@ class ManageBridge:
                 pass
         # Clear dictionary so that we can recreate sockets
         self.cbFactory.clear()
+        self.removeSecondarySockets()
 
         # Open sockets for communicating with all apps and adaptors
         for s in mgrSocs:
@@ -591,7 +608,7 @@ class ManageBridge:
                 status = "Could not upload log file: " + logFile
         reactor.callFromThread(self.sendStatusMsg, status)
 
-    def sendLog(self):
+    def sendLog(self, logFile):
         status = "Logfile upload failed"
         access_token = os.getenv('CB_DROPBOX_TOKEN', 'NO_TOKEN')
         logging.info('%s Dropbox access token %s', ModuleName, access_token)
@@ -608,7 +625,6 @@ class ManageBridge:
             if hostname.endswith('\n'):
                 hostname = hostname[:-1]
             dropboxPlace = '/' + hostname +'.log'
-            logFile = CB_CONFIG_DIR + '/bridge.log'
             logging.info('%s Uploading %s to %s', ModuleName, logFile, dropboxPlace)
             status = reactor.callInThread(self.uploadLog, logFile, dropboxPlace, status)
         self.sendStatusMsg(status)
@@ -704,10 +720,13 @@ class ManageBridge:
                 reactor.callLater(APP_STOP_DELAY, self.killAppProcs)
                 reactor.callLater(APP_STOP_DELAY + MIN_DELAY, self.upgradeBridge)
             elif msg["body"] == "sendlog" or msg["body"] == "send_log":
-                self.sendLog()
+                self.sendLog(CB_CONFIG_DIR + '/bridge.log')
             elif msg["body"].startswith("call"):
                 # Need to call in thread is case it hangs
                 reactor.callInThread(self.doCall, msg["body"][5:])
+            elif msg["body"].startswith("upload"):
+                # Need to call in thread is case it hangs
+                reactor.callInThread(self.sendLog, msg["body"][7:])
             elif msg["body"] == "update_config" or msg["body"] == "update":
                 req = {"cmd": "msg",
                        "msg": {"type": "request",
@@ -763,14 +782,7 @@ class ManageBridge:
                 p.kill()
             except:
                 logging.debug('%s No process to kill', ModuleName)
-        for a in self.apps:
-            for appDev in a["device_permissions"]:
-                socket = appDev["adtSoc"]
-                try:
-                    os.remove(socket) 
-                    logging.debug('%s Socket %s removed', ModuleName, socket)
-                except:
-                    logging.debug('%s Socket %s already removed', ModuleName, socket)
+        self.removerSecondarySockets()
         # In case some adaptors have not killed gatttool processes:
         subprocess.call(["killall", "gatttool"])
         self.states("stopped")
@@ -857,7 +869,7 @@ class ManageBridge:
     def pollElement(self):
         for e in self.elements:
             if self.elements[e] == False:
-                #logging.debug('%s pollElement, elements: %s', ModuleName, e)
+                logging.debug('%s pollElement, elements: %s', ModuleName, e)
                 if e == "conc":
                     self.cbSendConcMsg({"cmd": "status"})
                 elif e == "zwave":
