@@ -33,10 +33,11 @@ from cbconfig import *
 class Supervisor:
     def __init__(self):
         logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(message)s')
-        logging.info("%s *************************************", ModuleName)
+        logging.info("%s ************************************************************", ModuleName)
         logging.info("%s Restart", ModuleName)
-        logging.info("%s *************************************", ModuleName)
-        logging.info("%s CB_LOGGIN_LEVEL =  %s", ModuleName, CB_LOGGING_LEVEL)
+        logging.info("%s ************************************************************", ModuleName)
+        logging.info("%s BEWARE. LOG TIMES MAY BE WRONG BEFORE TIME UPDATED VIA NTP", ModuleName)
+        logging.info("%s CB_LOGGING_LEVEL =  %s", ModuleName, CB_LOGGING_LEVEL)
         try:
             versionFile =  CB_BRIDGE_ROOT + "/manager/" + "cb_version"
             with open(versionFile, 'r') as f:
@@ -46,6 +47,7 @@ class Supervisor:
         except:
             v = "Unknown"
         logging.info("%s Bridge version =  %s", ModuleName, v)
+        logging.info("%s ************************************************************", ModuleName)
         self.starting = True    # Don't check manager watchdog when manager not running
         self.connecting = True  # Ignore conduit not connected messages if trying to connect
         self.timeStamp = time.time()
