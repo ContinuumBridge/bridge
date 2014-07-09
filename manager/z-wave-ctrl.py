@@ -211,7 +211,7 @@ class ZwaveCtrl():
         reactor.callLater(DISCOVER_TIME, self.stopDiscover)
 
     def onAdaptorMessage(self, msg):
-        logging.debug("%s onAdaptorMessage: %s", ModuleName, msg)
+        #logging.debug("%s onAdaptorMessage: %s", ModuleName, msg)
         if "request" in msg:
             if msg["request"] == "init":
                 pass
