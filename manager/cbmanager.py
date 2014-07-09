@@ -114,6 +114,8 @@ class ManageBridge:
         return mgrSocs
 
     def startElements(self):
+        if self.configured:
+            self.removeSecondarySockets()
         els = [{"id": "conc",
                 "socket": "skt-mgr-conc",
                 "exe": CONCENTRATOR_PATH
@@ -178,7 +180,6 @@ class ManageBridge:
 
     def startAll(self):
         self.states("starting")
-        self.removeSecondarySockets()
         # Manager sockets may already exist. If so, delete them
         mgrSocs = self.listMgrSocs()
         for s in mgrSocs:
