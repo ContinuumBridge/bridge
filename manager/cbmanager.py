@@ -782,7 +782,7 @@ class ManageBridge:
                 p.kill()
             except:
                 logging.debug('%s No process to kill', ModuleName)
-        self.removerSecondarySockets()
+        self.removeSecondarySockets()
         # In case some adaptors have not killed gatttool processes:
         subprocess.call(["killall", "gatttool"])
         self.states("stopped")
