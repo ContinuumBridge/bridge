@@ -386,6 +386,9 @@ class ManageBridge:
             except:
                 success = False
                 logging.error('%s bridge.config appears to be corrupt. Ignoring', ModuleName)
+            #print "Devices"
+            #print "*****************************************************************************"
+            #pprint(self.devices)
 
         if success:
             # Process config to determine routing:
@@ -402,7 +405,8 @@ class ManageBridge:
                     dirName = (split_url[-3] + '-' + split_url[-1])[:-7]
                 d["adaptor"]["exe"] = adtRoot + dirName + "/" + d["adaptor"]["exe"]
                 logging.debug('%s exe: %s', ModuleName, d["adaptor"]["exe"])
-                if d["adaptor"]["protocol"] == "zwave":
+                logging.debug('%s protocol: %s', ModuleName, d["device"]["protocol"])
+                if d["device"]["protocol"] == "zwave":
                     d["adaptor"]["zwave_socket"] =  CB_SOCKET_DIR + "skt-" + d["id"] + "-zwave"
                 # Add a apps list to each device adaptor
                 d["adaptor"]["apps"] = []
@@ -928,7 +932,7 @@ class ManageBridge:
                              "sim": CB_SIM_LEVEL
                             }
                         }
-                        if d["adaptor"]["protocol"] == "zwave":
+                        if d["device"]["protocol"] == "zwave":
                             response["config"]["zwave_socket"] = d["adaptor"]["zwave_socket"]
                         #logging.debug('%s Response: %s %s', ModuleName, msg['id'], response)
                         self.cbSendMsg(response, msg["id"])
@@ -957,7 +961,7 @@ class ManageBridge:
                            }
                 if self.configured:
                     for d in self.devices:
-                        if d["adaptor"]["protocol"] == "zwave":
+                        if d["device"]["protocol"] == "zwave":
                             zwaveConfig.append({"id": d["id"], 
                                                 "socket": d["adaptor"]["zwave_socket"],
                                                 "address": d["address"]
