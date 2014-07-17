@@ -34,6 +34,7 @@ from twisted.internet import task
 from twisted.internet import threads
 from twisted.internet import defer
 from twisted.internet import reactor
+from data_store import DataStore, DataModel
 
 class CbAdaptor:
     """This should be sub-classed by any app."""
