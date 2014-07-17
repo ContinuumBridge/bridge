@@ -76,8 +76,10 @@ if __name__ == '__main__':
                     found = False
                     if len(discoveredAddresses) == 0:
                         discoveredAddresses.append(addr)
-                        names.append("SensorTag")
-                        #names.append(name)
+                        if name == "Continuum":
+                            names.append("SensorTag")
+                        else:
+                            names.append(name)
                         protocols.append("btle")
                         manufacturers.append("Texas Instruments")
                     else:
@@ -86,8 +88,10 @@ if __name__ == '__main__':
                                 found = True
                         if found == False:
                             discoveredAddresses.append(addr)
-                            #names.append(name)
-                            names.append("SensorTag")
+                            if name == "Continuum":
+                                names.append("SensorTag")
+                            else:
+                                names.append(name)
                             protocols.append("btle")
                             manufacturers.append("Texas Instruments")
             except:
