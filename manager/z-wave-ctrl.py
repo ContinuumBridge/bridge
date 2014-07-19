@@ -132,79 +132,83 @@ class ZwaveCtrl():
                 self.getting = False
             else:
                 URL = dataUrl + self.fromTime
-            #logging.debug("%s URL: %s", ModuleName, URL)
+            logging.debug("%s URL: %s", ModuleName, URL)
             resp, content = h.request(URL,
                                      'POST',
                                       headers={'Content-Type': 'application/json'})
             if "value" in resp:
                 if resp["value"] != "200":
-                    logging.debug("%s %s non-200 response:  %s", ModuleName, self.id, resp["value"])
-            dat = json.loads(content)
-            if dat:
-                if "updateTime" in dat:
-                    self.fromTime = str(dat["updateTime"])
-                if self.include:
-                    #logging.debug("%s include on, dat: %s", ModuleName, str(dat))
-                    if "controller.data.lastIncludedDevice" in dat:
-                        zid = dat["controller.data.lastIncludedDevice"]["value"]
-                        if zid != "1":
-                            included.append(zid)
-                        logging.debug("%s %s Include list; %s", ModuleName, self.id, str(included))
-                    if "controller.data.lastExcludedDevice" in dat:
-                        zid = dat["controller.data.lastExcludedDevice"]["value"]
-                        if zid != "1":
-                            excluded.append(zid)
-                        logging.debug("%s %s Excluded list; %s", ModuleName, self.id, str(excluded))
+                    logging.debug("%s non-200 response: %s", ModuleName, resp["value"])
+            try:
+                dat = json.loads(content)
+            except:
+                logging.debug("%s Could not load JSON in response", ModuleName)
+            else:
+                if dat:
                     if "updateTime" in dat:
                         self.fromTime = str(dat["updateTime"])
-                    if "devices" in dat:
-                        logging.debug("%s devices in dat", ModuleName)
-                        devs = "Included devices: "
-                        for d in dat["devices"].keys():
-                            devs += d + " "
-                            logging.debug("%s %s Included devices: %s", ModuleName, self.id, devs)
-                            new = False
-                            if d != "1":
-                                new = True
-                                for a in self.adaptors:
-                                    if d == a["address"]:
-                                        new = False
-                                        break
-                                for a in self.found:
-                                    #if d == a["mac_addr"][5:]:
-                                    if d == a["mac_addr"]:
-                                        new = False
-                                        break
-                            if new:
-                                for k in dat["devices"][d].keys():
-                                    for j in dat["devices"][d][k].keys():
-                                        if j == "nodeInfoFrame":
-                                            command_classes = dat["devices"][d][k][j]["value"]
-                                            logging.debug("%s %s command_classes: %s", ModuleName, self.id, command_classes)
-                                        elif j == "manufacturerId":
-                                            manufacturer_name = dat["devices"][d][k][j]["value"]
-                                            logging.debug("%s %s manufacturer_name: %s", ModuleName, self.id, manufacturer_name) 
-                                        elif j == "deviceTypeString":
-                                            name = dat["devices"][d][k][j]["value"]
-                                            logging.debug("%s %s name: %s", ModuleName, self.id, name)
-                                        elif j == "manufacturerProductType":
-                                            model_number = dat["devices"][d][k][j]["value"]
-                                            logging.debug("%s %s model_number: %s", ModuleName, self.id, model_number)
-                                self.found.append({"protocol": "zwave",
-                                                   "name": name,
-                                                   #"mac_addr": "XXXXX" + str(d),
-                                                   "mac_addr": str(d),
-                                                   "manufacturer_name": manufacturer_name,
-                                                   "model_number": model_number,
-                                                   #"command_classes": command_classes
-                                                 })
-                else: # not including
-                    #logging.debug("%s dat: %s", ModuleName, str(dat))
-                    for g in self.getStrs:
-                        if g.values()[0] in dat:
-                            logging.debug("%s found: %s", ModuleName, g.keys()[0])
-                            self.sendParameter("switch", dat[g.values()[0]], time.time(), g.keys()[0])
-            time.sleep(MIN_DELAY)
+                    if self.include:
+                        #logging.debug("%s include on, dat: %s", ModuleName, str(dat))
+                        if "controller.data.lastIncludedDevice" in dat:
+                            zid = dat["controller.data.lastIncludedDevice"]["value"]
+                            if zid != "1":
+                                included.append(zid)
+                            logging.debug("%s %s Include list; %s", ModuleName, self.id, str(included))
+                        if "controller.data.lastExcludedDevice" in dat:
+                            zid = dat["controller.data.lastExcludedDevice"]["value"]
+                            if zid != "1":
+                                excluded.append(zid)
+                            logging.debug("%s %s Excluded list; %s", ModuleName, self.id, str(excluded))
+                        if "updateTime" in dat:
+                            self.fromTime = str(dat["updateTime"])
+                        if "devices" in dat:
+                            logging.debug("%s devices in dat", ModuleName)
+                            devs = "Included devices: "
+                            for d in dat["devices"].keys():
+                                devs += d + " "
+                                logging.debug("%s %s Included devices: %s", ModuleName, self.id, devs)
+                                new = False
+                                if d != "1":
+                                    new = True
+                                    for a in self.adaptors:
+                                        if d == a["address"]:
+                                            new = False
+                                            break
+                                    for a in self.found:
+                                        #if d == a["mac_addr"][5:]:
+                                        if d == a["mac_addr"]:
+                                            new = False
+                                            break
+                                if new:
+                                    for k in dat["devices"][d].keys():
+                                        for j in dat["devices"][d][k].keys():
+                                            if j == "nodeInfoFrame":
+                                                command_classes = dat["devices"][d][k][j]["value"]
+                                                logging.debug("%s %s command_classes: %s", ModuleName, self.id, command_classes)
+                                            elif j == "manufacturerId":
+                                                manufacturer_name = dat["devices"][d][k][j]["value"]
+                                                logging.debug("%s %s manufacturer_name: %s", ModuleName, self.id, manufacturer_name) 
+                                            elif j == "deviceTypeString":
+                                                name = dat["devices"][d][k][j]["value"]
+                                                logging.debug("%s %s name: %s", ModuleName, self.id, name)
+                                            elif j == "manufacturerProductType":
+                                                model_number = dat["devices"][d][k][j]["value"]
+                                                logging.debug("%s %s model_number: %s", ModuleName, self.id, model_number)
+                                    self.found.append({"protocol": "zwave",
+                                                       "name": name,
+                                                       #"mac_addr": "XXXXX" + str(d),
+                                                       "mac_addr": str(d),
+                                                       "manufacturer_name": manufacturer_name,
+                                                       "model_number": model_number,
+                                                       #"command_classes": command_classes
+                                                     })
+                    else: # not including
+                        #logging.debug("%s dat: %s", ModuleName, str(dat))
+                        for g in self.getStrs:
+                            if g.values()[0] in dat:
+                                logging.debug("%s found: %s", ModuleName, g.keys()[0])
+                                self.sendParameter("switch", dat[g.values()[0]], time.time(), g.keys()[0])
+                time.sleep(MIN_DELAY)
 
     def sendDiscoverResults(self):
         d = {"status": "discovered",
@@ -234,7 +238,7 @@ class ZwaveCtrl():
                 self.sendMessage(resp, msg["id"])
             elif msg["request"] == "post":
                 self.postToUrl = postUrl + msg["address"] + "].instances[" + msg["instance"] + \
-                                 "].commandClasses[" + msg["commandClass"] + "].Set(" + \
+                                 "].commandClasses[" + msg["commandClass"] + "]." + msg["action"] + "(" + \
                                  msg["value"] + ")"
                 logging.debug("%s postToUrl: %s", ModuleName, str(self.postToUrl))
                 self.posting = True
@@ -245,7 +249,6 @@ class ZwaveCtrl():
                 logging.debug("%s New getStr: %s", ModuleName, getStr)
                 self.getStrs.append(getStr)
                 logging.debug("%s getStrs: %s", ModuleName, str(self.getStrs))
-                #self.getting = True
         else:
             logging.debug("%s onAdaptorMessage without request: %s", ModuleName, str(msg))
 
@@ -272,7 +275,7 @@ class ZwaveCtrl():
         sys.exit
 
     def onManagerMessage(self, cmd):
-        logging.debug("%s Received from manager: %s", ModuleName, cmd)
+        #logging.debug("%s Received from manager: %s", ModuleName, cmd)
         if cmd["cmd"] == "discover":
             self.discover()
             msg = {"id": self.id,

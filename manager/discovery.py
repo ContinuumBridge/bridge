@@ -55,8 +55,8 @@ if __name__ == '__main__':
             print json.dumps(d)
             sys.exit()
         try:
-            p.expect('.*', timeout=10)
-            p.expect('.*', timeout=10)
+            p.expect('.*', timeout=3)
+            p.expect('.*', timeout=3)
         except:
             logging.error('%s Nothing returned from pexpect', ModuleName)
             d = {"status": "error"}        
@@ -76,9 +76,8 @@ if __name__ == '__main__':
                     found = False
                     if len(discoveredAddresses) == 0:
                         discoveredAddresses.append(addr)
-                        names.append("SensorTag")
-                        #names.append(name)
-                        protocols.append("btle")
+                        names.append(name)
+                        protocols.append("bte")
                         manufacturers.append("Texas Instruments")
                     else:
                         for a in discoveredAddresses:
@@ -86,8 +85,7 @@ if __name__ == '__main__':
                                 found = True
                         if found == False:
                             discoveredAddresses.append(addr)
-                            #names.append(name)
-                            names.append("SensorTag")
+                            names.append(name)
                             protocols.append("btle")
                             manufacturers.append("Texas Instruments")
             except:
