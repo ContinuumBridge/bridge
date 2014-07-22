@@ -55,8 +55,8 @@ if __name__ == '__main__':
             print json.dumps(d)
             sys.exit()
         try:
-            p.expect('.*', timeout=10)
-            p.expect('.*', timeout=10)
+            p.expect('.*', timeout=3)
+            p.expect('.*', timeout=3)
         except:
             logging.error('%s Nothing returned from pexpect', ModuleName)
             d = {"status": "error"}        
@@ -76,24 +76,18 @@ if __name__ == '__main__':
                     found = False
                     if len(discoveredAddresses) == 0:
                         discoveredAddresses.append(addr)
-                        if name == "Continuum":
-                            names.append("SensorTag")
-                        else:
-                            names.append(name)
-                        protocols.append("btle")
-                        manufacturers.append("Texas Instruments")
+                        names.append(name)
+                        protocols.append("ble")
+                        manufacturers.append("")
                     else:
                         for a in discoveredAddresses:
                             if addr == a:
                                 found = True
                         if found == False:
                             discoveredAddresses.append(addr)
-                            if name == "Continuum":
-                                names.append("SensorTag")
-                            else:
-                                names.append(name)
-                            protocols.append("btle")
-                            manufacturers.append("Texas Instruments")
+                            names.append(name)
+                            protocols.append("ble")
+                            manufacturers.append("")
             except:
                 logging.debug('%s lescan skip', ModuleName)
         try:

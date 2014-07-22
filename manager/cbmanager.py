@@ -221,14 +221,14 @@ class ManageBridge:
         # Start watchdog to monitor apps and adaptors
         reactor.callLater(delay+ELEMENT_WATCHDOG_INTERVAL, self.elementWatchdog)
         # Monitor Bluetooth LE
-        reactor.callInThread(self.monitorLescan)
+        #reactor.callInThread(self.monitorLescan)
         # Give time for everything to start before we consider ourselves running
         reactor.callLater(delay+START_DELAY, self.setRunning)
         logging.info('%s All adaptors and apps set to start', ModuleName)
 
     def startAdaptor(self, exe, mgrSoc, id, friendlyName):
         try:
-            p = subprocess.Popen([exe, mgrSoc, id])
+            p = subprocess.Popen([id, mgrSoc, id], executable=exe)
             self.appProcs.append(p)
             logging.info('%s Started adaptor %s ID: %s', ModuleName, friendlyName, id)
         except:
@@ -881,7 +881,6 @@ class ManageBridge:
                     self.elFactory["zwave"].sendMsg({"cmd": "status"})
                 else:
                     self.cbSendMsg({"cmd": "status"}, e)
-                break
         reactor.callLater(ELEMENT_POLL_INTERVAL, self.pollElement)
 
     def processClient(self, msg):
