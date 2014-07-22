@@ -24,7 +24,7 @@ from cbcommslib import CbClientFactory
 from cbcommslib import CbServerProtocol
 from cbcommslib import CbServerFactory
 
-DISCOVER_TIME        = 20.0
+DISCOVER_TIME        = 10.0
 IPADDRESS            = 'localhost'
 MIN_DELAY            = 1.0
 PORT                 = "8083"
@@ -202,6 +202,8 @@ class ZwaveCtrl():
                                                        "model_number": model_number,
                                                        #"command_classes": command_classes
                                                      })
+                                    # Stop discovery as soon as one new deivce has been included:
+                                    reactor.callFromThread(self.stopDiscover)
                     else: # not including
                         #logging.debug("%s dat: %s", ModuleName, str(dat))
                         for g in self.getStrs:
@@ -218,14 +220,18 @@ class ZwaveCtrl():
         logging.debug("%s sendDiscoveredResults: %s", ModuleName, d)
         self.cbSendManagerMsg(d)
         del self.found[:]
+        self.discoveryResultsSent = True
  
     def stopDiscover(self):
+        # Stop discovery after a fixed time if no new devices have been included
         logging.debug("%s stopDiscover", ModuleName)
-        self.include = False
-        reactor.callLater(4*MIN_DELAY, self.sendDiscoverResults)
+        if not self.discoveryResultsSent:
+            self.include = False
+            reactor.callLater(MIN_DELAY, self.sendDiscoverResults)
 
     def discover(self):
         logging.debug("%s starting discovery", ModuleName)
+        self.discoveryResultsSent = False
         self.include = True
         reactor.callLater(DISCOVER_TIME, self.stopDiscover)
 

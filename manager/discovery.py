@@ -10,6 +10,7 @@
     All it does it look for addresses and append them to a list. """
 
 ModuleName = "Discovery"
+DISCOVERY_TIME = 8  # Time to scan before reporting results
 
 import sys
 import time
@@ -63,7 +64,7 @@ if __name__ == '__main__':
             print json.dumps(d)
             sys.exit()
         startTime = time.time()
-        endTime = startTime + 10
+        endTime = startTime + DISCOVERY_TIME
         while time.time() < endTime:
             try:
                 p.expect('.*', timeout=10)

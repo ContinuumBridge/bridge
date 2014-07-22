@@ -201,6 +201,8 @@ class ManageBridge:
 
         # Start adaptors with 2 secs between them to give time for each to start
         delay = START_DELAY 
+        # This ensures that any deleted adaptors/apps are removed from watchdog:
+        self.elements = {}
         for d in self.devices:
             id = d["id"]
             self.elements[id] = True
@@ -360,6 +362,7 @@ class ManageBridge:
         if CB_ZWAVE_BRIDGE:
             self.elFactory["zwave"].sendMsg({"cmd": "discover"})
         reactor.callInThread(self.bleDiscover)
+        self.sendStatusMsg("Press button on device to be discovered now")
 
     def readConfig(self):
         if CB_DEV_BRIDGE:
