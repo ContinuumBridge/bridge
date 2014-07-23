@@ -50,6 +50,7 @@ class ManageBridge:
         """
         logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(message)s')
         logging.info("%s CB_NO_CLOUD = %s", ModuleName, CB_NO_CLOUD)
+        self.bridge_id = "unconfigured"
         self.bridgeStatus = "ok" # Used to set status for sending to supervisor
         self.timeLastConduitMsg = time.time()  # For watchdog
         self.disconnectedCount = 0  # Used to count "disconnected" messages from conduit
@@ -383,6 +384,7 @@ class ManageBridge:
             success= False
         if configRead:
             try:
+                self.bridge_id = "BID" + str(config["body"]["id"])
                 self.apps = config["body"]["apps"]
                 self.devices = config["body"]["devices"]
                 success = True
@@ -395,10 +397,10 @@ class ManageBridge:
 
         if success:
             # Process config to determine routing:
-            logging.info('%s Config file read successfully. Processing', ModuleName)
+            logging.info('%s Config file for bridge %s read successfully. Processing', ModuleName, self.bridge_id)
             for d in self.devices:
-                d["id"] = "dev" + str(d["id"])
-                socket = CB_SOCKET_DIR + "skt-mgr-" + str(d["id"])
+                d["id"] = "DID" + str(d["id"])
+                socket = CB_SOCKET_DIR + "SKT-MGR-" + str(d["id"])
                 d["adaptor"]["mgrSoc"] = socket
                 url = d["adaptor"]["url"]
                 split_url = url.split('/')
@@ -415,7 +417,7 @@ class ManageBridge:
                 d["adaptor"]["apps"] = []
             # Add socket descriptors to apps and devices
             for a in self.apps:
-                a["app"]["id"] = "app" + str(a["app"]["id"])
+                a["app"]["id"] = "AID" + str(a["app"]["id"])
                 url = a["app"]["url"]
                 split_url = url.split('/')
                 if CB_DEV_BRIDGE:
@@ -424,8 +426,8 @@ class ManageBridge:
                     dirName = (split_url[-3] + '-' + split_url[-1])[:-7]
                 a["app"]["exe"] = appRoot + dirName + "/" + a["app"]["exe"]
                 logging.debug('%s exe: %s', ModuleName, a["app"]["exe"])
-                a["app"]["mgrSoc"] = CB_SOCKET_DIR + "skt-mgr-" + str(a["app"]["id"])
-                a["app"]["concSoc"] = CB_SOCKET_DIR + "skt-conc-" + str(a["app"]["id"])
+                a["app"]["mgrSoc"] = CB_SOCKET_DIR + "SKT-MGR-" + str(a["app"]["id"])
+                a["app"]["concSoc"] = CB_SOCKET_DIR + "SKT-CONC-" + str(a["app"]["id"])
                 for appDev in a["device_permissions"]:
                     uri = appDev["device_install"]
                     for d in self.devices: 
@@ -944,7 +946,8 @@ class ManageBridge:
                     for a in self.apps:
                         self.concConfig.append({"id": a["app"]["id"], "appConcSoc": a["app"]["concSoc"]})
                     response = {"cmd": "config",
-                                "config": self.concConfig 
+                                "config": {"bridge_id": self.bridge_id,
+                                           "apps": self.concConfig} 
                                }
                 else:
                     self.concNoApps = True

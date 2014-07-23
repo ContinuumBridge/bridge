@@ -132,7 +132,7 @@ class ZwaveCtrl():
                 self.getting = False
             else:
                 URL = dataUrl + self.fromTime
-            logging.debug("%s URL: %s", ModuleName, URL)
+            #logging.debug("%s URL: %s", ModuleName, URL)
             resp, content = h.request(URL,
                                      'POST',
                                       headers={'Content-Type': 'application/json'})

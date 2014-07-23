@@ -40,6 +40,7 @@ from dropbox.datastore import DatastoreError, DatastoreManager, Date, Bytes
 
 class DropboxStore():
     def __init__(self):
+        self.bridge_id = "unconfigured"
         self.configured = False
         self.connected = False
         self.gotConfig = False
@@ -149,15 +150,16 @@ class Concentrator():
         """Config is based on what apps are available."""
         logging.info("%s processConf: %s", ModuleName, config)
         if config != "no_apps":
+            self.bridge_id = config["bridge_id"]
             self.cbFactory = {}
             self.appInstances = []
-            for app in config:
+            for app in config["apps"]:
                 iName = app["id"]
                 if iName not in self.appInstances:
                     # Allows for reconfig on the fly
                     appConcSoc = app["appConcSoc"]
                     self.appInstances.append(iName)
-                    self.cbFactory[iName] = CbServerFactory(self.processReq)
+                    self.cbFactory[iName] = CbServerFactory(self.onAppData)
                     reactor.listenUNIX(appConcSoc, self.cbFactory[iName])
 
     def processServerMsg(self, msg):
@@ -221,26 +223,34 @@ class Concentrator():
                 "resp": "config"}
         self.cbSendMsg(resp, appID)
 
-    def processReq(self, req):
+    def onAppData(self, msg):
         """
         Processes requests from apps.
-        Called in a thread and so it is OK if it blocks.
-        Called separately for every app that can make requests.
+        Called separately for every app that can make msguests.
         """
-        if req["msg"] == "init":
-            logging.info("%s Init from app %s", ModuleName, req['appID'])
-            if req["appID"] == "app1":
-                reactor.callLater(6, self.appInit, req["appID"])
-        elif req["msg"] == "req":
-            if req["verb"] == "post":
-               if req["body"]["msg"] == "services":
-                   for s in req["body"]["services"]:
-                        self.dropboxStore.setConfig(req["body"])
-               elif req["body"]["msg"] == "data":
-                    self.dropboxStore.appendData(req['body']['deviceID'], req['body']['type'], \
-                                req["body"]["timeStamp"], req["body"]["data"])
+        if "msg" in msg:
+            # Dropbox backward-compatibility. To be removed after new regime working.
+            if msg["msg"] == "init":
+                logging.info("%s Init from app %s", ModuleName, msg['appID'])
+                if msg["appID"] == "app1":
+                    reactor.callLater(6, self.appInit, msg["appID"])
+            elif msg["msg"] == "req":
+                if msg["verb"] == "post":
+                    if msg["body"]["msg"] == "services":
+                        for s in msg["body"]["services"]:
+                            self.dropboxStore.setConfig(msg["body"])
+                    elif msg["body"]["msg"] == "data":
+                        self.dropboxStore.appendData(msg['body']['deviceID'], msg['body']['type'], \
+                                msg["body"]["timeStamp"], msg["body"]["data"])
+        elif not "destination" in msg:
+            logging.warning("%s Message from app with no destination: %s", ModuleName, str(msg))
         else:
-            pass
+            if msg["destination"].startswith("CID"):
+                msg["source"] = self.bridge_id + "/" + msg["source"]
+                logging.debug("%s Sending msg to cb: %s", ModuleName, str(msg))
+                self.concFactory.sendMsg(msg)
+            else:
+                logging.warning("%s Illegal desination in app message: %s", ModuleName, str(msg))
 
 if __name__ == '__main__':
     concentrator = Concentrator(sys.argv)
