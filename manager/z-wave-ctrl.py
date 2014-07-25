@@ -203,6 +203,7 @@ class ZwaveCtrl():
                                                        #"command_classes": command_classes
                                                      })
                                     # Stop discovery as soon as one new deivce has been included:
+                                    self.discTime = time.time()
                                     reactor.callFromThread(self.stopDiscover)
                     else: # not including
                         #logging.debug("%s dat: %s", ModuleName, str(dat))
@@ -220,17 +221,18 @@ class ZwaveCtrl():
         logging.debug("%s sendDiscoveredResults: %s", ModuleName, d)
         self.cbSendManagerMsg(d)
         del self.found[:]
-        self.discoveryResultsSent = True
  
     def stopDiscover(self):
         # Stop discovery after a fixed time if no new devices have been included
         logging.debug("%s stopDiscover", ModuleName)
         if not self.discoveryResultsSent:
+            self.discoveryResultsSent = True
             self.include = False
             reactor.callLater(MIN_DELAY, self.sendDiscoverResults)
 
     def discover(self):
         logging.debug("%s starting discovery", ModuleName)
+        self.discTime = time.time()
         self.discoveryResultsSent = False
         self.include = True
         reactor.callLater(DISCOVER_TIME, self.stopDiscover)
