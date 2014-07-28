@@ -9,13 +9,13 @@ ModuleName = "Supervisor"
 
 TIME_TO_IFUP = 15              # Time to wait before checking if we have an Internet connection (secs)
 WATCHDOG_INTERVAL = 30         # Time between manager checks (secs)
-CONNECT_CHECK_INTERVAL = 60    # How often to check LAN connection
 MAX_NO_SERVER_COUNT = 10       # Used when making decisions about rebooting
 MIN_TIME_BETWEEN_REBOOTS = 600 # Stops constant rebooting (secs)
 REBOOT_WAIT = 10               # Time to allow bridge to stop before rebooting
 RESTART_INTERVAL = 8           # Time between telling manager to stop and starting it again
 MAX_INTERFACE_CHECKS = 10      # No times to check interface before rebooting
 EXIT_WAIT = 2                  # On SIGINT, time to wait before exit after manager signalled to stop
+SAFETY_INTERVAL = 300          # Delay before rebooting if manager failed to start
 
 import sys
 import signal
@@ -48,13 +48,12 @@ class Supervisor:
             v = "Unknown"
         logging.info("%s Bridge version =  %s", ModuleName, v)
         logging.info("%s ************************************************************", ModuleName)
-        self.starting = True    # Don't check manager watchdog when manager not running
-        self.connecting = True  # Ignore conduit not connected messages if trying to connect
-        self.timeStamp = time.time()
+        self.starting = True               # Don't check manager watchdog when manager not running
+        self.connecting = True             # Ignore conduit not connected messages if trying to connect
+        self.timeStamp = time.time()       # Keeps track of when manager last communicated
         self.beginningOfTime = time.time() # Used when making decisions about rebooting
         self.noServerCount = 0             # Used when making decisions about rebooting
-        self.interfaceChecks = 0
-        self.managerStopped = False
+        self.interfaceChecks = 0           # Keeps track of how many times network connection has been checked
         signal.signal(signal.SIGINT, self.signalHandler)  # For catching SIGINT
         signal.signal(signal.SIGTERM, self.signalHandler)  # For catching SIGTERM
         try:
@@ -62,7 +61,7 @@ class Supervisor:
         except:
             logging.error("%s iUnable to call checkInterface", ModuleName)
 
-        reactor.callLater(1, self.startManager, False)
+        reactor.callLater(0.1, self.startManager, False)
         reactor.run()
 
     def startManager(self, restart):
@@ -71,13 +70,10 @@ class Supervisor:
             os.remove(CB_MANAGER_EXIT)
         # Open a socket for communicating with the bridge manager
         s = CB_SOCKET_DIR + "skt-super-mgr"
-        # Try to remove socket in case of prior crash & no clean-up
-        try:
+        # In case of prior crash & no clean-up
+        if os.path.exists(s):
             os.remove(s)
-        except:
-            logging.debug("%s Socket was not present %s", ModuleName, s)
-        #if not restart:
-        self.cbManagerFactory = CbServerFactory(self.processManager)
+        self.cbManagerFactory = CbServerFactory(self.onManagerMessage)
         self.mgrPort = reactor.listenUNIX(s, self.cbManagerFactory, backlog=4)
 
         # Start the manager in a subprocess
@@ -89,17 +85,19 @@ class Supervisor:
             reactor.callLater(2*WATCHDOG_INTERVAL, self.checkManager, time.time())
         except:
             logging.error("%s Bridge manager failed to start: %s", ModuleName, exe)
+            # Give developer a chance to do something before rebooting:
+            reactor.callLater(SAFETY_INTERVAL, self.reboot)
         
     def cbSendManagerMsg(self, msg):
         #logging.debug("%s Sending msg to manager: %s", ModuleName, msg)
         self.cbManagerFactory.sendMsg(msg)
 
-    def processManager(self, msg):
-        #logging.debug("%s processManager received message: %s", ModuleName, msg)
+    def onManagerMessage(self, msg):
+        #logging.debug("%s onManagerMessage received message: %s", ModuleName, msg)
         # Regardless of message content, timeStamp is the time when we last heard from the manager
         self.timeStamp = time.time()
         if msg["msg"] == "restart":
-            logging.info("%s processManager restarting", ModuleName)
+            logging.info("%s onManagerMessage restarting", ModuleName)
             self.cbSendManagerMsg({"msg": "stopall"})
             self.starting = True
             reactor.callLater(RESTART_INTERVAL, self.checkManagerStopped, 0)
@@ -107,8 +105,6 @@ class Supervisor:
             logging.info("%s Reboot message received from manager", ModuleName)
             self.starting = True
             self.doReboot()
-        elif msg["msg"] == "stopped":
-            self.managerStopped = True
         elif msg["msg"] == "status":
             if msg["status"] == "disconnected":
                 logging.info("%s status = %s, connecting = %s", ModuleName, msg["status"], self.connecting)
@@ -152,7 +148,7 @@ class Supervisor:
                     reactor.callLater(WATCHDOG_INTERVAL, self.recheckManager, time.time())
                 except:
                     logging.warning("%s Cannot send message to manager. Rebooting", ModuleName)
-                    self.killBridge()
+                    self.reboot()
 
     def recheckManager(self, startTime):
         logging.debug("%s recheckManager", ModuleName)
@@ -165,11 +161,7 @@ class Supervisor:
         else:
             # Manager is well and truely dead.
             logging.warning("%s Manager is well and truly dead. Rebooting", ModuleName)
-            self.killBridge()
-
-    def killBridge(self):
-        # For now, just do a reboot rather than anything more elegant
-        self.reboot()
+            self.reboot()
 
     def checkInterface(self):
         # Defer to thread - it could take several seconds
