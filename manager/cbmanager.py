@@ -916,6 +916,7 @@ class ManageBridge:
                                 response = {"cmd": "config",
                                             "sim": CB_SIM_LEVEL,
                                             "config": {"adaptors": a["device_permissions"],
+                                                       "bridge_id": self.bridge_id,
                                                        "concentrator": conc}}
                                 #logging.debug('%s Response: %s %s', ModuleName, msg['id'], response)
                                 self.cbSendMsg(response, msg["id"])

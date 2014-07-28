@@ -183,6 +183,7 @@ class CbApp:
         self.friendlyLookup = {}
         self.configured = False
         self.status = "ok"
+        self.bridge_id = "unconfigure"
 
         if len(argv) < 3:
             logging.error("%s cbApp improper number of arguments", ModuleName)
@@ -237,6 +238,7 @@ class CbApp:
         """Config is based on what adaptors are available."""
         #logging.debug("%s %s Config: %s", ModuleName, self.id, config)
         # Connect to socket for each adaptor
+        self.bridge_id = config["bridge_id"]
         for adaptor in config["adaptors"]:
             iName = adaptor["id"]
             if iName not in self.adtInstances:
