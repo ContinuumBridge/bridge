@@ -13,6 +13,7 @@ import os
 import json
 import httplib2
 import logging
+from pprint import pprint
 from cbconfig import *
 from twisted.internet import task
 from twisted.internet import threads
@@ -24,7 +25,7 @@ from cbcommslib import CbClientFactory
 from cbcommslib import CbServerProtocol
 from cbcommslib import CbServerFactory
 
-DISCOVER_TIME        = 10.0
+DISCOVER_TIME        = 15.0
 IPADDRESS            = 'localhost'
 MIN_DELAY            = 1.0
 PORT                 = "8083"
@@ -82,10 +83,10 @@ class ZwaveCtrl():
                "state": self.state}
         self.cbSendManagerMsg(msg)
 
-    def sendParameter(self, parameter, data, timeStamp, a):
+    def sendParameter(self, data, timeStamp, a, commandClass):
         msg = {"id": "zwave",
-               "content": "parameter",
-               "parameter": "switch",
+               "content": "data",
+               "commandClass": commandClass,
                "data": data,
                "timeStamp": timeStamp}
         reactor.callFromThread(self.sendMessage, msg, a)
@@ -113,7 +114,13 @@ class ZwaveCtrl():
                     del included[:]
                     URL = startIncludeUrl
                     body = []
+                    logging.debug("%s started including", ModuleName)
                 elif including:
+                    # To prevent problems with getting half-updated information from z-way
+                    # Give enough time to press button & get all data from device
+                    logging.debug("%s about to sleep", ModuleName)
+                    time.sleep(8)
+                    logging.debug("%s stopped sleeping", ModuleName)
                     URL = dataUrl + self.fromTime
             elif including:
                 including = False
@@ -148,7 +155,6 @@ class ZwaveCtrl():
                     if "updateTime" in dat:
                         self.fromTime = str(dat["updateTime"])
                     if self.include:
-                        #logging.debug("%s include on, dat: %s", ModuleName, str(dat))
                         if "controller.data.lastIncludedDevice" in dat:
                             zid = dat["controller.data.lastIncludedDevice"]["value"]
                             if zid != "1":
@@ -185,15 +191,20 @@ class ZwaveCtrl():
                                             if j == "nodeInfoFrame":
                                                 command_classes = dat["devices"][d][k][j]["value"]
                                                 logging.debug("%s %s command_classes: %s", ModuleName, self.id, command_classes)
-                                            elif j == "manufacturerId":
+                                            elif j == "vendorString":
                                                 manufacturer_name = dat["devices"][d][k][j]["value"]
                                                 logging.debug("%s %s manufacturer_name: %s", ModuleName, self.id, manufacturer_name) 
                                             elif j == "deviceTypeString":
-                                                name = dat["devices"][d][k][j]["value"]
-                                                logging.debug("%s %s name: %s", ModuleName, self.id, name)
-                                            elif j == "manufacturerProductType":
+                                                deviceTypeString = dat["devices"][d][k][j]["value"]
+                                                logging.debug("%s %s zwave name: %s", ModuleName, self.id, deviceTypeString)
+                                            elif j == "manufacturerProductId":
                                                 model_number = dat["devices"][d][k][j]["value"]
                                                 logging.debug("%s %s model_number: %s", ModuleName, self.id, model_number)
+                                    if manufacturer_name == "":
+                                        name = deviceTypeString
+                                    else:
+                                        name = manufacturer_name + " " + str(model_number)
+                                    logging.debug("%s %s name: %s", ModuleName, self.id, name)
                                     self.found.append({"protocol": "zwave",
                                                        "name": name,
                                                        #"mac_addr": "XXXXX" + str(d),
@@ -205,30 +216,39 @@ class ZwaveCtrl():
                                     # Stop discovery as soon as one new deivce has been included:
                                     self.discTime = time.time()
                                     reactor.callFromThread(self.stopDiscover)
+                                    self.debugTime = self.fromTime
+                                    self.debugDat = dat
+                                    self.debugContent = content
+                                    #reactor.callFromThread(self.debugPrint)
                     else: # not including
                         #logging.debug("%s dat: %s", ModuleName, str(dat))
                         for g in self.getStrs:
-                            if g.values()[0] in dat:
-                                logging.debug("%s found: %s", ModuleName, g.keys()[0])
-                                self.sendParameter("switch", dat[g.values()[0]], time.time(), g.keys()[0])
+                            if g["match"] in dat:
+                                #Logging.debug("%s found: %s %s", ModuleName, g["address"], g["commandClass"])
+                                self.sendParameter(dat[g["match"]], time.time(), g["address"], g["commandClass"])
                 time.sleep(MIN_DELAY)
 
-    def sendDiscoverResults(self):
-        d = {"status": "discovered",
-             "id": "zwave",
-             "body": self.found
-            }
-        logging.debug("%s sendDiscoveredResults: %s", ModuleName, d)
-        self.cbSendManagerMsg(d)
-        del self.found[:]
- 
+    def debugPrint(self):
+        reactor.callInThread(self.dodebugPrint)
+
+    def dodebugPrint(self):
+        print "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        print "updateTime: ", self.debugTime
+        pprint(self.debugDat)
+
     def stopDiscover(self):
         # Stop discovery after a fixed time if no new devices have been included
-        logging.debug("%s stopDiscover", ModuleName)
+        logging.debug("%s stopDiscover, discoveryResultsSent: %s", ModuleName, self.discoveryResultsSent)
+        self.include = False
         if not self.discoveryResultsSent:
             self.discoveryResultsSent = True
-            self.include = False
-            reactor.callLater(MIN_DELAY, self.sendDiscoverResults)
+            d = {"status": "discovered",
+                 "id": "zwave",
+                 "body": self.found
+                }
+            logging.debug("%s sendDiscoveredResults: %s", ModuleName, d)
+            self.cbSendManagerMsg(d)
+            del self.found[:]
 
     def discover(self):
         logging.debug("%s starting discovery", ModuleName)
@@ -236,6 +256,16 @@ class ZwaveCtrl():
         self.discoveryResultsSent = False
         self.include = True
         reactor.callLater(DISCOVER_TIME, self.stopDiscover)
+
+    def stopExclude(self):
+        self.exclude = False
+        msg = {"status": "excluded"}
+        self.cbSendManagerMsg(msg)
+
+    def exclude(self):
+        logging.debug("%s starting exclude", ModuleName)
+        self.exclude = True
+        reactor.callLater(DISCOVER_TIME, self.stopExclude)
 
     def onAdaptorMessage(self, msg):
         logging.debug("%s onAdaptorMessage: %s", ModuleName, msg)
@@ -253,8 +283,11 @@ class ZwaveCtrl():
             elif msg["request"] == "get":
                 g = "devices." + msg["address"] + ".instances." + msg["instance"] + \
                     ".commandClasses." + msg["commandClass"] + ".data." + msg["value"]
-                getStr = {msg["id"]: g}
-                logging.debug("%s New getStr: %s", ModuleName, getStr)
+                getStr = {"address": msg["id"],
+                          "match": g, 
+                          "commandClass": msg["commandClass"]
+                         }
+                logging.debug("%s New getStr: %s", ModuleName, str(getStr))
                 self.getStrs.append(getStr)
                 logging.debug("%s getStrs: %s", ModuleName, str(self.getStrs))
         else:
@@ -286,6 +319,10 @@ class ZwaveCtrl():
         #logging.debug("%s Received from manager: %s", ModuleName, cmd)
         if cmd["cmd"] == "discover":
             self.discover()
+            msg = {"id": self.id,
+                   "status": "ok"}
+        elif cmd["cmd"] == "exclude":
+            self.exclude()
             msg = {"id": self.id,
                    "status": "ok"}
         elif cmd["cmd"] == "stop":

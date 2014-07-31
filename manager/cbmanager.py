@@ -163,21 +163,24 @@ class ManageBridge:
         self.states("running")
 
     def removeSecondarySockets(self):
-        for a in self.apps:
-            for appDev in a["device_permissions"]:
-                socket = appDev["adtSoc"]
-                try:
-                    os.remove(socket) 
-                    logging.debug('%s Socket %s removed', ModuleName, socket)
-                except:
-                    logging.debug('%s Socket %s already removed', ModuleName, socket)
-        for d in self.devices:
-            if d["adaptor"]["protocol"] == "zwave":
-                socket = d["adaptor"]["zwave_socket"]
-                try:
-                    os.remove(socket) 
-                except:
-                    logging.debug('%s Socket %s already removed', ModuleName, socket)
+        # There should be no sockets to remove if there is no config file
+        # Also there are no apps and adaptors without a config file
+        if self.configured:
+            for a in self.apps:
+                for appDev in a["device_permissions"]:
+                    socket = appDev["adtSoc"]
+                    try:
+                        os.remove(socket) 
+                        logging.debug('%s Socket %s removed', ModuleName, socket)
+                    except:
+                        logging.debug('%s Socket %s already removed', ModuleName, socket)
+            for d in self.devices:
+                if d["adaptor"]["protocol"] == "zwave":
+                    socket = d["adaptor"]["zwave_socket"]
+                    try:
+                        os.remove(socket) 
+                    except:
+                        logging.debug('%s Socket %s already removed', ModuleName, socket)
 
     def startAll(self):
         self.states("starting")
@@ -355,6 +358,7 @@ class ManageBridge:
                  'model_number': 0
                 }
             d["body"].append(b)
+        logging.debug('%s Discovered: %s', ModuleName, str(d))
         msg = {"cmd": "msg",
                "msg": d}
         self.cbSendConcMsg(msg)
@@ -565,6 +569,7 @@ class ManageBridge:
         self.sendStatusMsg(status)
 
     def upgradeBridge(self):
+        reactor.callFromThread(self.sendStatusMsg, "Upgrade in progress. Please wait")
         upgradeStat = ""
         okToReboot = False
         access_token = os.getenv('CB_DROPBOX_TOKEN', 'NO_TOKEN')
@@ -601,9 +606,14 @@ class ManageBridge:
                 okToReboot = True
             except:
                 upgradeStat = "Failed. Problems moving directories"
-        self.sendStatusMsg(upgradeStat)
+        reactor.callFromThread(self.sendStatusMsg, upgradeStat)
         if okToReboot:
             self.cbSendSuperMsg({"msg": "reboot"})
+            reactor.callFromThread(self.sendSuperMsg, {"msg": "reboot"})
+
+    def waitToUpgrade(self):
+        # Call in threaad as it can take some time & watchdog still going
+        reactor.callInThread(self.upgradeBridge)
 
     def uploadLog(self, logFile, dropboxPlace, status):
         try:
@@ -708,9 +718,12 @@ class ManageBridge:
                     logging.warning('%s Cannot start adaptors and apps. Please run discovery', ModuleName)
                     self.sendStatusMsg("Start command received with no apps and adaptors")
             elif msg["body"] == "discover":
-                self.stopApps()
-                reactor.callLater(APP_STOP_DELAY, self.killAppProcs)
-                reactor.callLater(APP_STOP_DELAY + MIN_DELAY, self.discover)
+                if self.state != "stopped":
+                    self.stopApps()
+                    reactor.callLater(APP_STOP_DELAY, self.killAppProcs)
+                    reactor.callLater(APP_STOP_DELAY + MIN_DELAY, self.discover)
+                else:
+                    reactor.callLater(MIN_DELAY, self.discover)
             elif msg["body"] == "restart":
                 logging.info('%s Received restart command', ModuleName)
                 self.cbSendSuperMsg({"msg": "restart"})
@@ -726,9 +739,10 @@ class ManageBridge:
                 else:
                     self.sendStatusMsg("Already stopped or stopping. Stop command ignored.")
             elif msg["body"] == "upgrade":
-                self.stopApps()
+                if self.state != "stopped":
+                    self.stopApps()
                 reactor.callLater(APP_STOP_DELAY, self.killAppProcs)
-                reactor.callLater(APP_STOP_DELAY + MIN_DELAY, self.upgradeBridge)
+                reactor.callLater(APP_STOP_DELAY + MIN_DELAY, self.waitToUpgrade)
             elif msg["body"] == "sendlog" or msg["body"] == "send_log":
                 self.sendLog(CB_CONFIG_DIR + '/bridge.log')
             elif msg["body"].startswith("call"):
