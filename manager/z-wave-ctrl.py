@@ -289,7 +289,7 @@ class ZwaveCtrl():
                          }
                 logging.debug("%s New getStr: %s", ModuleName, str(getStr))
                 self.getStrs.append(getStr)
-                logging.debug("%s getStrs: %s", ModuleName, str(self.getStrs))
+                #logging.debug("%s getStrs: %s", ModuleName, str(self.getStrs))
         else:
             logging.debug("%s onAdaptorMessage without request: %s", ModuleName, str(msg))
 
