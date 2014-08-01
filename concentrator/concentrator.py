@@ -7,10 +7,6 @@
 #
 ModuleName = "Concentrator"
 
-# Number of samples stored locally before a commit to Dropbox
-DROPBOX_COMMIT_COUNT = 10
-DROPBOX_START_DELAY = 20  # Time to wait before trying to connect to Dropbox
-
 import sys
 import time
 import os
@@ -25,8 +21,6 @@ from twisted.internet import defer
 from twisted.internet import reactor
 from twisted.application.internet import TCPServer
 from twisted.application.service import Application
-from twisted.web.resource import Resource
-from twisted.web.server import Site
 from twisted.internet.task import deferLater
 from twisted.web.server import NOT_DONE_YET
 from cbcommslib import CbClientProtocol
@@ -34,67 +28,6 @@ from cbcommslib import CbClientFactory
 from cbcommslib import CbServerProtocol
 from cbcommslib import CbServerFactory
 from cbconfig import *
-from dropbox.client import DropboxClient, DropboxOAuth2Flow, DropboxOAuth2FlowNoRedirect
-from dropbox.rest import ErrorResponse, RESTSocketError
-from dropbox.datastore import DatastoreError, DatastoreManager, Date, Bytes
-
-class DropboxStore():
-    def __init__(self):
-        self.bridge_id = "unconfigured"
-        self.configured = False
-        self.connected = False
-        self.gotConfig = False
-        self.count = 0
-
-    def connectDropbox(self, hostname):
-        connected = True
-        access_token = os.getenv('CB_DROPBOX_TOKEN', 'NO_TOKEN')
-        logging.info("%s Dropbox access token: %s", ModuleName, access_token)
-        try:
-            self.client = DropboxClient(access_token)
-        except:
-            logging.error("%s Could not access Dropbox. Wrong access token?", ModuleName)
-            connected = False
-        else:
-            self.manager = DatastoreManager(self.client)
-            hostname = hostname.lower()
-            logging.info("%s Datastore ID: %s", ModuleName, hostname)
-            try:
-                self.datastore = self.manager.open_or_create_datastore(hostname)
-            except:
-                logging.info("%s Could not open Dropbox datastore", ModuleName)
-                connected = False
-        self.connected = connected
-        return self.connected
-
-    def configure(self):
-        idToName = self.config['idToName']
-        t = self.datastore.get_table('config')
-        for i in idToName:
-            devName = idToName.get(i)
-            t.get_or_insert(i, type='idtoname', device=i, name=devName)
-        self.datastore.commit()
-        self.configured = True
-
-    def setConfig(self, config):
-        self.config = config
-        self.gotConfig = True
-        if self.connected:
-            self.configure()
-    
-    def appendData(self, device, type, timeStamp, data):
-        if self.connected:
-            if self.configured:
-                devTable = self.datastore.get_table(device)
-                date = Date(timeStamp)
-                t = devTable.insert(Date=date, Type=type, Data=data)
-                if self.count > DROPBOX_COMMIT_COUNT:
-                    self.datastore.commit()
-                    self.count = 0
-                else:
-                    self.count += 1
-            elif self.gotConfig:
-                self.configure()
 
 class Concentrator():
     def __init__(self, argv):
@@ -124,28 +57,8 @@ class Concentrator():
         self.concFactory = CbClientFactory(self.processServerMsg, initMsg)
         self.jsConnect = reactor.connectTCP("localhost", 5000, self.concFactory, timeout=10)
 
-        # Connect to Dropbox
-        self.dropboxStore = DropboxStore()
-        with open('/etc/hostname', 'r') as hostFile:
-            self.hostname = hostFile.read()
-            if self.hostname.endswith('\n'):
-                self.hostname = self.hostname[:-1]
-        reactor.callLater(DROPBOX_START_DELAY, self.connectDropbox)
         reactor.run()
 
-    def connectDropbox(self):
-        d1 = threads.deferToThread(self.dropboxStore.connectDropbox, self.hostname)
-        d1.addCallback(self.checkDropbox)
-    
-    def checkDropbox(self, connected):
-        """ Will continually try to connect until it is connected. """
-        logging.info("%s Connected to Dropbox: %s", ModuleName, connected)
-        if not connected:
-            logging.info("%s Dropbox connection failed. Trying again", ModuleName)
-            reactor.callLater(DROPBOX_START_DELAY, self.connectDropbox)
-        else:
-            logging.info("%s Dropbox connection successful", ModuleName)
- 
     def processConf(self, config):
         """Config is based on what apps are available."""
         logging.info("%s processConf: %s", ModuleName, config)
@@ -228,21 +141,7 @@ class Concentrator():
         Processes requests from apps.
         Called separately for every app that can make msguests.
         """
-        if "msg" in msg:
-            # Dropbox backward-compatibility. To be removed after new regime working.
-            if msg["msg"] == "init":
-                logging.info("%s Init from app %s", ModuleName, msg['appID'])
-                if msg["appID"] == "app1":
-                    reactor.callLater(6, self.appInit, msg["appID"])
-            elif msg["msg"] == "req":
-                if msg["verb"] == "post":
-                    if msg["body"]["msg"] == "services":
-                        for s in msg["body"]["services"]:
-                            self.dropboxStore.setConfig(msg["body"])
-                    elif msg["body"]["msg"] == "data":
-                        self.dropboxStore.appendData(msg['body']['deviceID'], msg['body']['type'], \
-                                msg["body"]["timeStamp"], msg["body"]["data"])
-        elif not "destination" in msg:
+        if not "destination" in msg:
             logging.warning("%s Message from app with no destination: %s", ModuleName, str(msg))
         else:
             if msg["destination"].startswith("CID"):

@@ -89,6 +89,7 @@ class ZwaveCtrl():
                "commandClass": commandClass,
                "data": data,
                "timeStamp": timeStamp}
+        #logging.debug("%s sendParameter: %s %s", ModuleName, str(msg), a)
         reactor.callFromThread(self.sendMessage, msg, a)
 
     def checkAllProcessed(self, appID):
@@ -236,7 +237,7 @@ class ZwaveCtrl():
                         #logging.debug("%s dat: %s", ModuleName, str(dat))
                         for g in self.getStrs:
                             if g["match"] in dat:
-                                #Logging.debug("%s found: %s %s", ModuleName, g["address"], g["commandClass"])
+                                #logging.debug("%s found: %s %s", ModuleName, g["address"], g["commandClass"])
                                 self.sendParameter(dat[g["match"]], time.time(), g["address"], g["commandClass"])
                 time.sleep(MIN_DELAY)
 
@@ -274,7 +275,7 @@ class ZwaveCtrl():
         msg = {"id": self.id,
                "status": "excluded",
                #"body": "Z-wave devices excluded: " + self.excludeResult}
-               "body": "Z-wave devices excluded: not available at this release"
+               "body": "Z-wave devices excluded: not available at this release"}
         self.cbSendManagerMsg(msg)
 
     def startExclude(self):
