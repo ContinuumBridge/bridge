@@ -128,9 +128,19 @@ class ZwaveCtrl():
             elif self.exclude:
                 if not excluding:
                     excluding = True
+                    del excluded[:]
                     URL = startExcludeUrl
+                    logging.debug("%s started excluding", ModuleName)
             elif excluding:
+                logging.debug("%s stopping excluding", ModuleName)
                 excluding = False
+                if excluded:
+                    if excluded[0] == "None":
+                        self.excludeResult = "Unidentified device"
+                    else:
+                        self.excludeResult = excluded
+                else:
+                    self.excludeResult = "No devices were excluded"
                 URL = stopExcludeUrl
             elif self.posting:
                 self.posting = False
@@ -154,17 +164,19 @@ class ZwaveCtrl():
                 if dat:
                     if "updateTime" in dat:
                         self.fromTime = str(dat["updateTime"])
+                    if self.exclude:
+                        if "controller.data.lastExcludedDevice" in dat:
+                            logging.debug("%s lastExcludedDevice; %s", ModuleName, str(dat["controller.data.lastExcludedDevice"]))
+                            zid = dat["controller.data.lastExcludedDevice"]["value"]
+                            if zid != 1:
+                                excluded.append(zid)
+                            logging.debug("%s %s Excluded list; %s", ModuleName, self.id, str(excluded))
                     if self.include:
                         if "controller.data.lastIncludedDevice" in dat:
                             zid = dat["controller.data.lastIncludedDevice"]["value"]
-                            if zid != "1":
+                            if zid != 1:
                                 included.append(zid)
                             logging.debug("%s %s Include list; %s", ModuleName, self.id, str(included))
-                        if "controller.data.lastExcludedDevice" in dat:
-                            zid = dat["controller.data.lastExcludedDevice"]["value"]
-                            if zid != "1":
-                                excluded.append(zid)
-                            logging.debug("%s %s Excluded list; %s", ModuleName, self.id, str(excluded))
                         if "updateTime" in dat:
                             self.fromTime = str(dat["updateTime"])
                         if "devices" in dat:
@@ -259,11 +271,16 @@ class ZwaveCtrl():
 
     def stopExclude(self):
         self.exclude = False
-        msg = {"status": "excluded"}
+        msg = {"id": self.id,
+               "status": "excluded",
+               #"body": "Z-wave devices excluded: " + self.excludeResult}
+               "body": "Z-wave devices excluded: not available at this release"
         self.cbSendManagerMsg(msg)
 
-    def exclude(self):
+    def startExclude(self):
         logging.debug("%s starting exclude", ModuleName)
+        self.excludeResult = "none"
+        self.excluded = []
         self.exclude = True
         reactor.callLater(DISCOVER_TIME, self.stopExclude)
 
@@ -322,7 +339,7 @@ class ZwaveCtrl():
             msg = {"id": self.id,
                    "status": "ok"}
         elif cmd["cmd"] == "exclude":
-            self.exclude()
+            self.startExclude()
             msg = {"id": self.id,
                    "status": "ok"}
         elif cmd["cmd"] == "stop":

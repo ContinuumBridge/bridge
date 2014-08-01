@@ -369,6 +369,14 @@ class ManageBridge:
         reactor.callInThread(self.bleDiscover)
         self.sendStatusMsg("Press button on device to be discovered now")
 
+    def zwaveExclude(self):
+        logging.debug('%s zwaveExclude', ModuleName)
+        if CB_ZWAVE_BRIDGE:
+            self.elFactory["zwave"].sendMsg({"cmd": "exclude"})
+            self.sendStatusMsg("Follow manufacturer's instructions for Z-wave device to be excluded")
+        else:
+            self.sendStatusMsg("Bridge does not support Z-wave. Can't exclude")
+
     def readConfig(self):
         if CB_DEV_BRIDGE:
             appRoot = CB_HOME + "/apps_dev/"
@@ -494,6 +502,7 @@ class ManageBridge:
         Check if appname/adaptorname exist. If not, download app/adaptor.
         If directory does exist, check version file inside & download if changed.
         """
+        self.sendStatusMsg("Updating. This may take a minute")
         updateList = []
         d = CB_HOME + "/adaptors"
         if not os.path.exists(d):
@@ -538,31 +547,34 @@ class ManageBridge:
 
         logging.info('%s updateList: %s', ModuleName, updateList)
         for e in updateList:
+            logging.debug('%s Iterating updateList', ModuleName)
             status = self.downloadElement(e)
             if status != "ok":
                 self.sendStatusMsg(status)
         if updateList == []:
             return "Updated. All apps and adaptors already at latest versions"
         else:
+            logging.debug('%s updateList != []', ModuleName)
             feedback = "Updated: "
             for a in updateList:
                 feedback += " " + a["name"]
             return feedback
 
     def updateConfig(self, msg):
-        logging.info('%s Config update received from controller:', ModuleName)
-        logging.debug('%s %s', ModuleName, str(msg))
+        logging.info('%s Config update received from controller', ModuleName)
+        #logging.debug('%s %s', ModuleName, str(msg))
         configFile = CB_CONFIG_DIR + "/bridge.config"
         with open(configFile, 'w') as configFile:
             json.dump(msg, configFile)
         success = self.readConfig()
         logging.info('%s Update config, read config status: %s', ModuleName, success)
         if success:
-            try:
+            if True:
+            #try:
                 status = self.updateElements()
-            except:
-                logging.info('%s Update config. Something went badly wrong updating apps and adaptors', ModuleName)
-                status = "Something went badly wrong updating apps and adaptors"
+            #except:
+            #    logging.info('%s Update config. Something went badly wrong updating apps and adaptors', ModuleName)
+            #    status = "Something went badly wrong updating apps and adaptors"
         else:
             status = "Update failed"
             logging.warning('%s Update config. Failed to update ', ModuleName)
@@ -759,6 +771,8 @@ class ManageBridge:
                                "url": "/api/bridge/v1/current_bridge/bridge"}
                       }
                 self.cbSendConcMsg(req)
+            elif msg["body"] == "z-exclude":
+                self.zwaveExclude()
             else:
                 logging.warning('%s Unrecognised message received from server: %s', ModuleName, msg)
                 self.sendStatusMsg("Unrecognised command received from controller")
@@ -795,21 +809,23 @@ class ManageBridge:
         self.cbSendSuperMsg({"msg": "end of stopApps"})
 
     def killAppProcs(self):
-        # Stop listing on sockets
-        mgrSocs = self.listMgrSocs()
-        for a in mgrSocs:
-           logging.debug('%s Stop listening on %s', ModuleName, a)
-           self.appListen[a].stopListening()
-        # In case apps & adaptors have not shut down, kill their processes.
-        for p in self.appProcs:
-            try:
-                p.kill()
-            except:
-                logging.debug('%s No process to kill', ModuleName)
-        self.removeSecondarySockets()
-        # In case some adaptors have not killed gatttool processes:
-        subprocess.call(["killall", "gatttool"])
-        self.states("stopped")
+        # If not configured there will be no app processes & no mgrSocs
+        if self.configured:
+            # Stop listing on sockets
+            mgrSocs = self.listMgrSocs()
+            for a in mgrSocs:
+               logging.debug('%s Stop listening on %s', ModuleName, a)
+               self.appListen[a].stopListening()
+            # In case apps & adaptors have not shut down, kill their processes.
+            for p in self.appProcs:
+                try:
+                    p.kill()
+                except:
+                    logging.debug('%s No process to kill', ModuleName)
+            self.removeSecondarySockets()
+            # In case some adaptors have not killed gatttool processes:
+            subprocess.call(["killall", "gatttool"])
+            self.states("stopped")
 
     def stopAll(self):
         self.sendStatusMsg("Disconnecting. Goodbye, back soon ...")
@@ -1007,6 +1023,11 @@ class ManageBridge:
                 self.onZwaveDiscovered(msg)
             else:
                 logging.warning('%s Discovered message from unexpected source: %s', ModuleName, msg["id"])
+        elif msg["status"] == "excluded":
+            if msg["id"] == "zwave":
+                self.sendStatusMsg(msg["body"])
+            else:
+                logging.warning('%s Excluded  message from unexpected source: %s', ModuleName, msg["id"])
         elif msg["status"] == "state":
             if "state" in msg:
                 logging.debug('%s %s %s', ModuleName, msg["id"], msg["state"])
