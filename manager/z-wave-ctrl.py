@@ -25,7 +25,8 @@ from cbcommslib import CbClientFactory
 from cbcommslib import CbServerProtocol
 from cbcommslib import CbServerFactory
 
-DISCOVER_TIME        = 15.0
+DISCOVER_TIME        = 20.0
+DISCOVER_WAIT_TIME   = 12.0
 IPADDRESS            = 'localhost'
 MIN_DELAY            = 1.0
 PORT                 = "8083"
@@ -120,7 +121,7 @@ class ZwaveCtrl():
                     # To prevent problems with getting half-updated information from z-way
                     # Give enough time to press button & get all data from device
                     logging.debug("%s about to sleep", ModuleName)
-                    time.sleep(8)
+                    time.sleep(DISCOVER_WAIT_TIME)
                     logging.debug("%s stopped sleeping", ModuleName)
                     URL = dataUrl + self.fromTime
             elif including:
