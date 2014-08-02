@@ -378,6 +378,7 @@ class ManageBridge:
             self.sendStatusMsg("Bridge does not support Z-wave. Can't exclude")
 
     def readConfig(self):
+        # BEWARE. SOMETIMES CALLED IN A THREAD.
         if CB_DEV_BRIDGE:
             appRoot = CB_HOME + "/apps_dev/"
             adtRoot = CB_HOME + "/adaptors_dev/"
@@ -403,9 +404,6 @@ class ManageBridge:
             except:
                 success = False
                 logging.error('%s bridge.config appears to be corrupt. Ignoring', ModuleName)
-            #print "Devices"
-            #print "*****************************************************************************"
-            #pprint(self.devices)
 
         if success:
             # Process config to determine routing:
@@ -502,7 +500,7 @@ class ManageBridge:
         Check if appname/adaptorname exist. If not, download app/adaptor.
         If directory does exist, check version file inside & download if changed.
         """
-        self.sendStatusMsg("Updating. This may take a minute")
+        # THIS METHOD IS IN A THREAD
         updateList = []
         d = CB_HOME + "/adaptors"
         if not os.path.exists(d):
@@ -550,7 +548,7 @@ class ManageBridge:
             logging.debug('%s Iterating updateList', ModuleName)
             status = self.downloadElement(e)
             if status != "ok":
-                self.sendStatusMsg(status)
+                reactor.callFromThread(self.sendStatusMsg, status)
         if updateList == []:
             return "Updated. All apps and adaptors already at latest versions"
         else:
@@ -561,7 +559,9 @@ class ManageBridge:
             return feedback
 
     def updateConfig(self, msg):
+        # THIS METHOD IS IN A THREAD
         logging.info('%s Config update received from controller', ModuleName)
+        reactor.callFromThread(self.sendStatusMsg, "Updating. This may take a minute")
         #logging.debug('%s %s', ModuleName, str(msg))
         configFile = CB_CONFIG_DIR + "/bridge.config"
         with open(configFile, 'w') as configFile:
@@ -569,16 +569,21 @@ class ManageBridge:
         success = self.readConfig()
         logging.info('%s Update config, read config status: %s', ModuleName, success)
         if success:
-            if True:
-            #try:
+            try:
                 status = self.updateElements()
-            #except:
-            #    logging.info('%s Update config. Something went badly wrong updating apps and adaptors', ModuleName)
-            #    status = "Something went badly wrong updating apps and adaptors"
+            except:
+                logging.info('%s Update config. Something went badly wrong updating apps and adaptors', ModuleName)
+                status = "Something went badly wrong updating apps and adaptors"
         else:
             status = "Update failed"
             logging.warning('%s Update config. Failed to update ', ModuleName)
-        self.sendStatusMsg(status)
+        reactor.callFromThread(self.sendStatusMsg, status)
+        # Need to give concentrator new config if initial one was without apps
+        if self.concNoApps:
+            req = {"status": "req-config",
+                   "type": "conc"}
+            reactor.callFromThread(self.processClient, req)
+            self.concNoApps = False
 
     def upgradeBridge(self):
         reactor.callFromThread(self.sendStatusMsg, "Upgrade in progress. Please wait")
@@ -777,13 +782,8 @@ class ManageBridge:
                 logging.warning('%s Unrecognised message received from server: %s', ModuleName, msg)
                 self.sendStatusMsg("Unrecognised command received from controller")
         elif msg["type"] == "response":
-            self.updateConfig(msg)
-            # Need to give concentrator new config if initial one was without apps
-            if self.concNoApps:
-                req = {"status": "req-config",
-                       "type": "conc"}
-                self.processClient(req)
-                self.concNoApps = False
+            # Call in thread to prevent problems with blocking
+            reactor.callInThread(self.updateConfig, msg)
         elif msg["type"] == "status":
             if not "source" in msg:
                 logging.warning('%s Unrecognised command received from controller: %s', ModuleName, msg)
@@ -1034,9 +1034,11 @@ class ManageBridge:
             else:
                 logging.warning('%s Received state message from %s with no state', ModuleName, msg["id"])
         elif msg["status"] == "error":
-                logging.warning('%s Error status received from %s. Restarting', ModuleName, msg["id"])
-                self.sendStatusMsg("Error status received from " + msg["id"] + " - Restarting")
-                self.cbSendSuperMsg({"msg": "restart"})
+            logging.warning('%s Error status received from %s. Restarting', ModuleName, msg["id"])
+            self.sendStatusMsg("Error status received from " + msg["id"] + " - Restarting")
+            self.cbSendSuperMsg({"msg": "restart"})
+        elif msg["status"] != "ok":
+            logging.warning('%s Unrecognised messagge from client: %s', ModuleName, msg)
  
 if __name__ == '__main__':
     m = ManageBridge()
