@@ -21,6 +21,7 @@ import sys
 import signal
 import time
 import os
+import glob
 import wifisetup
 from subprocess import call
 from subprocess import Popen
@@ -65,6 +66,11 @@ class Supervisor:
         reactor.run()
 
     def startManager(self, restart):
+        # Try to remove all sockets, just in case
+        for f in glob.glob(CB_SOCKET_DIR + "skt-*"):
+            os.remove(f)
+        for f in glob.glob(CB_SOCKET_DIR + "SKT-*"):
+            os.remove(f)
         # Remove file that signifies that manager has exited 
         if os.path.exists(CB_MANAGER_EXIT):
             os.remove(CB_MANAGER_EXIT)
