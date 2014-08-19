@@ -304,11 +304,11 @@ class ManageBridge:
                 if self.configured:
                     for d in discOutput["body"]:
                         addrFound = False
-                        if d["protocol"] == "btle":
+                        if d["protocol"] == "ble":
                             for oldDev in self.devices:
-                               if oldDev["adaptor"]["protocol"] == "btle": 
-                                   if d["mac_addr"] == oldDev["address"]:
-                                       addrFound = True
+                                if oldDev["device"]["protocol"] == "btle" or oldDev["device"]["protocol"] == "ble": 
+                                    if d["address"] == oldDev["address"]:
+                                        addrFound = True
                         if addrFound == False:
                             self.bleDiscoveredData.append(d)  
                 else:
