@@ -163,7 +163,7 @@ class ZwaveCtrl():
             try:
                 dat = json.loads(content)
             except:
-                logging.debug("%s Could not load JSON in response", ModuleName)
+                logging.debug("%s Could not load JSON in response: %s", ModuleName, str(content))
             else:
                 if dat:
                     if "updateTime" in dat:
@@ -303,7 +303,9 @@ class ZwaveCtrl():
                 self.posting = True
             elif msg["request"] == "get":
                 g = "devices." + msg["address"] + ".instances." + msg["instance"] + \
-                    ".commandClasses." + msg["commandClass"] + ".data." + msg["value"]
+                    ".commandClasses." + msg["commandClass"] + ".data"
+                if "value" in msg:
+                    g += "." + msg["value"]
                 getStr = {"address": msg["id"],
                           "match": g, 
                           "commandClass": msg["commandClass"]
@@ -350,7 +352,7 @@ class ZwaveCtrl():
             msg = {"id": self.id,
                    "status": "stopping"}
             self.setState("stopping")
-            reactor.callLater(2, self.doStop)
+            reactor.callLater(1.5, self.doStop)
         elif cmd["cmd"] == "config":
             self.processConfig(cmd["config"])
             msg = {"id": self.id,

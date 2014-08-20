@@ -72,6 +72,7 @@ class ManageBridge:
         self.elFactory = {}
         self.elListen = {}
         self.elProc = {}
+        self.batteryLevels = []
 
         status = self.readConfig()
         logging.info('%s Read config status: %s', ModuleName, status)
@@ -677,6 +678,17 @@ class ManageBridge:
             output = "Error in running call"
         reactor.callFromThread(self.sendStatusMsg, output)
 
+    def sendBatteryLevels(self):
+        levels = ""
+        for b in self.batteryLevels:
+            for d in self.devices:
+                if b["id"] == d["id"]:
+                    levels = levels + d["friendly_name"] + ": " + str(b["battery_level"]) + "%\r\n"
+                    break
+        if levels == "":
+            levels = "No battery level information available at this time"
+        self.sendStatusMsg(levels)
+
     def processSuper(self, msg):
         """  watchdog. Replies with status=ok or a restart/reboot command. """
         if msg["msg"] == "stopall":
@@ -764,6 +776,8 @@ class ManageBridge:
                 reactor.callLater(APP_STOP_DELAY + MIN_DELAY, self.waitToUpgrade)
             elif msg["body"] == "sendlog" or msg["body"] == "send_log":
                 self.sendLog(CB_CONFIG_DIR + '/bridge.log')
+            elif msg["body"] == "battery":
+                self.sendBatteryLevels()
             elif msg["body"].startswith("call"):
                 # Need to call in thread is case it hangs
                 reactor.callInThread(self.doCall, msg["body"][5:])
@@ -836,7 +850,7 @@ class ManageBridge:
             self.elFactory["zwave"].sendMsg({"cmd": "stop"})
         self.cbSendConcMsg({"cmd": "stop"})
         # Give concentrator a change to stop before killing it and its sockets
-        reactor.callLater(MIN_DELAY, self.stopManager)
+        reactor.callLater(MIN_DELAY*2, self.stopManager)
 
     def stopManager(self):
         logging.debug('%s stopManager', ModuleName)
@@ -1035,6 +1049,16 @@ class ManageBridge:
                 logging.debug('%s %s %s', ModuleName, msg["id"], msg["state"])
             else:
                 logging.warning('%s Received state message from %s with no state', ModuleName, msg["id"])
+        elif msg["status"] == "battery_level":
+            if "battery_level" in msg:
+                for d in self.batteryLevels:
+                    if d["id"] == msg["id"]:
+                        d["battery_level"] = msg["battery_level"]
+                        break
+                else:
+                    self.batteryLevels.append({"id": msg["id"], "battery_level": msg["battery_level"]})
+            else:
+                logging.warning('%s Received battery_level message from %s with no battery_level', ModuleName, msg["id"])
         elif msg["status"] == "error":
             logging.warning('%s Error status received from %s. Restarting', ModuleName, msg["id"])
             self.sendStatusMsg("Error status received from " + msg["id"] + " - Restarting")
