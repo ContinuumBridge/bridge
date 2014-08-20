@@ -1040,7 +1040,7 @@ class ManageBridge:
             self.sendStatusMsg("Error status received from " + msg["id"] + " - Restarting")
             self.cbSendSuperMsg({"msg": "restart"})
         elif msg["status"] != "ok":
-            logging.warning('%s Unrecognised messagge from client: %s', ModuleName, msg)
+            logging.debug('%s Messagge from client: %s', ModuleName, msg)
  
 if __name__ == '__main__':
     m = ManageBridge()

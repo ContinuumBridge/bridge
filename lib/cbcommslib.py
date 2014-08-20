@@ -25,6 +25,7 @@ import os.path
 import time
 import json
 import logging
+import procname
 from cbconfig import *
 from twisted.internet.protocol import Protocol, Factory
 from twisted.internet.protocol import ClientFactory
@@ -54,6 +55,7 @@ class CbAdaptor:
         managerSocket = argv[1]
         self.id = argv[2]
         logging.info("%s Hello from %s", ModuleName, self.id)
+        procname.setprocname(self.id)
 
         initMsg = {"id": self.id,
                    "type": "adt",
@@ -191,6 +193,7 @@ class CbApp:
         managerSocket = argv[1]
         self.id = argv[2]
         logging.info("%s Hello from %s", ModuleName, self.id)
+        procname.setprocname(self.id)
 
         initMsg = {"id": self.id,
                    "type": "app",
