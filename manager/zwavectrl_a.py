@@ -26,8 +26,8 @@ from cbcommslib import CbClientFactory
 from cbcommslib import CbServerProtocol
 from cbcommslib import CbServerFactory
 
-DISCOVER_TIME        = 20.0
-DISCOVER_WAIT_TIME   = 12.0
+DISCOVER_TIME        = 26.0
+DISCOVER_WAIT_TIME   = 18.0
 IPADDRESS            = 'localhost'
 MIN_DELAY            = 1.0
 PORT                 = "8083"

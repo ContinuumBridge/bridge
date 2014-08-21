@@ -86,7 +86,7 @@ class CbAdaptor:
         if "request" in message:
             if message["request"] == "init":
                 self.onAppInit(message)
-            elif message["request"] == "functions": 
+            elif message["request"] == "service": 
                 self.onAppRequest(message)
             elif message["request"] == "command": 
                 self.onAppCommand(message)
@@ -216,17 +216,17 @@ class CbApp:
         """The app should overwrite this and do all configuration in it."""
         pass
 
-    def onAdaptorFunctions(self, message):
+    def onAdaptorService(self, message):
         """This should be overridden by the actual app."""
-        logging.warning("%s %s should subclass onAdaptorFunctions method", ModuleName, self.id)
+        logging.warning("%s %s should subclass onAdaptorService method", ModuleName, self.id)
 
     def onAdaptorData(self, message):
         """This should be overridden by the actual app."""
         logging.warning("%s %s should subclass onAdaptorData method", ModuleName, self.id)
 
     def onAdaptorMessage(self, message):
-        if message["content"] == "functions":
-            self.onAdaptorFunctions(message)
+        if message["content"] == "service":
+            self.onAdaptorService(message)
         else:
             self.onAdaptorData(message)
  
