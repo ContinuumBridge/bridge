@@ -1,60 +1,51 @@
 
+CB = require('continuumbridge');
+logger = CB.logger;
+
 require('./env');
 
-var BridgeConcentrator = require('./bridge/bridge_socket.js')
-    ,ControllerSocket = require('./controller/controller_socket.js')
-    ,controllerAuth = require('./controller/controller_auth.js')
-    ,Heartbeat = require('./heartbeat.js')
-    ;
-
-var logger = require('./logger');
-
-/* Node concentrator for managing socket communication between Bridge Manager and the main server (Controller) */
-
-var bridgeConcentrator = new BridgeConcentrator(5000);
-
-var controllerSocket = new ControllerSocket();
-
-var heartbeat = new Heartbeat(controllerSocket, bridgeConcentrator);
-heartbeat.start();
-
-controllerSocket.fromController.onValue(function(message) {
-
-    // Take messages from the controller and relay them to the bridge
-    bridgeConcentrator.toBridge.push(message);
-    logger.info('Controller => Bridge: ', message)
+//var args = process.argv.slice(2);
+//var key = args[0] || '677182590NDhU2Muu4q+r1kvUwJLvzewv50Wg+26ghkIZwyRYQgOSXEbfSmlB2B8';
+logger.log('debug', 'CONTROLLER_SOCKET', CONTROLLER_SOCKET);
+var client = new CB.Client({
+    key: BRIDGE_KEY,
+    cbAPI: CONTROLLER_API,
+    cbSocket: CONTROLLER_SOCKET,
+    bridge: true
 });
 
-bridgeConcentrator.fromBridge.onValue(function(message) {
+var TCPSocket = require('./tcpSocket');
 
-    // Take messages from the bridge and relay them to the controller
-    controllerSocket.toController.push(message);
-    logger.info('Bridge => Controller: ', message);
+var tcpSocket = new TCPSocket(5000);
+
+tcpSocket.on('message', function(message) {
+
+    // Take messages from the TCP socket and relay them to Continuum Bridge
+    client.publish(message);
+    logger.log('message', '%s <= %s: '
+            ,message.get('destination'), message.get('source'), message.get('body'));
 });
 
-connectToController = function() {
+client.on('message', function(message) {
 
-    controllerAuth(CONTROLLER_API, BRIDGE_EMAIL, BRIDGE_PASSWORD).then(function(sessionID) {
+    // Take messages from Continuum Bridge and relay them to the TCP socket
+    tcpSocket.publish(message);
+    logger.log('message', '%s => %s: '
+        ,message.get('source'), message.get('destination'), message.get('body'));
+});
 
-        logger.info('Authenticated to Bridge Controller');
 
-        controllerSocket.connect(CONTROLLER_SOCKET, sessionID);
+client.publish(message);
 
-        /* TODO {"msg":"aggregator_status", "data":"ok"} */
-    }, function(error) {
+// Set heartbeat for the local TCP connection
+setInterval(function() {
 
-        logger.error(error);
-        logger.info('Retrying..');
-        // Authorise again after 8 seconds
-        setTimeout(connectToController, 8000);
+    var message = new CB.Message({
+        source: client.cbid
     });
-};
+    message.set('body',{connected: client.connected});
 
-connectToController();
+    tcpSocket.publish(message);
 
-// Restart connection process on 'giveUp'
-controllerSocket.on('giveUp', function() {
-    logger.log('debug', 'calling connectToController after giveUp');
-    connectToController();
-});
+}, 1000);
 

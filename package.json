@@ -1,7 +1,7 @@
 {
-  "author": "",
+  "author": "Mark Claydon",
   "name": "bridge",
-  "description": "Continuum Bridge Raspberry Pi development package",
+  "description": "Continuum Bridge bridge node js",
   "version": "0.0.0",
   "homepage": "http://www.continuumbridge.com/",
   "repository": {
@@ -9,13 +9,13 @@
     "url": "git://github.com/ContinuumBridge/bridge.git"
   },
   "dependencies": {
-    "baconjs": "~0.6.21",
-    "socket.io": "~0.9.15",
-    "socket.io-client": "~0.9.16",
+    "backoff": "^2.4.0",
+    "client": "0.0.1",
+    "cookie": "^0.1.2",
+    "getenv": "^0.3.0",
     "restler": "~2.0.1",
-    "q": "~0.9.7",
-    "cookie": "~0.1.0",
-    "getenv": "~0.3.0",
+    "socket.io-client": "~0.9.16",
+    "underscore": "^1.6.0",
     "winston": "~0.7.2"
   },
   "devDependencies": {},
