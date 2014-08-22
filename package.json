@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "backoff": "^2.4.0",
-    "continuumbridge": "git+ssh://git@github.com:ContinuumBridge/client.git",
+    "client": "0.0.1",
     "cookie": "^0.1.2",
     "getenv": "^0.3.0",
     "restler": "~2.0.1",
