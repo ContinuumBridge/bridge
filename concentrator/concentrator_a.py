@@ -54,7 +54,7 @@ class Concentrator():
 
         # Connection to conduit process
         initMsg = {"type": "status",
-                   "time_sent": self.isotime(),
+                   "time_sent": isotime(),
                    "body": "bridge manager started"}
         self.concFactory = CbClientFactory(self.processServerMsg, initMsg)
         self.jsConnect = reactor.connectTCP("localhost", 5000, self.concFactory, timeout=10)
@@ -85,15 +85,7 @@ class Concentrator():
             msg["type"] = msg.pop("message")
         self.cbSendManagerMsg(msg)
 
-    def isotime(self):
-        t = time.time()
-        gmtime = time.gmtime(t)
-        milliseconds = '%03d' % int((t - int(t)) * 1000)
-        now = time.strftime('%Y-%m-%dT%H:%M:%S.', gmtime) + milliseconds +"Z"
-        return now
-
     def processManagerMsg(self, msg):
-        msg["time_sent"] = self.isotime()
         self.concFactory.sendMsg(msg)
 
     def processManager(self, cmd):

@@ -37,6 +37,13 @@ from twisted.internet import defer
 from twisted.internet import reactor
 from data_store import DataStore, DataModel
 
+def isotime(self):
+    t = time.time()
+    gmtime = time.gmtime(t)
+    milliseconds = '%03d' % int((t - int(t)) * 1000)
+    now = time.strftime('%Y-%m-%dT%H:%M:%S.', gmtime) + milliseconds +"Z"
+    return now
+
 class CbAdaptor:
     """This should be sub-classed by any app."""
     ModuleName = "CbAdaptor           " 

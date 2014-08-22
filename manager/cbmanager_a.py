@@ -35,6 +35,7 @@ from cbcommslib import CbClientProtocol
 from cbcommslib import CbClientFactory
 from cbcommslib import CbServerProtocol
 from cbcommslib import CbServerFactory
+from cbcommslib import isotime
 from cbconfig import *
 from dropbox.client import DropboxClient, DropboxOAuth2Flow, DropboxOAuth2FlowNoRedirect
 from dropbox.rest import ErrorResponse, RESTSocketError
@@ -785,11 +786,23 @@ class ManageBridge:
                 # Need to call in thread is case it hangs
                 reactor.callInThread(self.sendLog, msg["body"][7:])
             elif msg["body"] == "update_config" or msg["body"] == "update":
+        msg = {"cmd": "msg",
+               "msg": {"source": self.bridge_id,
+                       "destination": "broadcast",
+                       "time_sent": isotime(),
+                       "body": {
+                                 "status": status
+                               }
+              }
                 req = {"cmd": "msg",
-                       "msg": {"type": "request",
-                               "channel": "bridge_manager",
-                               "request": "get",
-                               "url": "/api/bridge/v1/current_bridge/bridge"}
+                       "msg": {"source": self.bridge_id,
+                               "destination": "cb",
+                               "time_sent": isotime(),
+                               "body": {
+                                        "url": "/api/bridge/v1/current_bridge/bridge",
+                                        "verb": "get"
+                                       }
+                              }
                       }
                 self.cbSendConcMsg(req)
             elif msg["body"] == "z-exclude":
@@ -884,10 +897,12 @@ class ManageBridge:
 
     def sendStatusMsg(self, status):
         msg = {"cmd": "msg",
-               "msg": {"type": "status",
-                       "channel": "bridge_manager",
-                       "body": status
-                      }
+               "msg": {"source": self.bridge_id,
+                       "destination": "broadcast",
+                       "time_sent": isotime(),
+                       "body": {
+                                 "status": status
+                               }
               }
         self.cbSendConcMsg(msg)
  
