@@ -34,9 +34,6 @@ client.on('message', function(message) {
         ,message.get('source'), message.get('destination'), message.get('body'));
 });
 
-
-client.publish(message);
-
 // Set heartbeat for the local TCP connection
 setInterval(function() {
 
