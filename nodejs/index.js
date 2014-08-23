@@ -34,6 +34,29 @@ client.on('message', function(message) {
         ,message.get('source'), message.get('destination'), message.get('body'));
 });
 
+client.on('connect', function() {
+    logger.log('message', 'Bridge connect message');
+    var configMessage = new CB.Message({
+        'body':
+                 {
+                      'url': '/api/bridge/v1/current_bridge/bridge',
+                      'verb': 'get'
+                 },
+        'source': 'BID2',
+        'destination': 'cb',
+        'time_sent': '2014-08-23T01:00:01.238Z'
+    });
+    var statusMessage = new CB.Message({
+        body:
+                  {
+                       status: 'Bridge state: stopped'
+                  },
+        source: 'BID2',
+        destination: 'broadcast',
+        time_sent: '2014-08-23T00:56:41.913Z'
+    });
+    setTimeout(client.publish(statusMessage), 2000);
+});
 // Set heartbeat for the local TCP connection
 setInterval(function() {
 
