@@ -344,16 +344,18 @@ class ManageBridge:
         self.zwaveDiscovered = False
         self.bleDiscovered = False
         d = {}
-        d["type"] = "request"
-        d["verb"] = "post"
-        d["url"] = "/api/bridge/v1/device_discovery/"
-        d["channel"] = "bridge_manager"
-        d["body"] = []
+        d["source"] = self.bridge_id
+        d["destination"] = "cb"
+        d["time_sent"] = isotime()
+        d["body"] = {}
+        d["body"]["url"] = "/api/bridge/v1/device_discovery/"
+        d["body"]["verb"] = "post"
+        d["body"]["body"] = []
         for b in self.bleDiscoveredData:
-            d["body"].append(b)
+            d["body"]["body"].append(b)
         if CB_ZWAVE_BRIDGE and CB_SIM_LEVEL == '0':
             for b in self.zwaveDiscoveredData:
-                d["body"].append(b)
+                d["body"]["body"].append(b)
         elif CB_SIM_LEVEL == '1':
             b = {'manufacturer_name': 0, 
                  'protocol': 'zwave', 
@@ -361,7 +363,7 @@ class ManageBridge:
                  'name': 'Binary Power Switch', 
                  'model_number': 0
                 }
-            d["body"].append(b)
+            d["body"]["body"].append(b)
         logging.debug('%s Discovered: %s', ModuleName, str(d))
         msg = {"cmd": "msg",
                "msg": d}
@@ -729,17 +731,16 @@ class ManageBridge:
                 self.disconnectedCount += 1
  
     def processControlMsg(self, msg):
-        #logging.info('%s msg received from controller: %s', ModuleName, msg)
-        if not "type" in msg: 
-            logging.error('%s msg received from controller with no "message" key', ModuleName)
-            self.sendStatusMsg("Error. message received from controller with no type key")
+        if not "body" in msg: 
+            logging.error('%s msg received from controller with no "body" key', ModuleName)
+            self.sendStatusMsg("Error. message received from controller with no body key")
             return 
-        if msg["type"] == "command":
-            if not "body" in msg:
-                logging.error('%s command message received from controller with no body', ModuleName)
-                self.sendStatusMsg("Error. command message received from controller with no body")
-                return 
-            if msg["body"] == "start":
+        if "connected" in msg["body"]:
+            return
+        logging.info('%s msg received from controller: %s', ModuleName, msg)
+        if "command" in msg["body"]:
+            command = msg["body"]["command"]
+            if command == "start":
                 if self.configured:
                     if self.state == "stopped":
                         logging.info('%s Starting adaptors and apps', ModuleName)
@@ -749,51 +750,43 @@ class ManageBridge:
                 else:
                     logging.warning('%s Cannot start adaptors and apps. Please run discovery', ModuleName)
                     self.sendStatusMsg("Start command received with no apps and adaptors")
-            elif msg["body"] == "discover":
+            elif command == "discover":
                 if self.state != "stopped":
                     self.stopApps()
                     reactor.callLater(APP_STOP_DELAY, self.killAppProcs)
                     reactor.callLater(APP_STOP_DELAY + MIN_DELAY, self.discover)
                 else:
                     reactor.callLater(MIN_DELAY, self.discover)
-            elif msg["body"] == "restart":
+            elif command == "restart":
                 logging.info('%s Received restart command', ModuleName)
                 self.cbSendSuperMsg({"msg": "restart"})
                 self.sendStatusMsg("restarting")
-            elif msg["body"] == "reboot":
+            elif command == "reboot":
                 logging.info('%s Received reboot command', ModuleName)
                 self.cbSendSuperMsg({"msg": "reboot"})
                 self.sendStatusMsg("Preparing to reboot")
-            elif msg["body"] == "stop":
+            elif command == "stop":
                 if self.state != "stopping" and self.state != "stopped":
                     self.stopApps()
                     reactor.callLater(APP_STOP_DELAY, self.killAppProcs)
                 else:
                     self.sendStatusMsg("Already stopped or stopping. Stop command ignored.")
-            elif msg["body"] == "upgrade":
+            elif command == "upgrade":
                 if self.state != "stopped":
                     self.stopApps()
                 reactor.callLater(APP_STOP_DELAY, self.killAppProcs)
                 reactor.callLater(APP_STOP_DELAY + MIN_DELAY, self.waitToUpgrade)
-            elif msg["body"] == "sendlog" or msg["body"] == "send_log":
+            elif command == "sendlog" or msg["body"] == "send_log":
                 self.sendLog(CB_CONFIG_DIR + '/bridge.log')
-            elif msg["body"] == "battery":
+            elif command == "battery":
                 self.sendBatteryLevels()
-            elif msg["body"].startswith("call"):
+            elif command.startswith("call"):
                 # Need to call in thread is case it hangs
                 reactor.callInThread(self.doCall, msg["body"][5:])
-            elif msg["body"].startswith("upload"):
+            elif command.startswith("upload"):
                 # Need to call in thread is case it hangs
                 reactor.callInThread(self.sendLog, msg["body"][7:])
-            elif msg["body"] == "update_config" or msg["body"] == "update":
-        msg = {"cmd": "msg",
-               "msg": {"source": self.bridge_id,
-                       "destination": "broadcast",
-                       "time_sent": isotime(),
-                       "body": {
-                                 "status": status
-                               }
-              }
+            elif command == "update_config" or command == "update":
                 req = {"cmd": "msg",
                        "msg": {"source": self.bridge_id,
                                "destination": "cb",
@@ -805,15 +798,15 @@ class ManageBridge:
                               }
                       }
                 self.cbSendConcMsg(req)
-            elif msg["body"] == "z-exclude":
+            elif command == "z-exclude":
                 self.zwaveExclude()
             else:
                 logging.warning('%s Unrecognised message received from server: %s', ModuleName, msg)
                 self.sendStatusMsg("Unrecognised command received from controller")
-        elif msg["type"] == "response":
+        elif "response" in msg["body"]:
             # Call in thread to prevent problems with blocking
             reactor.callInThread(self.updateConfig, msg)
-        elif msg["type"] == "status":
+        elif not "status" in msg["body"]:
             if not "source" in msg:
                 logging.warning('%s Unrecognised command received from controller: %s', ModuleName, msg)
                 return
@@ -903,6 +896,7 @@ class ManageBridge:
                        "body": {
                                  "status": status
                                }
+                      }
               }
         self.cbSendConcMsg(msg)
  

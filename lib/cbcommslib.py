@@ -37,7 +37,7 @@ from twisted.internet import defer
 from twisted.internet import reactor
 from data_store import DataStore, DataModel
 
-def isotime(self):
+def isotime():
     t = time.time()
     gmtime = time.gmtime(t)
     milliseconds = '%03d' % int((t - int(t)) * 1000)

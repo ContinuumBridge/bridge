@@ -28,6 +28,7 @@ from cbcommslib import CbClientProtocol
 from cbcommslib import CbClientFactory
 from cbcommslib import CbServerProtocol
 from cbcommslib import CbServerFactory
+from cbcommslib import isotime
 from cbconfig import *
 
 class Concentrator():
@@ -86,6 +87,7 @@ class Concentrator():
         self.cbSendManagerMsg(msg)
 
     def processManagerMsg(self, msg):
+        logging.debug("%s sending to controller: %s", ModuleName, str(msg))
         self.concFactory.sendMsg(msg)
 
     def processManager(self, cmd):
