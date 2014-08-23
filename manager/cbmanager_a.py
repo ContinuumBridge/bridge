@@ -776,16 +776,16 @@ class ManageBridge:
                     self.stopApps()
                 reactor.callLater(APP_STOP_DELAY, self.killAppProcs)
                 reactor.callLater(APP_STOP_DELAY + MIN_DELAY, self.waitToUpgrade)
-            elif command == "sendlog" or msg["body"] == "send_log":
+            elif command == "sendlog" or command == "send_log":
                 self.sendLog(CB_CONFIG_DIR + '/bridge.log')
             elif command == "battery":
                 self.sendBatteryLevels()
             elif command.startswith("call"):
                 # Need to call in thread is case it hangs
-                reactor.callInThread(self.doCall, msg["body"][5:])
+                reactor.callInThread(self.doCall, command[5:])
             elif command.startswith("upload"):
                 # Need to call in thread is case it hangs
-                reactor.callInThread(self.sendLog, msg["body"][7:])
+                reactor.callInThread(self.sendLog, command[7:])
             elif command == "update_config" or command == "update":
                 req = {"cmd": "msg",
                        "msg": {"source": self.bridge_id,
