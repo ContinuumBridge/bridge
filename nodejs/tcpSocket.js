@@ -18,8 +18,9 @@ function TCPSocket(port) {
 
         socket.on('data', function(jsonMessage) {
 
+            console.log('data is', jsonMessage);
             var message = new Message(jsonMessage);
-            self.emit(message);
+            self.emit('message', message);
         });
 
         // Add a 'close' event handler for the TCPClient socket
