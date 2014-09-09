@@ -306,6 +306,8 @@ class ZwaveCtrl():
                     ".commandClasses." + msg["commandClass"] + ".data"
                 if "value" in msg:
                     g += "." + msg["value"]
+                if "name" in msg:
+                    g += "." + msg["name"]
                 getStr = {"address": msg["id"],
                           "match": g, 
                           "commandClass": msg["commandClass"]
