@@ -13,7 +13,7 @@
 
 # If you want a command to always run, put it here
 NAME=cbridge
-BRIDGEPATH=/opt/bridge
+BRIDGEPATH=/opt/cbridge
 THISBRIDGE=$BRIDGEPATH'/thisbridge/thisbridge.sh'
 PIDFILE=/var/run/$NAME.pid
 
