@@ -382,12 +382,23 @@ class ManageBridge:
 
     def readConfig(self):
         # BEWARE. SOMETIMES CALLED IN A THREAD.
+        appRoot = CB_HOME + "/apps/"
+        adtRoot = CB_HOME + "/adaptors/"
         if CB_DEV_BRIDGE:
-            appRoot = CB_HOME + "/apps_dev/"
-            adtRoot = CB_HOME + "/adaptors_dev/"
-        else:
-            appRoot = CB_HOME + "/apps/"
-            adtRoot = CB_HOME + "/adaptors/"
+            logging.warning('%s Development user (CB_USERNAME): %s', ModuleName, CB_USERNAME)
+            devApps = CB_DEV_APPS.split(',')
+            devAdaptors = CB_DEV_ADAPTORS.split(',')
+            logging.debug('%s devApps: %s', ModuleName, devApps)
+            logging.debug('%s devAdaptors: %s', ModuleName, devAdaptors)
+            if CB_USERNAME == '':
+                logging.warning('%s CB_DEV_BRIDGE=True, but CB_USERNAME not set, so apps_dev and adaptors_dev not used', ModuleName)
+                appRootDev = appRoot
+                adtRootDev = adtRoot
+            else:   
+                appRootDev = "/home/" + CB_USERNAME + "/apps_dev/"
+                adtRootDev = "/home/" + CB_USERNAME + "/adaptors_dev/"
+            logging.debug('%s appRootDev: %s', ModuleName, appRootDev)
+            logging.debug('%s adtRootDev: %s', ModuleName, adtRootDev)
         configFile = CB_CONFIG_DIR + "/bridge.config"
         configRead = False
         try:
@@ -417,11 +428,12 @@ class ManageBridge:
                 d["adaptor"]["mgrSoc"] = socket
                 url = d["adaptor"]["url"]
                 split_url = url.split('/')
-                if CB_DEV_BRIDGE:
+                if CB_DEV_BRIDGE and d["adaptor"]["name"] in devAdaptors:
                     dirName = split_url[-3]
+                    d["adaptor"]["exe"] = adtRootDev + dirName + "/" + d["adaptor"]["exe"]
                 else:
                     dirName = (split_url[-3] + '-' + split_url[-1])[:-7]
-                d["adaptor"]["exe"] = adtRoot + dirName + "/" + d["adaptor"]["exe"]
+                    d["adaptor"]["exe"] = adtRoot + dirName + "/" + d["adaptor"]["exe"]
                 logging.debug('%s exe: %s', ModuleName, d["adaptor"]["exe"])
                 logging.debug('%s protocol: %s', ModuleName, d["device"]["protocol"])
                 if d["device"]["protocol"] == "zwave":
@@ -433,11 +445,12 @@ class ManageBridge:
                 a["app"]["id"] = "AID" + str(a["app"]["id"])
                 url = a["app"]["url"]
                 split_url = url.split('/')
-                if CB_DEV_BRIDGE:
+                if CB_DEV_BRIDGE and a["app"]["name"] in devApps:
                     dirName = split_url[-3]
+                    a["app"]["exe"] = appRootDev + dirName + "/" + a["app"]["exe"]
                 else:
                     dirName = (split_url[-3] + '-' + split_url[-1])[:-7]
-                a["app"]["exe"] = appRoot + dirName + "/" + a["app"]["exe"]
+                    a["app"]["exe"] = appRoot + dirName + "/" + a["app"]["exe"]
                 logging.debug('%s exe: %s', ModuleName, a["app"]["exe"])
                 a["app"]["mgrSoc"] = CB_SOCKET_DIR + "SKT-MGR-" + str(a["app"]["id"])
                 a["app"]["concSoc"] = CB_SOCKET_DIR + "SKT-CONC-" + str(a["app"]["id"])
