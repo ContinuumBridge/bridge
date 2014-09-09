@@ -403,9 +403,9 @@ class ManageBridge:
             success= False
         if configRead:
             try:
-                self.bridge_id = "BID" + str(config["body"]["id"])
-                self.apps = config["body"]["apps"]
-                self.devices = config["body"]["devices"]
+                self.bridge_id = "BID" + str(config["body"]["body"]["id"])
+                self.apps = config["body"]["body"]["apps"]
+                self.devices = config["body"]["body"]["devices"]
                 success = True
             except:
                 success = False
@@ -803,7 +803,7 @@ class ManageBridge:
             else:
                 logging.warning('%s Unrecognised message received from server: %s', ModuleName, msg)
                 self.sendStatusMsg("Unrecognised command received from controller")
-        elif "response" in msg["body"]:
+        elif "resource" in msg["body"]:
             # Call in thread to prevent problems with blocking
             reactor.callInThread(self.updateConfig, msg)
         elif not "status" in msg["body"]:
