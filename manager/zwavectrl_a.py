@@ -26,8 +26,8 @@ from cbcommslib import CbClientFactory
 from cbcommslib import CbServerProtocol
 from cbcommslib import CbServerFactory
 
-DISCOVER_TIME        = 26.0
-DISCOVER_WAIT_TIME   = 18.0
+DISCOVER_TIME        = 32.0
+DISCOVER_WAIT_TIME   = 22.0
 IPADDRESS            = 'localhost'
 MIN_DELAY            = 1.0
 PORT                 = "8083"
@@ -107,6 +107,7 @@ class ZwaveCtrl():
     def zway(self):
         including = False
         excluding = False
+        finished = False
         included = []
         excluded = []
         found = []
@@ -115,17 +116,19 @@ class ZwaveCtrl():
             if self.include:
                 if not including:
                     including = True
+                    finished = False
                     del included[:]
                     URL = startIncludeUrl
                     body = []
                     logging.debug("%s started including", ModuleName)
-                elif including:
+                elif including and not finished:
                     # To prevent problems with getting half-updated information from z-way
                     # Give enough time to press button & get all data from device
                     logging.debug("%s about to sleep", ModuleName)
                     time.sleep(DISCOVER_WAIT_TIME)
                     logging.debug("%s stopped sleeping", ModuleName)
                     URL = dataUrl + self.fromTime
+                    finished = True
             elif including:
                 including = False
                 URL = stopIncludeUrl
@@ -216,10 +219,13 @@ class ZwaveCtrl():
                                             elif j == "manufacturerProductId":
                                                 model_number = dat["devices"][d][k][j]["value"]
                                                 logging.debug("%s %s model_number: %s", ModuleName, self.id, model_number)
+                                            elif j == "manufacturerProductType":
+                                                model_type = dat["devices"][d][k][j]["value"]
+                                                logging.debug("%s %s model_type: %s", ModuleName, self.id, model_type)
                                     if manufacturer_name == "":
                                         name = deviceTypeString
                                     else:
-                                        name = manufacturer_name + " " + str(model_number)
+                                        name = manufacturer_name + " " + str(model_number) + " " + str(model_type)
                                     logging.debug("%s %s name: %s", ModuleName, self.id, name)
                                     self.found.append({"protocol": "zwave",
                                                        "name": name,
