@@ -386,10 +386,10 @@ class ManageBridge:
         adtRoot = CB_HOME + "/adaptors/"
         if CB_DEV_BRIDGE:
             logging.warning('%s Development user (CB_USERNAME): %s', ModuleName, CB_USERNAME)
-            devApps = CB_DEV_APPS.split(',')
-            devAdaptors = CB_DEV_ADAPTORS.split(',')
-            logging.debug('%s devApps: %s', ModuleName, devApps)
-            logging.debug('%s devAdaptors: %s', ModuleName, devAdaptors)
+            self.devApps = CB_DEV_APPS.split(',')
+            self.devAdaptors = CB_DEV_ADAPTORS.split(',')
+            logging.debug('%s self.devApps: %s', ModuleName, self.devApps)
+            logging.debug('%s self.devAdaptors: %s', ModuleName, self.devAdaptors)
             if CB_USERNAME == '':
                 logging.warning('%s CB_DEV_BRIDGE=True, but CB_USERNAME not set, so apps_dev and adaptors_dev not used', ModuleName)
                 appRootDev = appRoot
@@ -428,7 +428,7 @@ class ManageBridge:
                 d["adaptor"]["mgrSoc"] = socket
                 url = d["adaptor"]["url"]
                 split_url = url.split('/')
-                if CB_DEV_BRIDGE and d["adaptor"]["name"] in devAdaptors:
+                if CB_DEV_BRIDGE and d["adaptor"]["name"] in self.devAdaptors:
                     dirName = split_url[-3]
                     d["adaptor"]["exe"] = adtRootDev + dirName + "/" + d["adaptor"]["exe"]
                 else:
@@ -445,7 +445,7 @@ class ManageBridge:
                 a["app"]["id"] = "AID" + str(a["app"]["id"])
                 url = a["app"]["url"]
                 split_url = url.split('/')
-                if CB_DEV_BRIDGE and a["app"]["name"] in devApps:
+                if CB_DEV_BRIDGE and a["app"]["name"] in self.devApps:
                     dirName = split_url[-3]
                     a["app"]["exe"] = appRootDev + dirName + "/" + a["app"]["exe"]
                 else:
@@ -523,41 +523,47 @@ class ManageBridge:
             os.makedirs(d)
         dirs = os.listdir(d)
         for dev in self.devices:
-            url = dev["adaptor"]["url"] 
-            split_url = url.split('/')
-            logging.debug('%s updateElements. split_url: %s', ModuleName, split_url)
-            logging.debug('%s updateElements. split_url[-3]: %s', ModuleName, split_url[-3])
-            name = (split_url[-3] + '-' + split_url[-1])[:-7]
-            logging.debug('%s updateElements. name: %s', ModuleName, name)
-            logging.debug('%s updateElements. Current updateList: %s', ModuleName, updateList)
-            update = False
-            if name not in dirs:
-                update = True
-                for u in updateList:
-                    logging.debug('%s updateElements. u["name"]: %s', ModuleName, u["name"])
-                    if u["name"] == name: 
-                        update = False
-            if update:
-                updateList.append({"url": url, "type": "adaptors", "name": name})
+            if CB_DEV_BRIDGE and dev["adaptor"]["name"] in self.devAdaptors:
+                logging.debug('%s updateElements. Using %s from adaptors_dev', ModuleName, dev["adaptor"]["name"])
+            else:
+                url = dev["adaptor"]["url"] 
+                split_url = url.split('/')
+                logging.debug('%s updateElements. split_url: %s', ModuleName, split_url)
+                logging.debug('%s updateElements. split_url[-3]: %s', ModuleName, split_url[-3])
+                name = (split_url[-3] + '-' + split_url[-1])[:-7]
+                logging.debug('%s updateElements. name: %s', ModuleName, name)
+                logging.debug('%s updateElements. Current updateList: %s', ModuleName, updateList)
+                update = False
+                if name not in dirs:
+                    update = True
+                    for u in updateList:
+                        logging.debug('%s updateElements. u["name"]: %s', ModuleName, u["name"])
+                        if u["name"] == name: 
+                            update = False
+                if update:
+                    updateList.append({"url": url, "type": "adaptors", "name": name})
         d = CB_HOME + "/apps"
         if not os.path.exists(d):
             os.makedirs(d)
         dirs = os.listdir(d)
         for app in self.apps:
-            url = app["app"]["url"]
-            split_url = url.split('/')
-            logging.debug('%s updateElements. split_url: %s', ModuleName, split_url)
-            logging.debug('%s updateElements. split_url[-3]: %s', ModuleName, split_url[-3])
-            name = (split_url[-3] + '-' + split_url[-1])[:-7]
-            logging.debug('%s updateElements. name: %s', ModuleName, name)
-            update = False
-            if name not in dirs:
-                update = True
-                for u in updateList:
-                    if u["name"] == name: 
-                        update = False
-            if update:
-                updateList.append({"url": url, "type": "apps", "name": name})
+            if CB_DEV_BRIDGE and app["app"]["name"] in self.devApps:
+                logging.debug('%s updateElements. Using %s from apps_dev', ModuleName, app["app"]["name"])
+            else:
+                url = app["app"]["url"]
+                split_url = url.split('/')
+                logging.debug('%s updateElements. split_url: %s', ModuleName, split_url)
+                logging.debug('%s updateElements. split_url[-3]: %s', ModuleName, split_url[-3])
+                name = (split_url[-3] + '-' + split_url[-1])[:-7]
+                logging.debug('%s updateElements. name: %s', ModuleName, name)
+                update = False
+                if name not in dirs:
+                    update = True
+                    for u in updateList:
+                        if u["name"] == name: 
+                            update = False
+                if update:
+                    updateList.append({"url": url, "type": "apps", "name": name})
 
         logging.info('%s updateList: %s', ModuleName, updateList)
         for e in updateList:
