@@ -26,8 +26,8 @@ from cbcommslib import CbClientFactory
 from cbcommslib import CbServerProtocol
 from cbcommslib import CbServerFactory
 
-DISCOVER_TIME        = 32.0
-DISCOVER_WAIT_TIME   = 22.0
+DISCOVER_TIME        = 40.0
+INCLUDE_WAIT_TIME    = 5.0
 IPADDRESS            = 'localhost'
 MIN_DELAY            = 1.0
 PORT                 = "8083"
@@ -105,50 +105,104 @@ class ZwaveCtrl():
             self.setState("inUse")
 
     def zway(self):
-        including = False
-        excluding = False
-        finished = False
-        included = []
-        excluded = []
+        includeState = "notIncluding"
+        excludeState = "notExcluding"
         found = []
         h = httplib2.Http()
+        """ Include works as follow:
+            Send the include URL. includeState = "waitInclude".
+            Wait for the wait time. includeState = "waitInclude".
+            Check if there's a new device there.
+            If not wait again and repeat until time-out. includeState = "waitInclude".
+            If there is check that vendor string is not null. includeState = "checkData"
+            If it is wait and check again until time-out. includeState = "checkData"
+            If vendor string is there, send information back to manager. includeState = "notIncluding"
+            includeTick keeps tract of time in increments of INCLUDE_WAIT_TIME.
+            Don't change the "from" time when getting data until all data has been retrieved.
+        """
         while self.state != "stopping":
             if self.include:
-                if not including:
-                    including = True
-                    finished = False
-                    del included[:]
+                if includeState == "notIncluding":
+                    foundDevice = False
+                    foundData = False
+                    losEndos = False
+                    includeState = "waitInclude"
+                    incStartTime = str(int(time.time()))
+                    includedDevice = ""
+                    self.endMessage = "You should never see this message"
                     URL = startIncludeUrl
                     body = []
+                    includeTick = 0
                     logging.debug("%s started including", ModuleName)
-                elif including and not finished:
-                    # To prevent problems with getting half-updated information from z-way
-                    # Give enough time to press button & get all data from device
-                    logging.debug("%s about to sleep", ModuleName)
-                    time.sleep(DISCOVER_WAIT_TIME)
-                    logging.debug("%s stopped sleeping", ModuleName)
-                    URL = dataUrl + self.fromTime
-                    finished = True
-            elif including:
-                including = False
-                URL = stopIncludeUrl
-            elif self.exclude:
-                if not excluding:
-                    excluding = True
-                    del excluded[:]
-                    URL = startExcludeUrl
-                    logging.debug("%s started excluding", ModuleName)
-            elif excluding:
-                logging.debug("%s stopping excluding", ModuleName)
-                excluding = False
-                if excluded:
-                    if excluded[0] == "None":
-                        self.excludeResult = "Unidentified device"
+                elif includeState == "waitInclude":
+                    logging.debug("%s waitInclude, includeTick: %s foundData: %s", ModuleName, str(includeTick), foundData)
+                    URL = dataUrl + incStartTime
+                    if foundData:
+                        includeState = "tidyUp"
+                    elif foundDevice:
+                        includeTick = 0
+                        includeState = "checkData"
+                        msg = {"id": self.id,
+                               "status": "discovering"
+                              }
+                        reactor.callFromThread(self.cbSendManagerMsg, msg)
+                    elif includeTick > 3:
+                        self.endMessage = "No Z-wave device found. Try again."
+                        includeState = "tidyUp"
                     else:
-                        self.excludeResult = excluded
+                        includeTick += 1
+                        time.sleep(INCLUDE_WAIT_TIME)
+                elif includeState == "checkData":
+                    logging.debug("%s checkData, includeTick: %s foundData %s", ModuleName, str(includeTick), foundData)
+                    URL = dataUrl + incStartTime
+                    if foundData:
+                        includeState = "tidyUp"
+                    elif includeTick > 4:
+                        # Assume we're never going to get a vendorString and use zwave name
+                        losEndos = True
+                        includeState = "losEndos"
+                    else:
+                        includeTick += 1
+                        time.sleep(INCLUDE_WAIT_TIME)
+                elif includeState == "losEndos":
+                    time.sleep(MIN_DELAY)
+                    logging.debug("%s losEndos, foundData: %s", ModuleName, foundData)
+                    losEndos = False
+                    includeState = "tidyUp"
+                elif includeState == "tidyUp":
+                    logging.debug("%s tidyUp, includeTick: %s foundData %s", ModuleName, str(includeTick), foundData)
+                    self.include = False
+                    URL = stopIncludeUrl
+                    includeState = "notIncluding"
+                    reactor.callFromThread(self.stopDiscover)
+                    time.sleep(INCLUDE_WAIT_TIME)
                 else:
-                    self.excludeResult = "No devices were excluded"
-                URL = stopExcludeUrl
+                    URL = stopIncludeUrl
+                    includeState = "notIncluding"
+            elif self.exclude:
+                if excludeState == "notExcluding":
+                    foundDevice = False
+                    excludeState = "waitExclude"
+                    incStartTime = str(int(time.time()))
+                    excludedDevice = ""
+                    URL = startExcludeUrl
+                    excludeTick = 0
+                    logging.debug("%s started excluding", ModuleName)
+                elif excludeState == "waitExclude":
+                    logging.debug("%s waitExclude, excludeTick: %s", ModuleName, str(excludeTick))
+                    URL = dataUrl + incStartTime
+                    if foundDevice or excludeTick > 4:
+                        excludeState = "notExcluding"
+                        self.exclude = False
+                        msg = {"id": self.id,
+                               "status": "excluded",
+                               "body": excludedDevice
+                              }
+                        reactor.callFromThread(self.cbSendManagerMsg, msg)
+                        URL = stopExcludeUrl       
+                    else:
+                        excludeTick += 1
+                        time.sleep(INCLUDE_WAIT_TIME)
             elif self.posting:
                 self.posting = False
                 URL = self.postToUrl 
@@ -173,75 +227,60 @@ class ZwaveCtrl():
                         self.fromTime = str(dat["updateTime"])
                     if self.exclude:
                         if "controller.data.lastExcludedDevice" in dat:
-                            logging.debug("%s lastExcludedDevice; %s", ModuleName, str(dat["controller.data.lastExcludedDevice"]))
-                            zid = dat["controller.data.lastExcludedDevice"]["value"]
-                            if zid != 1:
-                                excluded.append(zid)
-                            logging.debug("%s %s Excluded list; %s", ModuleName, self.id, str(excluded))
+                            excludedDevice = str(dat["controller.data.lastExcludedDevice"]["value"])
+                            if excludedDevice != "None" and excludedDevice != 0:
+                                foundDevice = True
+                            logging.debug("%s lastExcludedDevice; %s", ModuleName, excludedDevice)
                     if self.include:
+                        #logging.debug("%s including. dat: %s", ModuleName, dat)
                         if "controller.data.lastIncludedDevice" in dat:
-                            zid = dat["controller.data.lastIncludedDevice"]["value"]
-                            if zid != 1:
-                                included.append(zid)
-                            logging.debug("%s %s Include list; %s", ModuleName, self.id, str(included))
-                        if "updateTime" in dat:
-                            self.fromTime = str(dat["updateTime"])
+                            includedDevice = str(dat["controller.data.lastIncludedDevice"]["value"])
+                            if includedDevice != "None":
+                                foundDevice = True
+                            logging.debug("%s %s includedDevice %s", ModuleName, self.id, includedDevice)
                         if "devices" in dat:
                             logging.debug("%s devices in dat", ModuleName)
-                            devs = "Included devices: "
                             for d in dat["devices"].keys():
-                                devs += d + " "
-                                logging.debug("%s %s Included devices: %s", ModuleName, self.id, devs)
-                                new = False
-                                if d != "1":
-                                    new = True
-                                    for a in self.adaptors:
-                                        if d == a["address"]:
-                                            new = False
-                                            break
-                                    for a in self.found:
-                                        #if d == a["mac_addr"][5:]:
-                                        if d == a["mac_addr"]:
-                                            new = False
-                                            break
-                                if new:
+                                logging.debug("%s device: %s", ModuleName, d)
+                                if d == includedDevice:
                                     for k in dat["devices"][d].keys():
                                         for j in dat["devices"][d][k].keys():
                                             if j == "nodeInfoFrame":
                                                 command_classes = dat["devices"][d][k][j]["value"]
-                                                logging.debug("%s %s command_classes: %s", ModuleName, self.id, command_classes)
+                                                logging.debug("%s command_classes: %s", ModuleName, command_classes)
                                             elif j == "vendorString":
-                                                manufacturer_name = dat["devices"][d][k][j]["value"]
-                                                logging.debug("%s %s manufacturer_name: %s", ModuleName, self.id, manufacturer_name) 
+                                                vendorString = dat["devices"][d][k][j]["value"]
+                                                logging.debug("%s vendorString: %s", ModuleName, vendorString) 
                                             elif j == "deviceTypeString":
                                                 deviceTypeString = dat["devices"][d][k][j]["value"]
-                                                logging.debug("%s %s zwave name: %s", ModuleName, self.id, deviceTypeString)
+                                                logging.debug("%s zwave name: %s", ModuleName, deviceTypeString)
                                             elif j == "manufacturerProductId":
-                                                model_number = dat["devices"][d][k][j]["value"]
-                                                logging.debug("%s %s model_number: %s", ModuleName, self.id, model_number)
+                                                manufacturerProductId = dat["devices"][d][k][j]["value"]
+                                                logging.debug("%s manufacturerProductId: %s", ModuleName, manufacturerProductId)
                                             elif j == "manufacturerProductType":
-                                                model_type = dat["devices"][d][k][j]["value"]
-                                                logging.debug("%s %s model_type: %s", ModuleName, self.id, model_type)
-                                    if manufacturer_name == "":
-                                        name = deviceTypeString
-                                    else:
-                                        name = manufacturer_name + " " + str(model_number) + " " + str(model_type)
-                                    logging.debug("%s %s name: %s", ModuleName, self.id, name)
-                                    self.found.append({"protocol": "zwave",
-                                                       "name": name,
-                                                       #"mac_addr": "XXXXX" + str(d),
-                                                       "mac_addr": str(d),
-                                                       "manufacturer_name": manufacturer_name,
-                                                       "model_number": model_number,
-                                                       #"command_classes": command_classes
-                                                     })
-                                    # Stop discovery as soon as one new deivce has been included:
-                                    self.discTime = time.time()
-                                    reactor.callFromThread(self.stopDiscover)
-                                    self.debugTime = self.fromTime
-                                    self.debugDat = dat
-                                    self.debugContent = content
-                                    #reactor.callFromThread(self.debugPrint)
+                                                manufacturerProductType = dat["devices"][d][k][j]["value"]
+                                                logging.debug("%s manufacturerProductType : %s", ModuleName, manufacturerProductType )
+                                    if (vendorString != "" or losEndos) and not foundData:
+                                        if losEndos:
+                                            if deviceTypeString == "":
+                                                name = ""
+                                                self.endMessage = "No Z-wave device found"
+                                            else:
+                                                name = deviceTypeString
+                                                self.endMessage = "Found Z-wave device: " + name
+                                        else:
+                                            name = vendorString + " " + str(manufacturerProductId) + " " + str(manufacturerProductType)
+                                            self.endMessage = "Found Z-wave device: " + name
+                                        foundData = True
+                                        logging.debug("%s name: %s", ModuleName, name)
+                                        self.found.append({"protocol": "zwave",
+                                                           "name": name,
+                                                           #"mac_addr": "XXXXX" + str(d),
+                                                           "mac_addr": str(d),
+                                                           "manufacturer_name": vendorString,
+                                                           "model_number": manufacturerProductId,
+                                                           #"command_classes": command_classes
+                                                          })
                     else: # not including
                         #logging.debug("%s dat: %s", ModuleName, str(dat))
                         for g in self.getStrs:
@@ -250,49 +289,31 @@ class ZwaveCtrl():
                                 self.sendParameter(dat[g["match"]], time.time(), g["address"], g["commandClass"])
                 time.sleep(MIN_DELAY)
 
-    def debugPrint(self):
-        reactor.callInThread(self.dodebugPrint)
-
-    def dodebugPrint(self):
-        print "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-        print "updateTime: ", self.debugTime
-        pprint(self.debugDat)
+    def sendLogMessage(self):
+        msg = {"id": self.id,
+                "status": "log",
+                "body": self.endMessage
+               }
+        self.cbSendManagerMsg(msg)
 
     def stopDiscover(self):
-        # Stop discovery after a fixed time if no new devices have been included
-        logging.debug("%s stopDiscover, discoveryResultsSent: %s", ModuleName, self.discoveryResultsSent)
         self.include = False
-        if not self.discoveryResultsSent:
-            self.discoveryResultsSent = True
-            d = {"status": "discovered",
-                 "id": "zwave",
-                 "body": self.found
-                }
-            logging.debug("%s sendDiscoveredResults: %s", ModuleName, d)
-            self.cbSendManagerMsg(d)
-            del self.found[:]
+        d = {"status": "discovered",
+             "id": "zwave",
+             "body": self.found
+            }
+        logging.debug("%s sendDiscoveredResults: %s", ModuleName, d)
+        self.cbSendManagerMsg(d)
+        reactor.callLater(1.0, self.sendLogMessage)
+        del self.found[:]
 
     def discover(self):
         logging.debug("%s starting discovery", ModuleName)
-        self.discTime = time.time()
-        self.discoveryResultsSent = False
         self.include = True
-        reactor.callLater(DISCOVER_TIME, self.stopDiscover)
-
-    def stopExclude(self):
-        self.exclude = False
-        msg = {"id": self.id,
-               "status": "excluded",
-               #"body": "Z-wave devices excluded: " + self.excludeResult}
-               "body": "Z-wave devices excluded: not available at this release"}
-        self.cbSendManagerMsg(msg)
 
     def startExclude(self):
         logging.debug("%s starting exclude", ModuleName)
-        self.excludeResult = "none"
-        self.excluded = []
         self.exclude = True
-        reactor.callLater(DISCOVER_TIME, self.stopExclude)
 
     def onAdaptorMessage(self, msg):
         logging.debug("%s onAdaptorMessage: %s", ModuleName, msg)
