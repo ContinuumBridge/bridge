@@ -24,7 +24,9 @@ from twisted.application.internet import TCPServer
 from twisted.application.service import Application
 from twisted.internet.task import deferLater
 from twisted.web.server import NOT_DONE_YET
+from testlib import CbTestClientProtocol
 from cbcommslib import CbClientProtocol
+from testlib import CbTestClientFactory
 from cbcommslib import CbClientFactory
 from cbcommslib import CbServerProtocol
 from cbcommslib import CbServerFactory
@@ -56,7 +58,7 @@ class Concentrator():
         initMsg = {"type": "status",
                    "time_sent": self.isotime(),
                    "body": "bridge manager started"}
-        self.concFactory = CbClientFactory(self.processServerMsg, initMsg)
+        self.concFactory = CbTestClientFactory(self.processServerMsg, initMsg)
         self.jsConnect = reactor.connectTCP("localhost", 5000, self.concFactory, timeout=10)
 
         reactor.run()
