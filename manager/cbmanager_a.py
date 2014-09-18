@@ -372,11 +372,43 @@ class ManageBridge:
         self.cbSendConcMsg(msg)
 
     def discover(self):
-        if CB_ZWAVE_BRIDGE:
-            self.elFactory["zwave"].sendMsg({"cmd": "discover"})
-            self.zwaveDiscovering = False
-        reactor.callInThread(self.bleDiscover)
-        self.sendStatusMsg("Press button on device to be discovered now")
+        # If there are peripherals report any that are not reported rather than discover
+        found = True
+        newPeripheral = ''
+        if CB_PERIPHERALS:
+            peripherals = CB_PERIPHERALS.split(',')
+            for p in peripherals:
+                for dev in self.devices:
+                    logging.debug('%s peripheral: %s, device: %s', ModuleName, p, dev["adaptor"]["name"])
+                    if p in dev["adaptor"]["name"]:
+                        found = False
+                        break
+                if found:
+                    newPeripheral = p
+                    break
+            if found:
+                d = {}
+                d["type"] = "request"
+                d["verb"] = "post"
+                d["url"] = "/api/bridge/v1/device_discovery/"
+                d["channel"] = "bridge_manager"
+                d["body"] = []
+                b = {'manufacturer_name': 0, 
+                     'protocol': 'peripheral', 
+                     'address': '0', 
+                     'name': newPeripheral,
+                     'model_number': 0
+                    }
+                d["body"].append(b)
+                msg = {"cmd": "msg",
+                       "msg": d}
+                self.cbSendConcMsg(msg)
+        if not found:
+            if CB_ZWAVE_BRIDGE:
+                self.elFactory["zwave"].sendMsg({"cmd": "discover"})
+                self.zwaveDiscovering = False
+            reactor.callInThread(self.bleDiscover)
+            self.sendStatusMsg("Press button on device to be discovered now")
 
     def onZwaveExcluded(self, address):
         msg = "Error in Z-wave exclude process. No button pressed on device?"
@@ -664,8 +696,7 @@ class ManageBridge:
                 upgradeStat = "Failed. Problems moving directories"
         reactor.callFromThread(self.sendStatusMsg, upgradeStat)
         if okToReboot:
-            self.cbSendSuperMsg({"msg": "reboot"})
-            reactor.callFromThread(self.sendSuperMsg, {"msg": "reboot"})
+            reactor.callFromThread(self.cbSendSuperMsg, {"msg": "reboot"})
 
     def waitToUpgrade(self):
         # Call in threaad as it can take some time & watchdog still going
