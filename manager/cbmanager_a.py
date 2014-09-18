@@ -325,32 +325,35 @@ class ManageBridge:
             self.discovered = True
             return
     
+    def onZwaveDiscovering(self, msg):
+        logging.debug('%s onZwaveDiscovering', ModuleName)
+        self.zwaveDiscovering = True
+        self.sendStatusMsg("Found a Z-wave device. Identifyiing it. Please wait.")
+
     def onZwaveDiscovered(self, msg):
         logging.debug('%s onZwaveDiscovered', ModuleName)
         self.zwaveDiscoveredData = msg["body"]
         self.zwaveDiscovered = True
-        if self.bleDiscovered:
-            self.gatherDiscovered()
+        self.gatherDiscovered()
 
     def onBLEDiscovered(self):
         logging.debug('%s onBLEDiscovered', ModuleName)
         self.bleDiscovered = True
-        if (CB_ZWAVE_BRIDGE and self.zwaveDiscovered) or CB_SIM_LEVEL == '1' or not CB_ZWAVE_BRIDGE:
+        if not self.zwaveDiscovered or self.zwaveDiscovering:
             self.gatherDiscovered()
 
     def gatherDiscovered(self):
         logging.debug('%s gatherDiscovered', ModuleName)
-        self.zwaveDiscovered = False
-        self.bleDiscovered = False
         d = {}
         d["type"] = "request"
         d["verb"] = "post"
         d["url"] = "/api/bridge/v1/device_discovery/"
         d["channel"] = "bridge_manager"
         d["body"] = []
-        for b in self.bleDiscoveredData:
-            d["body"].append(b)
-        if CB_ZWAVE_BRIDGE and CB_SIM_LEVEL == '0':
+        if self.bleDiscovered:
+            for b in self.bleDiscoveredData:
+                d["body"].append(b)
+        if self.zwaveDiscovered and CB_SIM_LEVEL == '0':
             for b in self.zwaveDiscoveredData:
                 d["body"].append(b)
         elif CB_SIM_LEVEL == '1':
@@ -361,6 +364,8 @@ class ManageBridge:
                  'model_number': 0
                 }
             d["body"].append(b)
+        self.zwaveDiscovered = False
+        self.bleDiscovered = False
         logging.debug('%s Discovered: %s', ModuleName, str(d))
         msg = {"cmd": "msg",
                "msg": d}
@@ -369,8 +374,20 @@ class ManageBridge:
     def discover(self):
         if CB_ZWAVE_BRIDGE:
             self.elFactory["zwave"].sendMsg({"cmd": "discover"})
+            self.zwaveDiscovering = False
         reactor.callInThread(self.bleDiscover)
         self.sendStatusMsg("Press button on device to be discovered now")
+
+    def onZwaveExcluded(self, address):
+        msg = "Error in Z-wave exclude process. No button pressed on device?"
+        if address == "":
+            msg= "No Z-wave device was excluded. Did it need one or three button clicks?"
+        else:
+            for d in self.devices:
+                if d["address"] == address:
+                    msg= "Excluded " + d["friendly_name"] + ". Please remove it from the devices list."
+                    break
+        self.sendStatusMsg(msg)
 
     def zwaveExclude(self):
         logging.debug('%s zwaveExclude', ModuleName)
@@ -908,6 +925,7 @@ class ManageBridge:
                        "body": status
                       }
               }
+        logging.debug('%s Sending status message: %s', ModuleName, msg)
         self.cbSendConcMsg(msg)
  
     def cbSendMsg(self, msg, iName):
@@ -952,6 +970,14 @@ class ManageBridge:
                 else:
                     self.cbSendMsg({"cmd": "status"}, e)
         reactor.callLater(ELEMENT_POLL_INTERVAL, self.pollElement)
+
+    def onLogMessage(self, msg):
+        if "body" in msg:
+            logMsg = msg["body"]
+        else:
+            "No log message provided" 
+        logging.warning('%s %s', ModuleName, logMsg)
+        self.sendStatusMsg(logMsg)
 
     def processClient(self, msg):
         #logging.debug('%s Received msg; %s', ModuleName, msg)
@@ -1047,22 +1073,22 @@ class ManageBridge:
                 response = {"cmd": "error"}
                 self.cbSendMsg(response, msg["id"])
         elif msg["status"] == "log":
-            if "log" in msg:
-                log = "log " + msg["id"] + ": " + msg["log"]
-            else:
-                log = "log " + msg["id"] + ": No log message provided" 
-            logging.warning('%s %s', ModuleName, log)
-            self.sendStatusMsg(log)
+            self.onLogMessage(msg)
         elif msg["status"] == "discovered":
             if msg["id"] == "zwave":
                 self.onZwaveDiscovered(msg)
             else:
                 logging.warning('%s Discovered message from unexpected source: %s', ModuleName, msg["id"])
+        elif msg["status"] == "discovering":
+            if msg["id"] == "zwave":
+                self.onZwaveDiscovering(msg)
+            else:
+                logging.warning('%s Discovering message from unexpected source: %s', ModuleName, msg["id"])
         elif msg["status"] == "excluded":
             if msg["id"] == "zwave":
-                self.sendStatusMsg(msg["body"])
+                self.onZwaveExcluded(msg["body"])
             else:
-                logging.warning('%s Excluded  message from unexpected source: %s', ModuleName, msg["id"])
+                logging.warning('%s Excluded message from unexpected source: %s', ModuleName, msg["id"])
         elif msg["status"] == "state":
             if "state" in msg:
                 logging.debug('%s %s %s', ModuleName, msg["id"], msg["state"])
