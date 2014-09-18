@@ -599,7 +599,7 @@ class ManageBridge:
 
     def updateConfig(self, msg):
         # THIS METHOD IS IN A THREAD
-        logging.info('%s Config update received from controller', ModuleName)
+        #logging.info('%s Config update received from controller', ModuleName)
         reactor.callFromThread(self.sendStatusMsg, "Updating. This may take a minute")
         #logging.debug('%s %s', ModuleName, str(msg))
         configFile = CB_CONFIG_DIR + "/bridge.config"
@@ -764,7 +764,7 @@ class ManageBridge:
                 self.disconnectedCount += 1
  
     def processControlMsg(self, msg):
-        #logging.info('%s msg received from controller: %s', ModuleName, msg)
+        #logging.debug('%s msg received from controller: %s', ModuleName, str(msg)[:100])
         if not "type" in msg: 
             logging.error('%s msg received from controller with no "message" key', ModuleName)
             self.sendStatusMsg("Error. message received from controller with no type key")

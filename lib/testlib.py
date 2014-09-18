@@ -9,6 +9,7 @@ from twisted.protocols.basic import LineReceiver
 from twisted.internet.protocol import ClientFactory
 from twisted.internet.protocol import ReconnectingClientFactory
 ModuleName = "testlib" 
+LineReceiver.MAX_LENGTH = 65535
 
 class CbTestClientProtocol(LineReceiver):
     def __init__(self, processMsg, initMsg):
@@ -26,7 +27,8 @@ class CbTestClientProtocol(LineReceiver):
         logging.debug("%s Connecction made", ModuleName)
 
     def lineReceived(self, data):
-        logging.debug("%s Line received: %s %s", ModuleName, data[:100], data[-100:])
+        logging.debug("%s Line received, start: %s", ModuleName, data[:100])
+        logging.debug("%s Line received, end: %s", ModuleName, data[-100:])
         self.processMsg(json.loads(data))
 
     def sendMsg(self, msg):
