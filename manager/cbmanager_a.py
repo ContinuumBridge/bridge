@@ -24,13 +24,7 @@ import json
 import urllib
 import pexpect
 from twisted.internet import threads
-from twisted.internet.protocol import Protocol, Factory
 from twisted.internet import reactor, defer
-from twisted.internet.task import deferLater
-from twisted.internet import task
-from twisted.protocols.basic import LineReceiver
-from twisted.internet.protocol import ReconnectingClientFactory
-from pprint import pprint
 from cbcommslib import CbClientProtocol
 from cbcommslib import CbClientFactory
 from cbcommslib import CbServerProtocol
@@ -41,6 +35,7 @@ from dropbox.rest import ErrorResponse, RESTSocketError
 from dropbox.datastore import DatastoreError, DatastoreManager, Date, Bytes
 import procname
 
+CB_UPGRADE_URL = 'https://github.com/ContinuumBridge/cbridge/releases/download/v1.0.0/bridge_clone.tar.gz'
 CONCENTRATOR_PATH = CB_BRIDGE_ROOT + "/concentrator/concentrator.py"
 ZWAVE_PATH = CB_BRIDGE_ROOT + "/manager/z-wave-ctrl.py"
 
@@ -111,6 +106,7 @@ class ManageBridge:
                 logging.warning("%s Problem configuring hci0 (down): %s", ModuleName, s)
             else:
                 logging.debug("%s hci0 down OK", ModuleName)
+            time.sleep(MIN_DELAY)
             s = subprocess.check_output(["hciconfig", "hci0", "up"])
             if s != '':
                 logging.warning("%s Problem configuring hci0 (up), %s", ModuleName, s)
@@ -671,19 +667,14 @@ class ManageBridge:
         reactor.callFromThread(self.sendStatusMsg, "Upgrade in progress. Please wait")
         upgradeStat = ""
         okToReboot = False
-        access_token = os.getenv('CB_DROPBOX_TOKEN', 'NO_TOKEN')
+        tarFile = CB_HOME + "/bridge_clone.tgz"
+        logging.debug('%s tarDir: %s, tarFile: %s', ModuleName, tarDir, tarFile)
         try:
-            logging.info('%s Dropbox access token = %s', ModuleName, access_token)
-            self.client = DropboxClient(access_token)
-            f, metadata = self.client.get_file_and_metadata('/bridge_clone.tgz')
+            urllib.urlretrieve(CB_UPGRADE_URL, tarFile)
         except:
-            logging.error('%s Cannot access Dropbox to upgrade', ModuleName)
-            upgradeStat = "Cannot access Dropbox to upgrade"
+            logging.error('%s Cannot access GitHub file to upgrade', ModuleName)
+            upgradeStat = "Cannot access GitHub file to upgrade"
         else:
-            tarFile = CB_HOME + "/bridge_clone.tgz"
-            out = open(tarFile, 'wb')
-            out.write(f.read())
-            out.close()
             subprocess.call(["tar", "xfz", tarFile])
             logging.info('%s Extracted upgrade tar', ModuleName)
 
