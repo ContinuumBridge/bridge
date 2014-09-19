@@ -82,7 +82,7 @@ class Concentrator():
 
     def processManagerMsg(self, msg):
         #logging.debug("%s Received from manager: %s", ModuleName, msg)
-        msg["time_sent"] = self.isotime()
+        msg["time_sent"] = isotime()
         try:
             self.concFactory.sendMsg(msg)
         except:

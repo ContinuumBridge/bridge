@@ -369,10 +369,10 @@ class ManageBridge:
             for b in self.zwaveDiscoveredData:
                 d["body"]["body"].append(b)
         elif CB_SIM_LEVEL == '1':
-            b = {'manufacturer_name': 0,.
-                 'protocol': 'zwave',.
-                 'mac_addr': '40',.
-                 'name': 'Binary Power Switch',.
+            b = {'manufacturer_name': 0,
+                 'protocol': 'zwave',
+                 'mac_addr': '40',
+                 'name': 'Binary Power Switch',
                  'model_number': 0
                 }
             d["body"]["body"].append(b)
@@ -400,18 +400,20 @@ class ManageBridge:
                     break
             if found:
                 d = {}
-                d["type"] = "request"
-                d["verb"] = "post"
-                d["url"] = "/api/bridge/v1/device_discovery/"
-                d["channel"] = "bridge_manager"
-                d["body"] = []
+                d["source"] = self.bridge_id
+                d["destination"] = "cb"
+                d["time_sent"] = isotime()
+                d["body"] = {}
+                d["body"]["url"] = "/api/bridge/v1/device_discovery/"
+                d["body"]["verb"] = "post"
+                d["body"]["body"] = []
                 b = {'manufacturer_name': 0, 
                      'protocol': 'peripheral', 
                      'address': '0', 
                      'name': newPeripheral,
                      'model_number': 0
                     }
-                d["body"].append(b)
+                d["body"]["body"].append(b)
                 msg = {"cmd": "msg",
                        "msg": d}
                 self.cbSendConcMsg(msg)
