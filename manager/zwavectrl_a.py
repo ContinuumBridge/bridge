@@ -54,6 +54,7 @@ class ZwaveCtrl():
         self.cbFactory = {}
         self.adaptors = [] 
         self.found = []
+        self.listen = []
         if len(argv) < 3:
             logging.error("%s Improper number of arguments", ModuleName)
             exit(1)
@@ -355,11 +356,14 @@ class ZwaveCtrl():
                                           "address": a["address"]
                                         })
                     self.cbFactory[a["id"]] = CbServerFactory(self.onAdaptorMessage)
-                    reactor.listenUNIX(a["socket"], self.cbFactory[a["id"]])
+                    self.listen.append(reactor.listenUNIX(a["socket"], self.cbFactory[a["id"]]))
         # Start zway even if there are no zway devices, in case we want to discover some
         reactor.callInThread(self.zway)
 
     def doStop(self):
+        # Stop listening on all ports (to prevent nasty crash on exit)
+        for l in self.listen:
+            l.stopListening()
         try:
             reactor.stop()
         except:

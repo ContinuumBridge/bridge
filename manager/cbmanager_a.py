@@ -98,16 +98,26 @@ class ManageBridge:
                 logging.error('%s node failed to start. exe = %s', ModuleName, exe)
         else:
             logging.info('%s Running without Cloud Server', ModuleName)
-        # Reset Bluetooth interface
-        try:
-            subprocess.call(["sudo", "hciconfig", "hci0", "down"])
-            subprocess.call(["sudo", "hciconfig", "hci0", "up"])
-        except:
-            logging.warning("%s %s %s Unable to bring up hci0", ModuleName, self.id, self.friendly_name)
-
         # Give time for node interface to start
         reactor.callLater(START_DELAY, self.startElements)
         reactor.run()
+
+    def resetBluetooth(self):
+        # Called in a thread
+        logging.debug("%s resetBluetooth", ModuleName)
+        try:
+            s = subprocess.check_output(["hciconfig", "hci0", "down"])
+            if s != '':
+                logging.warning("%s Problem configuring hci0 (down): %s", ModuleName, s)
+            else:
+                logging.debug("%s hci0 down OK", ModuleName)
+            s = subprocess.check_output(["hciconfig", "hci0", "up"])
+            if s != '':
+                logging.warning("%s Problem configuring hci0 (up), %s", ModuleName, s)
+            else:
+                logging.debug("%s hci0 up OK", ModuleName)
+        except:
+            logging.warning("%s Unable to configure hci0", ModuleName)
 
     def listMgrSocs(self):
         mgrSocs = {}
@@ -118,6 +128,7 @@ class ManageBridge:
         return mgrSocs
 
     def startElements(self):
+        reactor.callInThread(self.resetBluetooth)
         if self.configured:
             self.removeSecondarySockets()
         els = [{"id": "conc",

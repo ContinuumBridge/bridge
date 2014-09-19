@@ -59,10 +59,11 @@ class Supervisor:
         self.interfaceChecks = 0           # Keeps track of how many times network connection has been checked
         signal.signal(signal.SIGINT, self.signalHandler)  # For catching SIGINT
         signal.signal(signal.SIGTERM, self.signalHandler)  # For catching SIGTERM
-        try:
-            reactor.callLater(TIME_TO_IFUP, self.checkInterface)
-        except:
-            logging.error("%s iUnable to call checkInterface", ModuleName)
+        if not CB_DEV_BRIDGE:
+            try:
+                reactor.callLater(TIME_TO_IFUP, self.checkInterface)
+            except:
+                logging.error("%s iUnable to call checkInterface", ModuleName)
 
         reactor.callLater(0.1, self.startManager, False)
         reactor.run()
@@ -78,9 +79,6 @@ class Supervisor:
             os.remove(CB_MANAGER_EXIT)
         # Open a socket for communicating with the bridge manager
         s = CB_SOCKET_DIR + "skt-super-mgr"
-        # In case of prior crash & no clean-up
-        if os.path.exists(s):
-            os.remove(s)
         self.cbManagerFactory = CbServerFactory(self.onManagerMessage)
         self.mgrPort = reactor.listenUNIX(s, self.cbManagerFactory, backlog=4)
 
