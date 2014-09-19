@@ -15,7 +15,7 @@ timeout         Not usually set by user apps
 running should be set at least every 10 seconds as a heartbeat
 """
 
-ModuleName = "cbLib" 
+ModuleName = "cbcommslib" 
 TIME_TO_MONITOR_STATUS = 60     # Time to wait before sending status messages to manager
 SEND_STATUS_INTERVAL = 30       # Interval between sending status messages to manager
 REACTOR_STOP_DELAY = 2          # Time to wait between telling app/adt to stop & stopping reactor
@@ -36,6 +36,7 @@ from twisted.internet import threads
 from twisted.internet import defer
 from twisted.internet import reactor
 from data_store import DataStore, DataModel
+LineReceiver.MAX_LENGTH = 262143
 
 def isotime():
     t = time.time()
@@ -325,7 +326,10 @@ class CbClientProtocol(LineReceiver):
         self.processMsg(json.loads(data))
 
     def sendMsg(self, msg):
-        self.sendLine(json.dumps(msg))
+        try:
+            self.sendLine(json.dumps(msg))
+        except:
+            logging.warning("%s Message not send: %s", ModuleName, self.id, msg)
 
 class CbClientFactory(ClientFactory):
     def __init__(self, processMsg, initMsg):
@@ -347,7 +351,10 @@ class CbServerProtocol(LineReceiver):
         self.processMsg(json.loads(data))
 
     def sendMsg(self, msg):
-        self.sendLine(json.dumps(msg))
+        try:
+            self.sendLine(json.dumps(msg))
+        except:
+            logging.warning("%s Message not send: %s", ModuleName, self.id, msg)
 
 class CbServerFactory(Factory):
     def __init__(self, processMsg):

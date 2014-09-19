@@ -24,13 +24,7 @@ import json
 import urllib
 import pexpect
 from twisted.internet import threads
-from twisted.internet.protocol import Protocol, Factory
 from twisted.internet import reactor, defer
-from twisted.internet.task import deferLater
-from twisted.internet import task
-from twisted.protocols.basic import LineReceiver
-from twisted.internet.protocol import ReconnectingClientFactory
-from pprint import pprint
 from cbcommslib import CbClientProtocol
 from cbcommslib import CbClientFactory
 from cbcommslib import CbServerProtocol
@@ -42,6 +36,7 @@ from dropbox.rest import ErrorResponse, RESTSocketError
 from dropbox.datastore import DatastoreError, DatastoreManager, Date, Bytes
 import procname
 
+CB_UPGRADE_URL = 'https://github.com/ContinuumBridge/cbridge/releases/download/v1.0.0/bridge_clone.tar.gz'
 CONCENTRATOR_PATH = CB_BRIDGE_ROOT + "/concentrator/concentrator.py"
 ZWAVE_PATH = CB_BRIDGE_ROOT + "/manager/z-wave-ctrl.py"
 
@@ -60,6 +55,7 @@ class ManageBridge:
         self.zwaveDiscovered = False
         self.bleDiscovered = False
         self.configured = False
+        self.restarting = False
         self.reqSync = False
         self.state = "stopped"
         self.concNoApps = False
@@ -99,16 +95,27 @@ class ManageBridge:
                 logging.error('%s node failed to start. exe = %s', ModuleName, exe)
         else:
             logging.info('%s Running without Cloud Server', ModuleName)
-        # Reset Bluetooth interface
-        try:
-            subprocess.call(["sudo", "hciconfig", "hci0", "down"])
-            subprocess.call(["sudo", "hciconfig", "hci0", "up"])
-        except:
-            logging.warning("%s %s %s Unable to bring up hci0", ModuleName, self.id, self.friendly_name)
-
         # Give time for node interface to start
         reactor.callLater(START_DELAY, self.startElements)
         reactor.run()
+
+    def resetBluetooth(self):
+        # Called in a thread
+        logging.debug("%s resetBluetooth", ModuleName)
+        try:
+            s = subprocess.check_output(["hciconfig", "hci0", "down"])
+            if s != '':
+                logging.warning("%s Problem configuring hci0 (down): %s", ModuleName, s)
+            else:
+                logging.debug("%s hci0 down OK", ModuleName)
+            time.sleep(MIN_DELAY)
+            s = subprocess.check_output(["hciconfig", "hci0", "up"])
+            if s != '':
+                logging.warning("%s Problem configuring hci0 (up), %s", ModuleName, s)
+            else:
+                logging.debug("%s hci0 up OK", ModuleName)
+        except:
+            logging.warning("%s Unable to configure hci0", ModuleName)
 
     def listMgrSocs(self):
         mgrSocs = {}
@@ -119,6 +126,7 @@ class ManageBridge:
         return mgrSocs
 
     def startElements(self):
+        reactor.callInThread(self.resetBluetooth)
         if self.configured:
             self.removeSecondarySockets()
         els = [{"id": "conc",
@@ -326,17 +334,21 @@ class ManageBridge:
             self.discovered = True
             return
     
+    def onZwaveDiscovering(self, msg):
+        logging.debug('%s onZwaveDiscovering', ModuleName)
+        self.zwaveDiscovering = True
+        self.sendStatusMsg("Found a Z-wave device. Identifyiing it. Please wait.")
+
     def onZwaveDiscovered(self, msg):
         logging.debug('%s onZwaveDiscovered', ModuleName)
         self.zwaveDiscoveredData = msg["body"]
         self.zwaveDiscovered = True
-        if self.bleDiscovered:
-            self.gatherDiscovered()
+        self.gatherDiscovered()
 
     def onBLEDiscovered(self):
         logging.debug('%s onBLEDiscovered', ModuleName)
         self.bleDiscovered = True
-        if (CB_ZWAVE_BRIDGE and self.zwaveDiscovered) or CB_SIM_LEVEL == '1' or not CB_ZWAVE_BRIDGE:
+        if not self.zwaveDiscovered or self.zwaveDiscovering:
             self.gatherDiscovered()
 
     def gatherDiscovered(self):
@@ -353,27 +365,73 @@ class ManageBridge:
         d["body"]["body"] = []
         for b in self.bleDiscoveredData:
             d["body"]["body"].append(b)
-        if CB_ZWAVE_BRIDGE and CB_SIM_LEVEL == '0':
+        if self.zwaveDiscovered and CB_SIM_LEVEL == '0':
             for b in self.zwaveDiscoveredData:
                 d["body"]["body"].append(b)
         elif CB_SIM_LEVEL == '1':
-            b = {'manufacturer_name': 0, 
-                 'protocol': 'zwave', 
-                 'mac_addr': '40', 
-                 'name': 'Binary Power Switch', 
+            b = {'manufacturer_name': 0,.
+                 'protocol': 'zwave',.
+                 'mac_addr': '40',.
+                 'name': 'Binary Power Switch',.
                  'model_number': 0
                 }
             d["body"]["body"].append(b)
+        self.zwaveDiscovered = False
+        self.bleDiscovered = False
         logging.debug('%s Discovered: %s', ModuleName, str(d))
         msg = {"cmd": "msg",
                "msg": d}
         self.cbSendConcMsg(msg)
 
     def discover(self):
-        if CB_ZWAVE_BRIDGE:
-            self.elFactory["zwave"].sendMsg({"cmd": "discover"})
-        reactor.callInThread(self.bleDiscover)
-        self.sendStatusMsg("Press button on device to be discovered now")
+        # If there are peripherals report any that are not reported rather than discover
+        found = True
+        newPeripheral = ''
+        if CB_PERIPHERALS:
+            peripherals = CB_PERIPHERALS.split(',')
+            for p in peripherals:
+                for dev in self.devices:
+                    logging.debug('%s peripheral: %s, device: %s', ModuleName, p, dev["adaptor"]["name"])
+                    if p in dev["adaptor"]["name"]:
+                        found = False
+                        break
+                if found:
+                    newPeripheral = p
+                    break
+            if found:
+                d = {}
+                d["type"] = "request"
+                d["verb"] = "post"
+                d["url"] = "/api/bridge/v1/device_discovery/"
+                d["channel"] = "bridge_manager"
+                d["body"] = []
+                b = {'manufacturer_name': 0, 
+                     'protocol': 'peripheral', 
+                     'address': '0', 
+                     'name': newPeripheral,
+                     'model_number': 0
+                    }
+                d["body"].append(b)
+                msg = {"cmd": "msg",
+                       "msg": d}
+                self.cbSendConcMsg(msg)
+        if not found:
+            if CB_ZWAVE_BRIDGE:
+                self.elFactory["zwave"].sendMsg({"cmd": "discover"})
+                self.zwaveDiscovering = False
+            reactor.callInThread(self.bleDiscover)
+            self.sendStatusMsg("Press button on device to be discovered now")
+
+    def onZwaveExcluded(self, address):
+        msg = "Error in Z-wave exclude process. No button pressed on device?"
+        if address == "":
+            msg= "No Z-wave device was excluded. Did it need one or three button clicks?"
+        else:
+            for d in self.devices:
+                if d["address"] == address:
+                    msg= "Excluded " + d["friendly_name"] + ". Please remove it from the devices list."
+                    break
+        self.sendStatusMsg(msg)
 
     def zwaveExclude(self):
         logging.debug('%s zwaveExclude', ModuleName)
@@ -385,12 +443,23 @@ class ManageBridge:
 
     def readConfig(self):
         # BEWARE. SOMETIMES CALLED IN A THREAD.
+        appRoot = CB_HOME + "/apps/"
+        adtRoot = CB_HOME + "/adaptors/"
         if CB_DEV_BRIDGE:
-            appRoot = CB_HOME + "/apps_dev/"
-            adtRoot = CB_HOME + "/adaptors_dev/"
-        else:
-            appRoot = CB_HOME + "/apps/"
-            adtRoot = CB_HOME + "/adaptors/"
+            logging.warning('%s Development user (CB_USERNAME): %s', ModuleName, CB_USERNAME)
+            self.devApps = CB_DEV_APPS.split(',')
+            self.devAdaptors = CB_DEV_ADAPTORS.split(',')
+            logging.debug('%s self.devApps: %s', ModuleName, self.devApps)
+            logging.debug('%s self.devAdaptors: %s', ModuleName, self.devAdaptors)
+            if CB_USERNAME == '':
+                logging.warning('%s CB_DEV_BRIDGE=True, but CB_USERNAME not set, so apps_dev and adaptors_dev not used', ModuleName)
+                appRootDev = appRoot
+                adtRootDev = adtRoot
+            else:   
+                appRootDev = "/home/" + CB_USERNAME + "/apps_dev/"
+                adtRootDev = "/home/" + CB_USERNAME + "/adaptors_dev/"
+            logging.debug('%s appRootDev: %s', ModuleName, appRootDev)
+            logging.debug('%s adtRootDev: %s', ModuleName, adtRootDev)
         configFile = CB_CONFIG_DIR + "/bridge.config"
         configRead = False
         try:
@@ -420,11 +489,12 @@ class ManageBridge:
                 d["adaptor"]["mgrSoc"] = socket
                 url = d["adaptor"]["url"]
                 split_url = url.split('/')
-                if CB_DEV_BRIDGE:
+                if CB_DEV_BRIDGE and d["adaptor"]["name"] in self.devAdaptors:
                     dirName = split_url[-3]
+                    d["adaptor"]["exe"] = adtRootDev + dirName + "/" + d["adaptor"]["exe"]
                 else:
                     dirName = (split_url[-3] + '-' + split_url[-1])[:-7]
-                d["adaptor"]["exe"] = adtRoot + dirName + "/" + d["adaptor"]["exe"]
+                    d["adaptor"]["exe"] = adtRoot + dirName + "/" + d["adaptor"]["exe"]
                 logging.debug('%s exe: %s', ModuleName, d["adaptor"]["exe"])
                 logging.debug('%s protocol: %s', ModuleName, d["device"]["protocol"])
                 if d["device"]["protocol"] == "zwave":
@@ -436,11 +506,12 @@ class ManageBridge:
                 a["app"]["id"] = "AID" + str(a["app"]["id"])
                 url = a["app"]["url"]
                 split_url = url.split('/')
-                if CB_DEV_BRIDGE:
+                if CB_DEV_BRIDGE and a["app"]["name"] in self.devApps:
                     dirName = split_url[-3]
+                    a["app"]["exe"] = appRootDev + dirName + "/" + a["app"]["exe"]
                 else:
                     dirName = (split_url[-3] + '-' + split_url[-1])[:-7]
-                a["app"]["exe"] = appRoot + dirName + "/" + a["app"]["exe"]
+                    a["app"]["exe"] = appRoot + dirName + "/" + a["app"]["exe"]
                 logging.debug('%s exe: %s', ModuleName, a["app"]["exe"])
                 a["app"]["mgrSoc"] = CB_SOCKET_DIR + "SKT-MGR-" + str(a["app"]["id"])
                 a["app"]["concSoc"] = CB_SOCKET_DIR + "SKT-CONC-" + str(a["app"]["id"])
@@ -513,41 +584,47 @@ class ManageBridge:
             os.makedirs(d)
         dirs = os.listdir(d)
         for dev in self.devices:
-            url = dev["adaptor"]["url"] 
-            split_url = url.split('/')
-            logging.debug('%s updateElements. split_url: %s', ModuleName, split_url)
-            logging.debug('%s updateElements. split_url[-3]: %s', ModuleName, split_url[-3])
-            name = (split_url[-3] + '-' + split_url[-1])[:-7]
-            logging.debug('%s updateElements. name: %s', ModuleName, name)
-            logging.debug('%s updateElements. Current updateList: %s', ModuleName, updateList)
-            update = False
-            if name not in dirs:
-                update = True
-                for u in updateList:
-                    logging.debug('%s updateElements. u["name"]: %s', ModuleName, u["name"])
-                    if u["name"] == name: 
-                        update = False
-            if update:
-                updateList.append({"url": url, "type": "adaptors", "name": name})
+            if CB_DEV_BRIDGE and dev["adaptor"]["name"] in self.devAdaptors:
+                logging.debug('%s updateElements. Using %s from adaptors_dev', ModuleName, dev["adaptor"]["name"])
+            else:
+                url = dev["adaptor"]["url"] 
+                split_url = url.split('/')
+                logging.debug('%s updateElements. split_url: %s', ModuleName, split_url)
+                logging.debug('%s updateElements. split_url[-3]: %s', ModuleName, split_url[-3])
+                name = (split_url[-3] + '-' + split_url[-1])[:-7]
+                logging.debug('%s updateElements. name: %s', ModuleName, name)
+                logging.debug('%s updateElements. Current updateList: %s', ModuleName, updateList)
+                update = False
+                if name not in dirs:
+                    update = True
+                    for u in updateList:
+                        logging.debug('%s updateElements. u["name"]: %s', ModuleName, u["name"])
+                        if u["name"] == name: 
+                            update = False
+                if update:
+                    updateList.append({"url": url, "type": "adaptors", "name": name})
         d = CB_HOME + "/apps"
         if not os.path.exists(d):
             os.makedirs(d)
         dirs = os.listdir(d)
         for app in self.apps:
-            url = app["app"]["url"]
-            split_url = url.split('/')
-            logging.debug('%s updateElements. split_url: %s', ModuleName, split_url)
-            logging.debug('%s updateElements. split_url[-3]: %s', ModuleName, split_url[-3])
-            name = (split_url[-3] + '-' + split_url[-1])[:-7]
-            logging.debug('%s updateElements. name: %s', ModuleName, name)
-            update = False
-            if name not in dirs:
-                update = True
-                for u in updateList:
-                    if u["name"] == name: 
-                        update = False
-            if update:
-                updateList.append({"url": url, "type": "apps", "name": name})
+            if CB_DEV_BRIDGE and app["app"]["name"] in self.devApps:
+                logging.debug('%s updateElements. Using %s from apps_dev', ModuleName, app["app"]["name"])
+            else:
+                url = app["app"]["url"]
+                split_url = url.split('/')
+                logging.debug('%s updateElements. split_url: %s', ModuleName, split_url)
+                logging.debug('%s updateElements. split_url[-3]: %s', ModuleName, split_url[-3])
+                name = (split_url[-3] + '-' + split_url[-1])[:-7]
+                logging.debug('%s updateElements. name: %s', ModuleName, name)
+                update = False
+                if name not in dirs:
+                    update = True
+                    for u in updateList:
+                        if u["name"] == name: 
+                            update = False
+                if update:
+                    updateList.append({"url": url, "type": "apps", "name": name})
 
         logging.info('%s updateList: %s', ModuleName, updateList)
         for e in updateList:
@@ -566,7 +643,7 @@ class ManageBridge:
 
     def updateConfig(self, msg):
         # THIS METHOD IS IN A THREAD
-        logging.info('%s Config update received from controller', ModuleName)
+        #logging.info('%s Config update received from controller', ModuleName)
         reactor.callFromThread(self.sendStatusMsg, "Updating. This may take a minute")
         #logging.debug('%s %s', ModuleName, str(msg))
         configFile = CB_CONFIG_DIR + "/bridge.config"
@@ -595,19 +672,14 @@ class ManageBridge:
         reactor.callFromThread(self.sendStatusMsg, "Upgrade in progress. Please wait")
         upgradeStat = ""
         okToReboot = False
-        access_token = os.getenv('CB_DROPBOX_TOKEN', 'NO_TOKEN')
+        tarFile = CB_HOME + "/bridge_clone.tgz"
+        logging.debug('%s tarFile: %s', ModuleName, tarFile)
         try:
-            logging.info('%s Dropbox access token = %s', ModuleName, access_token)
-            self.client = DropboxClient(access_token)
-            f, metadata = self.client.get_file_and_metadata('/bridge_clone.tgz')
+            urllib.urlretrieve(CB_UPGRADE_URL, tarFile)
         except:
-            logging.error('%s Cannot access Dropbox to upgrade', ModuleName)
-            upgradeStat = "Cannot access Dropbox to upgrade"
+            logging.error('%s Cannot access GitHub file to upgrade', ModuleName)
+            upgradeStat = "Cannot access GitHub file to upgrade"
         else:
-            tarFile = CB_HOME + "/bridge_clone.tgz"
-            out = open(tarFile, 'wb')
-            out.write(f.read())
-            out.close()
             subprocess.call(["tar", "xfz", tarFile])
             logging.info('%s Extracted upgrade tar', ModuleName)
 
@@ -631,8 +703,7 @@ class ManageBridge:
                 upgradeStat = "Failed. Problems moving directories"
         reactor.callFromThread(self.sendStatusMsg, upgradeStat)
         if okToReboot:
-            self.cbSendSuperMsg({"msg": "reboot"})
-            reactor.callFromThread(self.sendSuperMsg, {"msg": "reboot"})
+            reactor.callFromThread(self.cbSendSuperMsg, {"msg": "reboot"})
 
     def waitToUpgrade(self):
         # Call in threaad as it can take some time & watchdog still going
@@ -760,6 +831,7 @@ class ManageBridge:
             elif command == "restart":
                 logging.info('%s Received restart command', ModuleName)
                 self.cbSendSuperMsg({"msg": "restart"})
+                self.restarting = True
                 self.sendStatusMsg("restarting")
             elif command == "reboot":
                 logging.info('%s Received reboot command', ModuleName)
@@ -846,7 +918,10 @@ class ManageBridge:
                     logging.debug('%s No process to kill', ModuleName)
             self.removeSecondarySockets()
             # In case some adaptors have not killed gatttool processes:
-            subprocess.call(["killall", "gatttool"])
+            try:
+                subprocess.call(["killall", "gatttool"])
+            except:
+                pass
             self.states("stopped")
 
     def stopAll(self):
@@ -898,6 +973,7 @@ class ManageBridge:
                                }
                       }
               }
+        logging.debug('%s Sending status message: %s', ModuleName, msg)
         self.cbSendConcMsg(msg)
  
     def cbSendMsg(self, msg, iName):
@@ -922,6 +998,7 @@ class ManageBridge:
                         logging.warning('%s %s has not communicated within watchdog interval', ModuleName, e)
                         self.sendStatusMsg("Watchdog timeout for " + e + " - Restarting")
                         self.cbSendSuperMsg({"msg": "restart"})
+                        self.restarting = True
                         break
                 else:
                     self.elements[e] = False
@@ -942,6 +1019,14 @@ class ManageBridge:
                 else:
                     self.cbSendMsg({"cmd": "status"}, e)
         reactor.callLater(ELEMENT_POLL_INTERVAL, self.pollElement)
+
+    def onLogMessage(self, msg):
+        if "body" in msg:
+            logMsg = msg["body"]
+        else:
+            "No log message provided" 
+        logging.warning('%s %s', ModuleName, logMsg)
+        self.sendStatusMsg(logMsg)
 
     def processClient(self, msg):
         #logging.debug('%s Received msg; %s', ModuleName, msg)
@@ -1037,22 +1122,22 @@ class ManageBridge:
                 response = {"cmd": "error"}
                 self.cbSendMsg(response, msg["id"])
         elif msg["status"] == "log":
-            if "log" in msg:
-                log = "log " + msg["id"] + ": " + msg["log"]
-            else:
-                log = "log " + msg["id"] + ": No log message provided" 
-            logging.warning('%s %s', ModuleName, log)
-            self.sendStatusMsg(log)
+            self.onLogMessage(msg)
         elif msg["status"] == "discovered":
             if msg["id"] == "zwave":
                 self.onZwaveDiscovered(msg)
             else:
                 logging.warning('%s Discovered message from unexpected source: %s', ModuleName, msg["id"])
+        elif msg["status"] == "discovering":
+            if msg["id"] == "zwave":
+                self.onZwaveDiscovering(msg)
+            else:
+                logging.warning('%s Discovering message from unexpected source: %s', ModuleName, msg["id"])
         elif msg["status"] == "excluded":
             if msg["id"] == "zwave":
-                self.sendStatusMsg(msg["body"])
+                self.onZwaveExcluded(msg["body"])
             else:
-                logging.warning('%s Excluded  message from unexpected source: %s', ModuleName, msg["id"])
+                logging.warning('%s Excluded message from unexpected source: %s', ModuleName, msg["id"])
         elif msg["status"] == "state":
             if "state" in msg:
                 logging.debug('%s %s %s', ModuleName, msg["id"], msg["state"])
@@ -1069,9 +1154,11 @@ class ManageBridge:
             else:
                 logging.warning('%s Received battery_level message from %s with no battery_level', ModuleName, msg["id"])
         elif msg["status"] == "error":
-            logging.warning('%s Error status received from %s. Restarting', ModuleName, msg["id"])
-            self.sendStatusMsg("Error status received from " + msg["id"] + " - Restarting")
-            self.cbSendSuperMsg({"msg": "restart"})
+            if not self.restarting:
+                logging.warning('%s Error status received from %s. Restarting', ModuleName, msg["id"])
+                self.sendStatusMsg("Error status received from " + msg["id"] + " - Restarting")
+                self.cbSendSuperMsg({"msg": "restart"})
+                self.restarting = True
         elif msg["status"] != "ok":
             logging.debug('%s Messagge from client: %s', ModuleName, msg)
  

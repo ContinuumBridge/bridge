@@ -12,7 +12,7 @@ WATCHDOG_INTERVAL = 30         # Time between manager checks (secs)
 MAX_NO_SERVER_COUNT = 10       # Used when making decisions about rebooting
 MIN_TIME_BETWEEN_REBOOTS = 600 # Stops constant rebooting (secs)
 REBOOT_WAIT = 10               # Time to allow bridge to stop before rebooting
-RESTART_INTERVAL = 8           # Time between telling manager to stop and starting it again
+RESTART_INTERVAL = 10          # Time between telling manager to stop and starting it again
 MAX_INTERFACE_CHECKS = 10      # No times to check interface before rebooting
 EXIT_WAIT = 2                  # On SIGINT, time to wait before exit after manager signalled to stop
 SAFETY_INTERVAL = 300          # Delay before rebooting if manager failed to start
@@ -59,10 +59,11 @@ class Supervisor:
         self.interfaceChecks = 0           # Keeps track of how many times network connection has been checked
         signal.signal(signal.SIGINT, self.signalHandler)  # For catching SIGINT
         signal.signal(signal.SIGTERM, self.signalHandler)  # For catching SIGTERM
-        try:
-            reactor.callLater(TIME_TO_IFUP, self.checkInterface)
-        except:
-            logging.error("%s iUnable to call checkInterface", ModuleName)
+        if not CB_DEV_BRIDGE:
+            try:
+                reactor.callLater(TIME_TO_IFUP, self.checkInterface)
+            except:
+                logging.error("%s iUnable to call checkInterface", ModuleName)
 
         reactor.callLater(0.1, self.startManager, False)
         reactor.run()
@@ -78,9 +79,6 @@ class Supervisor:
             os.remove(CB_MANAGER_EXIT)
         # Open a socket for communicating with the bridge manager
         s = CB_SOCKET_DIR + "skt-super-mgr"
-        # In case of prior crash & no clean-up
-        if os.path.exists(s):
-            os.remove(s)
         self.cbManagerFactory = CbServerFactory(self.onManagerMessage)
         self.mgrPort = reactor.listenUNIX(s, self.cbManagerFactory, backlog=4)
 
