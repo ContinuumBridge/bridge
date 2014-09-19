@@ -54,6 +54,7 @@ class ManageBridge:
         self.zwaveDiscovered = False
         self.bleDiscovered = False
         self.configured = False
+        self.restarting = False
         self.reqSync = False
         self.state = "stopped"
         self.concNoApps = False
@@ -668,7 +669,7 @@ class ManageBridge:
         upgradeStat = ""
         okToReboot = False
         tarFile = CB_HOME + "/bridge_clone.tgz"
-        logging.debug('%s tarDir: %s, tarFile: %s', ModuleName, tarDir, tarFile)
+        logging.debug('%s tarFile: %s', ModuleName, tarFile)
         try:
             urllib.urlretrieve(CB_UPGRADE_URL, tarFile)
         except:
@@ -827,6 +828,7 @@ class ManageBridge:
             elif msg["body"] == "restart":
                 logging.info('%s Received restart command', ModuleName)
                 self.cbSendSuperMsg({"msg": "restart"})
+                self.restarting = True
                 self.sendStatusMsg("restarting")
             elif msg["body"] == "reboot":
                 logging.info('%s Received reboot command', ModuleName)
@@ -909,7 +911,10 @@ class ManageBridge:
                     logging.debug('%s No process to kill', ModuleName)
             self.removeSecondarySockets()
             # In case some adaptors have not killed gatttool processes:
-            subprocess.call(["killall", "gatttool"])
+            try:
+                subprocess.call(["killall", "gatttool"])
+            except:
+                pass
             self.states("stopped")
 
     def stopAll(self):
@@ -983,6 +988,7 @@ class ManageBridge:
                         logging.warning('%s %s has not communicated within watchdog interval', ModuleName, e)
                         self.sendStatusMsg("Watchdog timeout for " + e + " - Restarting")
                         self.cbSendSuperMsg({"msg": "restart"})
+                        self.restarting = True
                         break
                 else:
                     self.elements[e] = False
@@ -1138,9 +1144,11 @@ class ManageBridge:
             else:
                 logging.warning('%s Received battery_level message from %s with no battery_level', ModuleName, msg["id"])
         elif msg["status"] == "error":
-            logging.warning('%s Error status received from %s. Restarting', ModuleName, msg["id"])
-            self.sendStatusMsg("Error status received from " + msg["id"] + " - Restarting")
-            self.cbSendSuperMsg({"msg": "restart"})
+            if not self.restarting:
+                logging.warning('%s Error status received from %s. Restarting', ModuleName, msg["id"])
+                self.sendStatusMsg("Error status received from " + msg["id"] + " - Restarting")
+                self.cbSendSuperMsg({"msg": "restart"})
+                self.restarting = True
         elif msg["status"] != "ok":
             logging.debug('%s Messagge from client: %s', ModuleName, msg)
  
