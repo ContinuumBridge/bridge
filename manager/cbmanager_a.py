@@ -411,7 +411,7 @@ class ManageBridge:
                 msg = {"cmd": "msg",
                        "msg": d}
                 self.cbSendConcMsg(msg)
-        if not found:
+        if not CB_PERIPHERALS or not found:
             if CB_ZWAVE_BRIDGE:
                 self.elFactory["zwave"].sendMsg({"cmd": "discover"})
                 self.zwaveDiscovering = False
