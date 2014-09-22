@@ -88,7 +88,8 @@ class Supervisor:
             self.managerProc = Popen([exe])
             logging.info("%s Starting bridge manager", ModuleName)
             self.starting = False
-            reactor.callLater(2*WATCHDOG_INTERVAL, self.checkManager, time.time())
+            if not CB_DEV_BRIDGE:
+                reactor.callLater(2*WATCHDOG_INTERVAL, self.checkManager, time.time())
         except:
             logging.error("%s Bridge manager failed to start: %s", ModuleName, exe)
             # Give developer a chance to do something before rebooting:
@@ -231,4 +232,4 @@ class Supervisor:
         sys.exit
         
 if __name__ == '__main__':
-    s = Supervisor()
+    Supervisor()
