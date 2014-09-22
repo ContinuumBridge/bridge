@@ -808,6 +808,10 @@ class ManageBridge:
             logging.error('%s msg received from controller with no "body" key', ModuleName)
             self.sendStatusMsg("Error. message received from controller with no body key")
             return 
+        if self.bridge_id == "unconfigured":
+            if msg["desination"]:
+                logging.info('%s No BID from bridge.config - used %s from incoming message', ModuleName, msg["destination"])
+                self.bridge_id = msg["destination"]
         if "connected" in msg["body"]:
             return
         logging.info('%s msg received from controller: %s', ModuleName, msg)
