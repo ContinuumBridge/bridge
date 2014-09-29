@@ -10,7 +10,7 @@
     All it does it look for addresses and append them to a list. """
 
 ModuleName = "Discovery"
-DISCOVERY_TIME = 8  # Time to scan before reporting results
+DISCOVERY_TIME = 12  # Time to scan before reporting results
 
 import sys
 import time

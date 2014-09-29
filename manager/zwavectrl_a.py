@@ -148,7 +148,7 @@ class ZwaveCtrl():
                               }
                         reactor.callFromThread(self.cbSendManagerMsg, msg)
                     elif includeTick > 3:
-                        self.endMessage = "No Z-wave device found. Try again."
+                        self.endMessage = "No Z-wave device found."
                         includeState = "tidyUp"
                     else:
                         includeTick += 1

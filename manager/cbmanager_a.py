@@ -303,7 +303,7 @@ class ManageBridge:
     def bleDiscover(self):
         self.bleDiscoveredData = [] 
         exe = CB_BRIDGE_ROOT + "/manager/discovery.py"
-        protocol = "btle"
+        protocol = "ble"
         output = subprocess.check_output([exe, protocol, str(CB_SIM_LEVEL), CB_CONFIG_DIR])
         logging.info('%s Discovery output: %s', ModuleName, output)
         try:
@@ -337,7 +337,7 @@ class ManageBridge:
     def onZwaveDiscovering(self, msg):
         logging.debug('%s onZwaveDiscovering', ModuleName)
         self.zwaveDiscovering = True
-        self.sendStatusMsg("Found a Z-wave device. Identifyiing it. Please wait.")
+        self.sendStatusMsg("Z-wave device found. Identifyiing it. This may take up to 30 seconds.")
 
     def onZwaveDiscovered(self, msg):
         logging.debug('%s onZwaveDiscovered', ModuleName)
@@ -359,9 +359,12 @@ class ManageBridge:
         d["url"] = "/api/bridge/v1/device_discovery/"
         d["channel"] = "bridge_manager"
         d["body"] = []
-        if self.bleDiscovered:
-            for b in self.bleDiscoveredData:
-                d["body"].append(b)
+        if self.bleDiscovered and not self.zwaveDiscovered:
+            if self.bleDiscoveredData:
+                for b in self.bleDiscoveredData:
+                    d["body"].append(b)
+            else:
+                self.sendStatusMsg("No Bluetooth devices found.")
         if self.zwaveDiscovered and CB_SIM_LEVEL == '0':
             for b in self.zwaveDiscoveredData:
                 d["body"].append(b)
@@ -376,9 +379,10 @@ class ManageBridge:
         self.zwaveDiscovered = False
         self.bleDiscovered = False
         logging.debug('%s Discovered: %s', ModuleName, str(d))
-        msg = {"cmd": "msg",
-               "msg": d}
-        self.cbSendConcMsg(msg)
+        if d["body"] != []:
+            msg = {"cmd": "msg",
+                   "msg": d}
+            self.cbSendConcMsg(msg)
 
     def discover(self):
         # If there are peripherals report any that are not reported rather than discover
@@ -418,7 +422,7 @@ class ManageBridge:
                 self.elFactory["zwave"].sendMsg({"cmd": "discover"})
                 self.zwaveDiscovering = False
             reactor.callInThread(self.bleDiscover)
-            self.sendStatusMsg("Press button on device to be discovered now")
+            self.sendStatusMsg("Follow manufacturer's instructions for device to be discovered now.")
 
     def onZwaveExcluded(self, address):
         msg = "Error in Z-wave exclude process. No button pressed on device?"
