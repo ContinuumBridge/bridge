@@ -36,6 +36,7 @@ from dropbox.datastore import DatastoreError, DatastoreManager, Date, Bytes
 import procname
 
 CB_UPGRADE_URL = 'https://github.com/ContinuumBridge/cbridge/releases/download/v1.0.0/bridge_clone.tar.gz'
+CB_DEV_UPGRADE_URL = 'https://github.com/ContinuumBridge/cbridge/releases/download/v0.0.1/bridge_clone.tar.gz'
 CONCENTRATOR_PATH = CB_BRIDGE_ROOT + "/concentrator/concentrator.py"
 ZWAVE_PATH = CB_BRIDGE_ROOT + "/manager/z-wave-ctrl.py"
 
@@ -385,10 +386,11 @@ class ManageBridge:
         newPeripheral = ''
         if CB_PERIPHERALS:
             peripherals = CB_PERIPHERALS.split(',')
+            peripherals = [p.strip(' ') for p in peripherals]
             for p in peripherals:
                 for dev in self.devices:
                     logging.debug('%s peripheral: %s, device: %s', ModuleName, p, dev["adaptor"]["name"])
-                    if p in dev["adaptor"]["name"]:
+                    if p in dev["adaptor"]["name"] or p == "none":
                         found = False
                         break
                 if found:
@@ -444,10 +446,12 @@ class ManageBridge:
         if CB_DEV_BRIDGE:
             logging.warning('%s Development user (CB_USERNAME): %s', ModuleName, CB_USERNAME)
             self.devApps = CB_DEV_APPS.split(',')
-            self.devAdaptors = CB_DEV_ADAPTORS.split(',')
+            self.devApps = [x.strip(' ') for x in self.devApps]
             logging.debug('%s self.devApps: %s', ModuleName, self.devApps)
+            self.devAdaptors = CB_DEV_ADAPTORS.split(',')
+            self.devAdaptors = [x.strip(' ') for x in self.devAdaptors]
             logging.debug('%s self.devAdaptors: %s', ModuleName, self.devAdaptors)
-            if CB_USERNAME == '':
+            if CB_USERNAME == 'none':
                 logging.warning('%s CB_DEV_BRIDGE=True, but CB_USERNAME not set, so apps_dev and adaptors_dev not used', ModuleName)
                 appRootDev = appRoot
                 adtRootDev = adtRoot
@@ -671,7 +675,10 @@ class ManageBridge:
         tarFile = CB_HOME + "/bridge_clone.tgz"
         logging.debug('%s tarFile: %s', ModuleName, tarFile)
         try:
-            urllib.urlretrieve(CB_UPGRADE_URL, tarFile)
+            if CB_DEV_UPGRADE:
+                urllib.urlretrieve(CB_DEV_UPGRADE_URL, tarFile)
+            else:
+                urllib.urlretrieve(CB_UPGRADE_URL, tarFile)
         except:
             logging.error('%s Cannot access GitHub file to upgrade', ModuleName)
             upgradeStat = "Cannot access GitHub file to upgrade"
