@@ -422,10 +422,10 @@ class ManageBridge:
                 self.elFactory["zwave"].sendMsg({"cmd": "discover"})
                 self.zwaveDiscovering = False
             reactor.callInThread(self.bleDiscover)
-            self.sendStatusMsg("Follow manufacturer's instructions for device to be discovered now.")
+            self.sendStatusMsg("Follow manufacturer's instructions for device to be connected now.")
 
     def onZwaveExcluded(self, address):
-        msg = "Error in Z-wave exclude process. No button pressed on device?"
+        msg = "No Z-wave device was excluded. No button pressed on device?"
         if address == "":
             msg= "No Z-wave device was excluded. Did it need one or three button clicks?"
         else:
