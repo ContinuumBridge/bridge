@@ -7,7 +7,7 @@
 #
 ModuleName = "Supervisor"
 
-TIME_TO_IFUP = 15              # Time to wait before checking if we have an Internet connection (secs)
+TIME_TO_IFUP = 30              # Time to wait before checking if we have an Internet connection (secs)
 WATCHDOG_INTERVAL = 30         # Time between manager checks (secs)
 MAX_NO_SERVER_COUNT = 10       # Used when making decisions about rebooting
 MIN_TIME_BETWEEN_REBOOTS = 600 # Stops constant rebooting (secs)
@@ -16,6 +16,7 @@ RESTART_INTERVAL = 10          # Time between telling manager to stop and starti
 MAX_INTERFACE_CHECKS = 10      # No times to check interface before rebooting
 EXIT_WAIT = 2                  # On SIGINT, time to wait before exit after manager signalled to stop
 SAFETY_INTERVAL = 300          # Delay before rebooting if manager failed to start
+CHECK_CONNECTED_DELAY = 120    # Time bewteen connection checks if not connected to Internet
 
 import sys
 import signal
@@ -179,8 +180,13 @@ class Supervisor:
     def interfaceChecked(self, mode):
         logging.info("%s Connected by %s", ModuleName, mode)
         if mode == "none":
-            d = threads.deferToThread(wifisetup.getConnected)
-            d.addCallback(self.checkConnected)
+            s = call(["hciconfig", "hci0"])
+            if s != 0:
+                logging.info("%s Not connected & no Bluetooth dongle. Asking for SSID", ModuleName)
+                d = threads.deferToThread(wifisetup.getConnected)
+                d.addCallback(self.checkConnected)
+            else:
+                reactor.callLater(CHECK_CONNECTED_DELAY, self.checkConnected)
         else:
             self.connecting = False
 
