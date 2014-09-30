@@ -16,7 +16,7 @@ RESTART_INTERVAL = 10          # Time between telling manager to stop and starti
 MAX_INTERFACE_CHECKS = 10      # No times to check interface before rebooting
 EXIT_WAIT = 2                  # On SIGINT, time to wait before exit after manager signalled to stop
 SAFETY_INTERVAL = 300          # Delay before rebooting if manager failed to start
-CHECK_CONNECTED_DELAY = 120    # Time bewteen connection checks if not connected to Internet
+CHECK_INTERFACE_DELAY = 120    # Time bewteen connection checks if not connected to Internet
 
 import sys
 import signal
@@ -186,7 +186,8 @@ class Supervisor:
                 d = threads.deferToThread(wifisetup.getConnected)
                 d.addCallback(self.checkConnected)
             else:
-                reactor.callLater(CHECK_CONNECTED_DELAY, self.checkConnected)
+                logging.info("%s Not connected but Bluetooth dongle connected. Waiting to connect.", ModuleName)
+                reactor.callLater(CHECK_INTERFACE_DELAY, self.checkConnected, False)
         else:
             self.connecting = False
 
