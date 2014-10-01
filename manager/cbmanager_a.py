@@ -301,6 +301,7 @@ class ManageBridge:
             lescan.kill(9)
  
     def bleDiscover(self):
+        self.resetBluetooth()
         self.bleDiscoveredData = [] 
         exe = CB_BRIDGE_ROOT + "/manager/discovery.py"
         protocol = "ble"
@@ -388,7 +389,7 @@ class ManageBridge:
         # If there are peripherals report any that are not reported rather than discover
         found = True
         newPeripheral = ''
-        if CB_PERIPHERALS:
+        if CB_PERIPHERALS != "none":
             peripherals = CB_PERIPHERALS.split(',')
             peripherals = [p.strip(' ') for p in peripherals]
             for p in peripherals:
@@ -417,7 +418,7 @@ class ManageBridge:
                 msg = {"cmd": "msg",
                        "msg": d}
                 self.cbSendConcMsg(msg)
-        if not CB_PERIPHERALS or not found:
+        if CB_PERIPHERALS == "none"or not found:
             if CB_ZWAVE_BRIDGE:
                 self.elFactory["zwave"].sendMsg({"cmd": "discover"})
                 self.zwaveDiscovering = False

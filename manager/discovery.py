@@ -41,13 +41,6 @@ if __name__ == '__main__':
     protocols = []
     if sim == "0":
         try:
-            os.system("sudo hciconfig hci0 up")
-        except:
-            logging.error('%s Unable to bring up bci0 interface', ModuleName)
-            d = {"status": "error"}        
-            print json.dumps(d)
-            sys.exit()
-        try:
             cmd = "sudo hcitool lescan"
             p = pexpect.spawn(cmd)
         except:
