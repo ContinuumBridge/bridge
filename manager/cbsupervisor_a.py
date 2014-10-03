@@ -66,9 +66,18 @@ class Supervisor:
             except:
                 logging.error("%s iUnable to call checkInterface", ModuleName)
 
-        reactor.callLater(0.1, self.startManager, False)
+        reactor.callLater(0.1, self.checkBTStartManager)
         reactor.run()
 
+    def checkBTStartManager(self):
+        s = call(["hciconfig", "hci0"])
+        if s != 0:
+            self.managerStarted = False
+            logging.info("%s No Bluetooth dongle. Not starting manager", ModuleName)
+        else:
+            self.managerStarted = True
+            self.startManager(False)
+  
     def startManager(self, restart):
         # Try to remove all sockets, just in case
         for f in glob.glob(CB_SOCKET_DIR + "skt-*"):
@@ -189,10 +198,16 @@ class Supervisor:
                 logging.info("%s Not connected but Bluetooth dongle connected. Waiting to connect.", ModuleName)
                 reactor.callLater(CHECK_INTERFACE_DELAY, self.checkConnected, False)
         else:
+            if not self.managerStarted:
+                logging.debug("%s No Bluetooth dongle, but connected. Starting manager", ModuleName)
+                self.startManager(False)
             self.connecting = False
 
     def checkConnected(self, connected):
         if connected:
+            if not self.managerStarted:
+                logging.debug("%s No Bluetooth dongle, got connected. Starting manager", ModuleName)
+                self.startManager(False)
             self.connecting = False
         else:
             if self.interfaceChecks > MAX_INTERFACE_CHECKS:

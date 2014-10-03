@@ -26,6 +26,7 @@ from cbcommslib import CbClientFactory
 from cbcommslib import CbServerProtocol
 from cbcommslib import CbServerFactory
 
+ZWAVE_DEVICES_FILE   = "zwave_devices.json"
 DISCOVER_TIME        = 40.0
 INCLUDE_WAIT_TIME    = 5.0
 IPADDRESS            = 'localhost'
@@ -60,10 +61,16 @@ class ZwaveCtrl():
             exit(1)
         managerSocket = argv[1]
         self.id = argv[2]
-        logging.info("%s Hello", ModuleName)
-
-       
+        # Load zwave devices data
+        self.zwave_devices = []    # In case file doesn't load
+        try:
+            with open(ZWAVE_DEVICES_FILE, 'r') as configFile:
+                self.zwave_devices = json.load(configFile)
+                logging.info('%s Read zwave devices file', ModuleName)
+        except:
+            logging.error('%s No zwave devices file exists or file is corrupt', ModuleName)
         self.fromTime = str(int(time.time()) - 1)
+        logging.info("%s Hello", ModuleName)
 
         # Connection to manager
         initMsg = {"id": self.id,
@@ -263,12 +270,24 @@ class ZwaveCtrl():
                                                 logging.debug("%s manufacturerProductType : %s", ModuleName, manufacturerProductType )
                                     if (vendorString != "" or losEndos) and not foundData:
                                         if losEndos:
-                                            if deviceTypeString == "":
-                                                name = ""
-                                                self.endMessage = "No Z-wave device found"
-                                            else:
-                                                name = deviceTypeString
-                                                self.endMessage = "Found Z-wave device: " + name
+                                            for dev in self.zwave_devices:
+                                                logging.debug("%s zwave_device : %s", ModuleName, str(dev))
+                                                found = True
+                                                for c in dev["command_classes"]:
+                                                    logging.debug("%s command_class : %s", ModuleName, str(c))
+                                                    if c not in command_classes:
+                                                        found = False
+                                                        break
+                                                    if found:
+                                                        name = dev["name"]
+                                                        break
+                                            if not found:
+                                                if deviceTypeString == "":
+                                                    name = ""
+                                                    self.endMessage = "No Z-wave device found"
+                                                else:
+                                                    name = deviceTypeString
+                                                    self.endMessage = "Found Z-wave device: " + name
                                         else:
                                             name = vendorString + " " + str(manufacturerProductId) + " " + str(manufacturerProductType)
                                             self.endMessage = "Found Z-wave device: " + name
@@ -317,7 +336,7 @@ class ZwaveCtrl():
         self.exclude = True
 
     def onAdaptorMessage(self, msg):
-        logging.debug("%s onAdaptorMessage: %s", ModuleName, msg)
+        #logging.debug("%s onAdaptorMessage: %s", ModuleName, msg)
         if "request" in msg:
             if msg["request"] == "init":
                 resp = {"id": "zwave",
