@@ -108,6 +108,8 @@ def getConnected():
     """
     logging.info("%s getConnected. Switching to server mode", ModuleName)
     switchwlan0("server")
+    # Allow time for server to start
+    time.sleep(3)
     gotCreds, ssid, wpa_key = getCredentials()
     if gotCreds:
         try:
@@ -163,6 +165,11 @@ def switchwlan0(switchTo):
         logging.debug("%s wlan0 down", ModuleName)
         call(["killall", "wpa_supplicant"])
         logging.debug("%s wpa_supplicant process killed", ModuleName)
+        # In case dnsmasq and hostapd already running;
+        call(["service", "dnsmasq", "stop"])
+        logging.info("%s dnsmasq stopped", ModuleName)
+        call(["service", "hostapd", " stop"])
+        logging.info("%s hostapd stopped", ModuleName)
         interfacesFile = CB_BRIDGE_ROOT + "/bridgeconfig/interfaces.server"
         call(["cp", interfacesFile, "/etc/network/interfaces"])
         call(["ifup", "wlan0"])

@@ -7,7 +7,7 @@
 #
 ModuleName = "Supervisor"
 
-TIME_TO_IFUP = 15              # Time to wait before checking if we have an Internet connection (secs)
+TIME_TO_IFUP = 30              # Time to wait before checking if we have an Internet connection (secs)
 WATCHDOG_INTERVAL = 30         # Time between manager checks (secs)
 MAX_NO_SERVER_COUNT = 10       # Used when making decisions about rebooting
 MIN_TIME_BETWEEN_REBOOTS = 600 # Stops constant rebooting (secs)
@@ -16,6 +16,7 @@ RESTART_INTERVAL = 10          # Time between telling manager to stop and starti
 MAX_INTERFACE_CHECKS = 10      # No times to check interface before rebooting
 EXIT_WAIT = 2                  # On SIGINT, time to wait before exit after manager signalled to stop
 SAFETY_INTERVAL = 300          # Delay before rebooting if manager failed to start
+CHECK_INTERFACE_DELAY = 120    # Time bewteen connection checks if not connected to Internet
 
 import sys
 import signal
@@ -65,9 +66,18 @@ class Supervisor:
             except:
                 logging.error("%s iUnable to call checkInterface", ModuleName)
 
-        reactor.callLater(0.1, self.startManager, False)
+        reactor.callLater(0.1, self.checkBTStartManager)
         reactor.run()
 
+    def checkBTStartManager(self):
+        s = call(["hciconfig", "hci0"])
+        if s != 0:
+            self.managerStarted = False
+            logging.info("%s No Bluetooth dongle. Not starting manager", ModuleName)
+        else:
+            self.managerStarted = True
+            self.startManager(False)
+  
     def startManager(self, restart):
         # Try to remove all sockets, just in case
         for f in glob.glob(CB_SOCKET_DIR + "skt-*"):
@@ -88,7 +98,8 @@ class Supervisor:
             self.managerProc = Popen([exe])
             logging.info("%s Starting bridge manager", ModuleName)
             self.starting = False
-            reactor.callLater(2*WATCHDOG_INTERVAL, self.checkManager, time.time())
+            if not CB_DEV_BRIDGE:
+                reactor.callLater(2*WATCHDOG_INTERVAL, self.checkManager, time.time())
         except:
             logging.error("%s Bridge manager failed to start: %s", ModuleName, exe)
             # Give developer a chance to do something before rebooting:
@@ -178,13 +189,25 @@ class Supervisor:
     def interfaceChecked(self, mode):
         logging.info("%s Connected by %s", ModuleName, mode)
         if mode == "none":
-            d = threads.deferToThread(wifisetup.getConnected)
-            d.addCallback(self.checkConnected)
+            s = call(["hciconfig", "hci0"])
+            if s != 0:
+                logging.info("%s Not connected & no Bluetooth dongle. Asking for SSID", ModuleName)
+                d = threads.deferToThread(wifisetup.getConnected)
+                d.addCallback(self.checkConnected)
+            else:
+                logging.info("%s Not connected but Bluetooth dongle connected. Waiting to connect.", ModuleName)
+                reactor.callLater(CHECK_INTERFACE_DELAY, self.checkConnected, False)
         else:
+            if not self.managerStarted:
+                logging.debug("%s No Bluetooth dongle, but connected. Starting manager", ModuleName)
+                self.startManager(False)
             self.connecting = False
 
     def checkConnected(self, connected):
         if connected:
+            if not self.managerStarted:
+                logging.debug("%s No Bluetooth dongle, got connected. Starting manager", ModuleName)
+                self.startManager(False)
             self.connecting = False
         else:
             if self.interfaceChecks > MAX_INTERFACE_CHECKS:
@@ -231,4 +254,4 @@ class Supervisor:
         sys.exit
         
 if __name__ == '__main__':
-    s = Supervisor()
+    Supervisor()

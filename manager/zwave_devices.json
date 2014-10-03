@@ -1,0 +1,6 @@
+[
+    {
+     "name": "Zwave Power Meter Socket",
+     "command_classes": [37, 32, 39, 114, 134, 50, 133, 112]
+    }
+]

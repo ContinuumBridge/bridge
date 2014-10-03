@@ -37,6 +37,7 @@ from dropbox.datastore import DatastoreError, DatastoreManager, Date, Bytes
 import procname
 
 CB_UPGRADE_URL = 'https://github.com/ContinuumBridge/cbridge/releases/download/v1.0.0/bridge_clone.tar.gz'
+CB_DEV_UPGRADE_URL = 'https://github.com/ContinuumBridge/cbridge/releases/download/v0.0.1/bridge_clone.tar.gz'
 CONCENTRATOR_PATH = CB_BRIDGE_ROOT + "/concentrator/concentrator.py"
 ZWAVE_PATH = CB_BRIDGE_ROOT + "/manager/z-wave-ctrl.py"
 
@@ -301,9 +302,10 @@ class ManageBridge:
             lescan.kill(9)
  
     def bleDiscover(self):
+        self.resetBluetooth()
         self.bleDiscoveredData = [] 
         exe = CB_BRIDGE_ROOT + "/manager/discovery.py"
-        protocol = "btle"
+        protocol = "ble"
         output = subprocess.check_output([exe, protocol, str(CB_SIM_LEVEL), CB_CONFIG_DIR])
         logging.info('%s Discovery output: %s', ModuleName, output)
         try:
@@ -337,7 +339,7 @@ class ManageBridge:
     def onZwaveDiscovering(self, msg):
         logging.debug('%s onZwaveDiscovering', ModuleName)
         self.zwaveDiscovering = True
-        self.sendStatusMsg("Found a Z-wave device. Identifyiing it. Please wait.")
+        self.sendStatusMsg("Z-wave device found. Identifyiing it. This may take up to 30 seconds.")
 
     def onZwaveDiscovered(self, msg):
         logging.debug('%s onZwaveDiscovered', ModuleName)
@@ -363,8 +365,12 @@ class ManageBridge:
         d["body"]["resource"] = "/api/bridge/v1/device_discovery/"
         d["body"]["verb"] = "post"
         d["body"]["body"] = []
-        for b in self.bleDiscoveredData:
-            d["body"]["body"].append(b)
+        if self.bleDiscovered and not self.zwaveDiscovered:
+            if self.bleDiscoveredData:
+                for b in self.bleDiscoveredData:
+                    d["body"]["body"].append(b)
+            else:
+                self.sendStatusMsg("No Bluetooth devices found.")
         if self.zwaveDiscovered and CB_SIM_LEVEL == '0':
             for b in self.zwaveDiscoveredData:
                 d["body"]["body"].append(b)
@@ -379,21 +385,23 @@ class ManageBridge:
         self.zwaveDiscovered = False
         self.bleDiscovered = False
         logging.debug('%s Discovered: %s', ModuleName, str(d))
-        msg = {"cmd": "msg",
-               "msg": d}
-        self.cbSendConcMsg(msg)
+        if d["body"] != []:
+            msg = {"cmd": "msg",
+                   "msg": d}
+            self.cbSendConcMsg(msg)
 
     def discover(self):
         logging.debug('%s discover', ModuleName)
         # If there are peripherals report any that are not reported rather than discover
         found = True
         newPeripheral = ''
-        if CB_PERIPHERALS:
+        if CB_PERIPHERALS != "none":
             peripherals = CB_PERIPHERALS.split(',')
+            peripherals = [p.strip(' ') for p in peripherals]
             for p in peripherals:
                 for dev in self.devices:
                     logging.debug('%s peripheral: %s, device: %s', ModuleName, p, dev["adaptor"]["name"])
-                    if p in dev["adaptor"]["name"]:
+                    if p in dev["adaptor"]["name"] or p == "none":
                         found = False
                         break
                 if found:
@@ -418,16 +426,15 @@ class ManageBridge:
                 msg = {"cmd": "msg",
                        "msg": d}
                 self.cbSendConcMsg(msg)
-        if not CB_PERIPHERALS or not found:
-            logging.debug('%s no peripheralss', ModuleName)
+        if CB_PERIPHERALS == "none" or not found:
             if CB_ZWAVE_BRIDGE:
                 self.elFactory["zwave"].sendMsg({"cmd": "discover"})
                 self.zwaveDiscovering = False
             reactor.callInThread(self.bleDiscover)
-            self.sendStatusMsg("Press button on device to be discovered now")
+            self.sendStatusMsg("Follow manufacturer's instructions for device to be connected now.")
 
     def onZwaveExcluded(self, address):
-        msg = "Error in Z-wave exclude process. No button pressed on device?"
+        msg = "No Z-wave device was excluded. No button pressed on device?"
         if address == "":
             msg= "No Z-wave device was excluded. Did it need one or three button clicks?"
         else:
@@ -452,10 +459,12 @@ class ManageBridge:
         if CB_DEV_BRIDGE:
             logging.warning('%s Development user (CB_USERNAME): %s', ModuleName, CB_USERNAME)
             self.devApps = CB_DEV_APPS.split(',')
-            self.devAdaptors = CB_DEV_ADAPTORS.split(',')
+            self.devApps = [x.strip(' ') for x in self.devApps]
             logging.debug('%s self.devApps: %s', ModuleName, self.devApps)
+            self.devAdaptors = CB_DEV_ADAPTORS.split(',')
+            self.devAdaptors = [x.strip(' ') for x in self.devAdaptors]
             logging.debug('%s self.devAdaptors: %s', ModuleName, self.devAdaptors)
-            if CB_USERNAME == '':
+            if CB_USERNAME == 'none':
                 logging.warning('%s CB_DEV_BRIDGE=True, but CB_USERNAME not set, so apps_dev and adaptors_dev not used', ModuleName)
                 appRootDev = appRoot
                 adtRootDev = adtRoot
@@ -679,7 +688,10 @@ class ManageBridge:
         tarFile = CB_HOME + "/bridge_clone.tgz"
         logging.debug('%s tarFile: %s', ModuleName, tarFile)
         try:
-            urllib.urlretrieve(CB_UPGRADE_URL, tarFile)
+            if CB_DEV_UPGRADE:
+                urllib.urlretrieve(CB_DEV_UPGRADE_URL, tarFile)
+            else:
+                urllib.urlretrieve(CB_UPGRADE_URL, tarFile)
         except:
             logging.error('%s Cannot access GitHub file to upgrade', ModuleName)
             upgradeStat = "Cannot access GitHub file to upgrade"
