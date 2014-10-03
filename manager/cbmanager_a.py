@@ -360,7 +360,7 @@ class ManageBridge:
         d["destination"] = "cb"
         d["time_sent"] = isotime()
         d["body"] = {}
-        d["body"]["url"] = "/api/bridge/v1/device_discovery/"
+        d["body"]["resource"] = "/api/bridge/v1/device_discovery/"
         d["body"]["verb"] = "post"
         d["body"]["body"] = []
         for b in self.bleDiscoveredData:
@@ -384,6 +384,7 @@ class ManageBridge:
         self.cbSendConcMsg(msg)
 
     def discover(self):
+        logging.debug('%s discover', ModuleName)
         # If there are peripherals report any that are not reported rather than discover
         found = True
         newPeripheral = ''
@@ -404,7 +405,7 @@ class ManageBridge:
                 d["destination"] = "cb"
                 d["time_sent"] = isotime()
                 d["body"] = {}
-                d["body"]["url"] = "/api/bridge/v1/device_discovery/"
+                d["body"]["resource"] = "/api/bridge/v1/device_discovery/"
                 d["body"]["verb"] = "post"
                 d["body"]["body"] = []
                 b = {'manufacturer_name': 0, 
@@ -417,7 +418,8 @@ class ManageBridge:
                 msg = {"cmd": "msg",
                        "msg": d}
                 self.cbSendConcMsg(msg)
-        if not found:
+        if not CB_PERIPHERALS or not found:
+            logging.debug('%s no peripheralss', ModuleName)
             if CB_ZWAVE_BRIDGE:
                 self.elFactory["zwave"].sendMsg({"cmd": "discover"})
                 self.zwaveDiscovering = False
@@ -809,7 +811,7 @@ class ManageBridge:
             self.sendStatusMsg("Error. message received from controller with no body key")
             return 
         if self.bridge_id == "unconfigured":
-            if msg["desination"]:
+            if "destination" in msg:
                 logging.info('%s No BID from bridge.config - used %s from incoming message', ModuleName, msg["destination"])
                 self.bridge_id = msg["destination"]
         if "connected" in msg["body"]:
@@ -870,7 +872,7 @@ class ManageBridge:
                                "destination": "cb",
                                "time_sent": isotime(),
                                "body": {
-                                        "url": "/api/bridge/v1/current_bridge/bridge",
+                                        "resource": "/api/bridge/v1/current_bridge/bridge",
                                         "verb": "get"
                                        }
                               }
