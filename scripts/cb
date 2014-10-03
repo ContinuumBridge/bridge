@@ -33,6 +33,11 @@ def login(user, password):
            }
     r = requests.post(url, data=json.dumps(data), headers=headers)
     print "status:    ", r.status_code
+    print "status:    ", r.status_code
+    print "text:      ", r.text
+    print "headers:   ", r.headers
+    print "content:   ", r.content
+    print "cookies:   ", r.cookies
     if r.status_code == 200:
         sessionid = r.cookies['sessionid']
     else:
@@ -92,8 +97,6 @@ def cb(bridge, app, device, user, password, dev, zwave, log, param):
             print "Usage: cb --bridge [init|rm] --user <user_name> --password <password>"
             exit()
     if app:
-        print "cb --app not yet supported. Please contact ContinuumBridge."
-        exit()
         if not user or not password:
             print "Usage: cb --app [init|rm] --user <user_name> --password <password>"
             exit()
@@ -138,17 +141,16 @@ def cb(bridge, app, device, user, password, dev, zwave, log, param):
     if param:
         changeLine(param[0], "'" + param[1] +"'")
     if app:
-        print "cb --app not yet supported. Please contact ContinuumBridge."
-        exit()
         if app[0]  == "init":
             configFile = app[1]
-            try:
+            if True:
+            #try:
                 with open(configFile, 'r') as configFile:
                     config = json.load(configFile)
                     configRead = True
                     print "Read file: ", configFile
-            except:
-                print "No config file exists or file is corrupt: ", configFile
+            #except:
+            #    print "No config file exists or file is corrupt: ", configFile
                 success= False
             if 'description' not in config:
                 print "No description found in file: ", configFile
@@ -179,20 +181,23 @@ def cb(bridge, app, device, user, password, dev, zwave, log, param):
             appConfig['version'] = config['version']
             sessionid = login(user, password) 
      
-            print "Creating app"
-            url = "http://54.72.38.223/api/bridge/v1/app/"
-            data = appConfig
-            headers = {'Content-Type': 'application/json'}
-            cookies = {'sessionid': sessionid}
-            r = requests.post(url, data=json.dumps(data), headers=headers, cookies=cookies)
-            print "status:    ", r.status_code
-            print "text:      ", r.text
-            print "headers:   ", r.headers
-            print "content:   ", r.content
-            print "cookies:   ", r.cookies
-    
-            logout(sessionid)
-            print "Logging out"
+            if sessionid != "":
+                print "Creating app"
+                url = "http://54.72.38.223/api/bridge/v1/app/"
+                data = appConfig
+                headers = {'Content-Type': 'application/json'}
+                cookies = {'sessionid': sessionid}
+                r = requests.post(url, data=json.dumps(data), headers=headers, cookies=cookies)
+                print "status:    ", r.status_code
+                print "text:      ", r.text
+                print "headers:   ", r.headers
+                print "content:   ", r.content
+                print "cookies:   ", r.cookies
+        
+                logout(sessionid)
+                print "Logging out"
+            else:
+                print "Could not log in. Please check user name and password."
         elif app[0]  == "rm":
             pass
     if device:
