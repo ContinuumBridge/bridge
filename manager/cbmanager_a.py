@@ -355,8 +355,6 @@ class ManageBridge:
 
     def gatherDiscovered(self):
         logging.debug('%s gatherDiscovered', ModuleName)
-        self.zwaveDiscovered = False
-        self.bleDiscovered = False
         d = {}
         d["source"] = self.bridge_id
         d["destination"] = "cb"
