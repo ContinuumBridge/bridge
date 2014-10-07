@@ -387,9 +387,11 @@ class ManageBridge:
 
     def discover(self):
         # If there are peripherals report any that are not reported rather than discover
-        found = True
-        newPeripheral = ''
+        logging.debug('%s CB_PERIPHERALS: %s', ModuleName, CB_PERIPHERALS)
         if CB_PERIPHERALS != "none":
+            found = True
+            newPeripheral = ''
+            logging.debug('%s Checcking for peripherals: %s', ModuleName, CB_PERIPHERALS)
             peripherals = CB_PERIPHERALS.split(',')
             peripherals = [p.strip(' ') for p in peripherals]
             for p in peripherals:

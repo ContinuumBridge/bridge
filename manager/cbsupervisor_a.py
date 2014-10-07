@@ -107,7 +107,7 @@ class Supervisor:
         self.cbManagerFactory.sendMsg(msg)
 
     def onManagerMessage(self, msg):
-        logging.debug("%s onManagerMessage received message: %s", ModuleName, msg)
+        #logging.debug("%s onManagerMessage received message: %s", ModuleName, msg)
         # Regardless of message content, timeStamp is the time when we last heard from the manager
         self.timeStamp = time.time()
         if msg["msg"] == "restart":
