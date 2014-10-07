@@ -982,12 +982,13 @@ class ManageBridge:
         sys.exit
 
     def sendStatusMsg(self, status):
+        now = time.strftime('%H:%M:%S', time.localtime(time.time()))
         msg = {"cmd": "msg",
                "msg": {"source": self.bridge_id,
                        "destination": "broadcast",
                        "time_sent": isotime(),
                        "body": {
-                                 "status": status
+                                 "status": now + ' ' + status
                                }
                       }
               }

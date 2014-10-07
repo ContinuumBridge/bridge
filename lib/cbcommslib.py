@@ -69,7 +69,7 @@ class CbAdaptor:
                    "type": "adt",
                    "status": "req-config"} 
         self.managerFactory = CbClientFactory(self.processManager, initMsg)
-        reactor.connectUNIX(managerSocket, self.managerFactory, timeout=10)
+        reactor.connectUNIX(managerSocket, self.managerFactory, timeout=30)
 
         reactor.callLater(TIME_TO_MONITOR_STATUS, self.sendStatus)
         reactor.run()
@@ -135,7 +135,7 @@ class CbAdaptor:
             initMsg = {"id": self.id,
                        "request": "init"}
             self.zwaveFactory = CbClientFactory(self.onZwaveMessage, initMsg)
-            reactor.connectUNIX(config["zwave_socket"], self.zwaveFactory, timeout=10)
+            reactor.connectUNIX(config["zwave_socket"], self.zwaveFactory, timeout=30)
         self.onConfigureMessage(config)
         self.configured = True
 
@@ -207,7 +207,7 @@ class CbApp:
                    "type": "app",
                    "status": "req-config"} 
         self.managerFactory = CbClientFactory(self.processManager, initMsg)
-        reactor.connectUNIX(managerSocket, self.managerFactory, timeout=10)
+        reactor.connectUNIX(managerSocket, self.managerFactory, timeout=30)
 
         reactor.callLater(TIME_TO_MONITOR_STATUS, self.sendStatus)
         reactor.run()
@@ -263,7 +263,7 @@ class CbApp:
                            "appClass": self.appClass,
                            "request": "init"}
                 self.cbFactory[iName] = CbClientFactory(self.onAdaptorMessage, initMsg)
-                reactor.connectUNIX(adtSoc, self.cbFactory[iName], timeout=10)
+                reactor.connectUNIX(adtSoc, self.cbFactory[iName], timeout=30)
         # Connect to Concentrator socket
         if not self.configured:
             # Connect to the concentrator
@@ -271,9 +271,8 @@ class CbApp:
             initMsg = {"msg": "init",
                        "appID": self.id
                       }
-            self.cbFactory["conc"] = CbClientFactory(self.onConcMessage, \
-                                     initMsg)
-            reactor.connectUNIX(concSocket, self.cbFactory["conc"], timeout=10)
+            self.cbFactory["conc"] = CbClientFactory(self.onConcMessage, initMsg)
+            reactor.connectUNIX(concSocket, self.cbFactory["conc"], timeout=30)
             # Now call the app's configure method & set self.configured = True
             self.onConfigureMessage(config)
             self.configured = True

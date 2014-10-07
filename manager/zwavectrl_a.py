@@ -49,13 +49,13 @@ class ZwaveCtrl():
         self.state = "stopped"
         self.include = False
         self.exclude = False
-        self.posting = False
         self.getting = False
         self.getStrs = []
         self.cbFactory = {}
         self.adaptors = [] 
         self.found = []
         self.listen = []
+        self.postToUrls = []
         if len(argv) < 3:
             logging.error("%s Improper number of arguments", ModuleName)
             exit(1)
@@ -128,6 +128,7 @@ class ZwaveCtrl():
             includeTick keeps tract of time in increments of INCLUDE_WAIT_TIME.
             Don't change the "from" time when getting data until all data has been retrieved.
         """
+        posting = False
         while self.state != "stopping":
             if self.include:
                 if includeState == "notIncluding":
@@ -211,9 +212,9 @@ class ZwaveCtrl():
                     else:
                         excludeTick += 1
                         time.sleep(INCLUDE_WAIT_TIME)
-            elif self.posting:
-                self.posting = False
-                URL = self.postToUrl 
+            elif self.postToUrls:
+                posting = True
+                URL = self.postToUrls.pop() 
             elif self.getting:
                 self.getting = False
             else:
@@ -307,7 +308,10 @@ class ZwaveCtrl():
                             if g["match"] in dat:
                                 #logging.debug("%s found: %s %s", ModuleName, g["address"], g["commandClass"])
                                 self.sendParameter(dat[g["match"]], time.time(), g["address"], g["commandClass"])
-                time.sleep(MIN_DELAY)
+                if posting:
+                    posting = False
+                else:
+                    time.sleep(MIN_DELAY)
 
     def sendLogMessage(self):
         msg = {"id": self.id,
@@ -343,11 +347,11 @@ class ZwaveCtrl():
                         "content": "init"}
                 self.sendMessage(resp, msg["id"])
             elif msg["request"] == "post":
-                self.postToUrl = postUrl + msg["address"] + "].instances[" + msg["instance"] + \
-                                 "].commandClasses[" + msg["commandClass"] + "]." + msg["action"] + "(" + \
-                                 msg["value"] + ")"
-                logging.debug("%s postToUrl: %s", ModuleName, str(self.postToUrl))
-                self.posting = True
+                postToUrl = postUrl + msg["address"] + "].instances[" + msg["instance"] + \
+                            "].commandClasses[" + msg["commandClass"] + "]." + msg["action"] + "(" + \
+                            msg["value"] + ")"
+                #logging.debug("%s postToUrl: %s", ModuleName, str(postToUrl))
+                self.postToUrls.insert(0, postToUrl)
             elif msg["request"] == "get":
                 g = "devices." + msg["address"] + ".instances." + msg["instance"] + \
                     ".commandClasses." + msg["commandClass"] + ".data"
@@ -359,7 +363,7 @@ class ZwaveCtrl():
                           "match": g, 
                           "commandClass": msg["commandClass"]
                          }
-                logging.debug("%s New getStr: %s", ModuleName, str(getStr))
+                #logging.debug("%s New getStr: %s", ModuleName, str(getStr))
                 self.getStrs.append(getStr)
                 #logging.debug("%s getStrs: %s", ModuleName, str(self.getStrs))
         else:
