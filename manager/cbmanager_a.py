@@ -969,10 +969,11 @@ class ManageBridge:
         sys.exit
 
     def sendStatusMsg(self, status):
+        now = time.strftime('%H:%M:%S', time.localtime(time.time()))
         msg = {"cmd": "msg",
                "msg": {"type": "status",
                        "channel": "bridge_manager",
-                       "body": status
+                       "body": now + ' ' + status
                       }
               }
         logging.debug('%s Sending status message: %s', ModuleName, msg)

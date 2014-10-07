@@ -7,6 +7,7 @@
 #
 ModuleName = "Supervisor"
 
+MANAGER_START_TIME = 3            # Time to allow for manager to start before starting to monitor it (secs)
 TIME_TO_IFUP = 30                 # Time to wait before checking if we have an Internet connection (secs)
 WATCHDOG_INTERVAL = 30            # Time between manager checks (secs)
 MAX_NO_SERVER_COUNT = 10          # Used when making decisions about rebooting
@@ -59,6 +60,7 @@ class Supervisor:
         self.beginningOfTime = time.time()      # Used when making decisions about rebooting
         self.noServerCount = 0                  # Used when making decisions about rebooting
         self.interfaceChecks = 0                # Keeps track of how many times network connection has been checked
+        self.checkingManager = False            # So that we knoow when checkManager method is active
         signal.signal(signal.SIGINT, self.signalHandler)  # For catching SIGINT
         signal.signal(signal.SIGTERM, self.signalHandler)  # For catching SIGTERM
         if not CB_DEV_BRIDGE:
@@ -89,9 +91,12 @@ class Supervisor:
         try:
             self.managerProc = Popen([exe])
             logging.info("%s Starting bridge manager", ModuleName)
-            self.starting = False
+            # Give time for manager to start before setting self.starting
+            reactor.callLater(MANAGER_START_TIME, self.setStartingOff)
             if not CB_DEV_BRIDGE:
-                reactor.callLater(2*WATCHDOG_INTERVAL, self.checkManager, time.time())
+                if not self.checkingManager:
+                    reactor.callLater(2*WATCHDOG_INTERVAL, self.checkManager, time.time())
+                    checkingManager = True
         except:
             logging.error("%s Bridge manager failed to start: %s", ModuleName, exe)
             # Give developer a chance to do something before rebooting:
@@ -133,6 +138,9 @@ class Supervisor:
         else:
             logging.warning("%s checkManagerStopped. Manager not stopped after count %s, rebooting", ModuleName, count)
             self.reboot()
+
+    def setStartingOff(self):
+        self.starting = False
 
     def checkManager(self, startTime):
         if not self.starting:
