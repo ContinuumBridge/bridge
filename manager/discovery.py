@@ -41,7 +41,7 @@ if __name__ == '__main__':
     protocols = []
     if sim == "0":
         try:
-            cmd = "sudo hcitool lescan"
+            cmd = "hcitool lescan"
             p = pexpect.spawn(cmd)
         except:
             logging.error('%s lescan failed to spawn', ModuleName)
