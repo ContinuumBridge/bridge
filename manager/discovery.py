@@ -10,7 +10,7 @@
     All it does it look for addresses and append them to a list. """
 
 ModuleName = "Discovery"
-DISCOVERY_TIME = 8  # Time to scan before reporting results
+DISCOVERY_TIME = 12  # Time to scan before reporting results
 
 import sys
 import time
@@ -41,14 +41,7 @@ if __name__ == '__main__':
     protocols = []
     if sim == "0":
         try:
-            os.system("sudo hciconfig hci0 up")
-        except:
-            logging.error('%s Unable to bring up bci0 interface', ModuleName)
-            d = {"status": "error"}        
-            print json.dumps(d)
-            sys.exit()
-        try:
-            cmd = "sudo hcitool lescan"
+            cmd = "hcitool lescan"
             p = pexpect.spawn(cmd)
         except:
             logging.error('%s lescan failed to spawn', ModuleName)

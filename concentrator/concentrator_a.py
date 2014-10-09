@@ -14,16 +14,10 @@ import json
 import logging
 import procname
 from twisted.internet.protocol import Protocol, Factory
-from twisted.internet.protocol import ReconnectingClientFactory
 from twisted.protocols.basic import LineReceiver
-from twisted.internet import task
 from twisted.internet import threads
 from twisted.internet import defer
 from twisted.internet import reactor
-from twisted.application.internet import TCPServer
-from twisted.application.service import Application
-from twisted.internet.task import deferLater
-from twisted.web.server import NOT_DONE_YET
 from cbcommslib import CbClientProtocol
 from cbcommslib import CbClientFactory
 from cbcommslib import CbServerProtocol
@@ -63,7 +57,7 @@ class Concentrator():
 
     def processConf(self, config):
         """Config is based on what apps are available."""
-        logging.info("%s processConf: %s", ModuleName, config)
+        #logging.info("%s processConf: %s", ModuleName, config)
         if config != "no_apps":
             self.bridge_id = config["bridge_id"]
             self.cbFactory = {}
@@ -78,7 +72,7 @@ class Concentrator():
                     reactor.listenUNIX(appConcSoc, self.cbFactory[iName])
 
     def processServerMsg(self, msg):
-        #logging.debug("%s Received from controller: %s", ModuleName, msg)
+        #logging.debug("%s Received from controller: %s", ModuleName, str(msg)[:100])
         msg["status"] = "control_msg"
         msg["id"] = self.id
         if "message" in msg:
@@ -93,8 +87,12 @@ class Concentrator():
         return now
 
     def processManagerMsg(self, msg):
+        #logging.debug("%s Received from manager: %s", ModuleName, msg)
         msg["time_sent"] = self.isotime()
-        self.concFactory.sendMsg(msg)
+        try:
+            self.concFactory.sendMsg(msg)
+        except:
+            logging.warning("%s Failed to send message to bridge controller: %s", ModuleName, msg)
 
     def processManager(self, cmd):
         #logging.debug("%s Received from manager: %s", ModuleName, cmd)
@@ -154,4 +152,4 @@ class Concentrator():
                 logging.warning("%s Illegal desination in app message: %s", ModuleName, str(msg))
 
 if __name__ == '__main__':
-    concentrator = Concentrator(sys.argv)
+    Concentrator(sys.argv)

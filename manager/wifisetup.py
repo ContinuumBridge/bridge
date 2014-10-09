@@ -70,11 +70,11 @@ def clientConnected():
         index = p.expect(['time', pexpect.TIMEOUT, pexpect.EOF], timeout=PING_TIMEOUT)
         if index == 1 or index == 2:
             logging.warning("%s %s did not succeed", ModuleName, cmd)
-            p.kill(9)
+            p.sendcontrol("c")
             cmd = 'ping bbc.co.uk'
             attempt += 1
         else:
-            p.kill(9)
+            p.sendcontrol("c")
             return True
     # If we don't return before getting here, we've failed
     return False
@@ -97,7 +97,7 @@ def getCredentials():
         wpa_key = raw[3]
         logging.info("%s SSID = %s, WPA = %s", ModuleName, ssid, wpa_key)
         return True, ssid, wpa_key
-    p.kill(9)
+    p.sendcontrol("c")
 
 def getConnected():
     """ If the Bridge is not connected assume that we are going to connect
@@ -108,14 +108,12 @@ def getConnected():
     """
     logging.info("%s getConnected. Switching to server mode", ModuleName)
     switchwlan0("server")
+    # Allow time for server to start
+    time.sleep(3)
     gotCreds, ssid, wpa_key = getCredentials()
     if gotCreds:
-        try:
-            call(["rm", "/etc/wpa_supplicant/wpa_supplicant.conf"])
-        except:
-            logging.wwarning("%s Cannot rm wpa_supplicant.conf", ModuleName)
         wpa_proto_file = CB_BRIDGE_ROOT + "/bridgeconfig/wpa_supplicant.conf.proto"
-        wpa_config_file = CB_CONFIG_DIR + "/wpa_supplicant.conf"
+        wpa_config_file = "/etc/wpa_supplicant/wpa_supplicant.conf"
         i = open(wpa_proto_file, 'r')
         o = open(wpa_config_file, 'a')  #append new SSID to file
         for line in i:
@@ -141,7 +139,7 @@ def connectClient():
     except:
         logging.warning("%s Cannot spawn ifup wlan0", ModuleName)
     else:
-        index = p.expect(['bound',  pexpect.TIMEOUT, pexpect.EOF], timeout=60)
+        index = p.expect(['bound',  pexpect.TIMEOUT, pexpect.EOF], timeout=120)
         if index == 0:
             logging.info("%s wlan0 connected in client mode", ModuleName)
             connected = True
@@ -152,8 +150,8 @@ def connectClient():
                     connected = True
                     break
         else:
-            logging.warning("%s DHCP failed", ModuleName)
-            p.kill(9)
+            logging.warning("%s DHCP timed out", ModuleName)
+            p.sendcontrol("c")
     return connected
 
 def switchwlan0(switchTo):
@@ -163,6 +161,11 @@ def switchwlan0(switchTo):
         logging.debug("%s wlan0 down", ModuleName)
         call(["killall", "wpa_supplicant"])
         logging.debug("%s wpa_supplicant process killed", ModuleName)
+        # In case dnsmasq and hostapd already running;
+        call(["service", "dnsmasq", "stop"])
+        logging.info("%s dnsmasq stopped", ModuleName)
+        call(["service", "hostapd", " stop"])
+        logging.info("%s hostapd stopped", ModuleName)
         interfacesFile = CB_BRIDGE_ROOT + "/bridgeconfig/interfaces.server"
         call(["cp", interfacesFile, "/etc/network/interfaces"])
         call(["ifup", "wlan0"])
@@ -202,10 +205,9 @@ def switchwlan0(switchTo):
             logging.info("%s Unable to remove /etc/default.hostapd. Already in client mode?", ModuleName)
         interfacesFile = CB_BRIDGE_ROOT + "/bridgeconfig/interfaces.client"
         call(["cp", interfacesFile, "/etc/network/interfaces"])
-        wpa_config_file = CB_CONFIG_DIR + "/wpa_supplicant.conf"
-        call(["cp", wpa_config_file, "/etc/wpa_supplicant/wpa_supplicant.conf"])
         time.sleep(1)
-        connectClient()
-        logging.info("%s Wifi in client mode", ModuleName)
+        connected = connectClient()
+        logging.info("%s Wifi in client mode, connected: %s", ModuleName, connected)
+        return connected
     else:
         logging.debug("%s switch. Must switch to either client or server", ModuleName)
