@@ -2,6 +2,7 @@
 // Set up the TCP socket for the bridge
 var net = require('net')
     ,Bacon = require('baconjs').Bacon
+    ,_ = require('underscore')
     ;
 
 var logger = require('../logger')
@@ -36,9 +37,23 @@ function BridgeConcentrator(port) {
 
         socket.on('data', function(jsonMessage) {
 
+            // There may be multiple messages in each chunk of TCP data.
+            var messageArray = JSON.parse('[' + jsonMessage.replace('}\r\n{', '},{') + ']');
+
+            _.each(messageArray, function(message) {
+                console.log('Received message', message);
+                var message = new Message(message);
+                fromBridge.push(message);
+                //self.emit('message', message);
+            });
+        });
+        /*
+        socket.on('data', function(jsonMessage) {
+
             var message = new Message(jsonMessage);
             fromBridge.push(message);
         }); 
+        */
 
         // Add a 'close' event handler for the bridgeTCPClient socket
         socket.on('close', function() {
