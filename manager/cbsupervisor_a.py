@@ -8,7 +8,7 @@
 ModuleName = "Supervisor"
 
 MANAGER_START_TIME = 3            # Time to allow for manager to start before starting to monitor it (secs)
-TIME_TO_IFUP = 30                 # Time to wait before checking if we have an Internet connection (secs)
+TIME_TO_IFUP = 90                 # Time to wait before checking if we have an Internet connection (secs)
 WATCHDOG_INTERVAL = 30            # Time between manager checks (secs)
 MAX_NO_SERVER_COUNT = 10          # Used when making decisions about rebooting
 MIN_TIME_BETWEEN_REBOOTS = 10000  # Stops constant rebooting (secs)
