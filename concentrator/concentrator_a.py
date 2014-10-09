@@ -91,8 +91,10 @@ class Concentrator():
         msg["time_sent"] = self.isotime()
         try:
             self.concFactory.sendMsg(msg)
-        except:
+        except Exception as inst:
             logging.warning("%s Failed to send message to bridge controller: %s", ModuleName, msg)
+            logging.warning("%s Exception type: %s", ModuleName, type(inst))
+            logging.warning("%s Exception args: %s", ModuleName, str(inst.args))
 
     def processManager(self, cmd):
         #logging.debug("%s Received from manager: %s", ModuleName, cmd)

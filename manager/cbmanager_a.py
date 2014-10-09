@@ -81,7 +81,8 @@ class ManageBridge:
         else:
             self.state = action
         logging.info('%s state = %s', ModuleName, self.state)
-        self.sendStatusMsg("Bridge state: " + self.state)
+        if self.state != "starting":
+            self.sendStatusMsg("Bridge state: " + self.state)
 
     def initBridge(self):
         if CB_NO_CLOUD != "True":

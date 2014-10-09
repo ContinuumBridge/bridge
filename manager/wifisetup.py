@@ -94,7 +94,10 @@ def getCredentials():
         raw = p.after.split()
         logging.debug("%s Credentials = %s", ModuleName, raw)
         ssid = raw[2]
-        wpa_key = raw[3]
+        wpa_key = raw[1]
+        if len(raw) > 2:
+            for i in range(2, len(raw)):
+                wpa_key += " " + raw[i]
         logging.info("%s SSID = %s, WPA = %s", ModuleName, ssid, wpa_key)
         return True, ssid, wpa_key
     p.sendcontrol("c")
