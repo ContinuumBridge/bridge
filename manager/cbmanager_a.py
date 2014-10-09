@@ -81,7 +81,7 @@ class ManageBridge:
         else:
             self.state = action
         logging.info('%s state = %s', ModuleName, self.state)
-        if self.state != "starting":
+        if self.state != "starting" and self.state != "running":
             self.sendStatusMsg("Bridge state: " + self.state)
 
     def initBridge(self):
