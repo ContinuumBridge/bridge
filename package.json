@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "backoff": "^2.4.0",
-    "continuumbridge": "^0.0.4",
+    "continuumbridge": "^0.0.7",
     "cookie": "^0.1.2",
     "getenv": "^0.3.0",
     "restler": "~2.0.1",
