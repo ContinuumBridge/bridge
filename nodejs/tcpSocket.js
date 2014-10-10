@@ -2,6 +2,7 @@
 // Set up the TCP socket for the bridge
 var net = require('net')
     ,util = require('util')
+    ,_ = require('underscore')
     ;
 
 var CB = require('./index');
