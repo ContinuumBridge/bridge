@@ -15,7 +15,7 @@
     "getenv": "^0.3.0",
     "restler": "~2.0.1",
     "socket.io-client": "~0.9.16",
-    "underscore": "^1.6.0",
+    "underscore": "~1.7.0",
     "winston": "~0.7.2"
   },
   "devDependencies": {},

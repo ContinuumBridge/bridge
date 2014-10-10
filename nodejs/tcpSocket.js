@@ -18,6 +18,7 @@ function TCPSocket(port) {
 
         socket.on('data', function(jsonMessage) {
 
+            var messageArray = JSON.parse('[' + jsonMessage.replace('}\r\n{', '},{') + ']');
             console.log('data is', jsonMessage);
             var message = new Message(jsonMessage);
             self.emit('message', message);
@@ -26,9 +27,14 @@ function TCPSocket(port) {
         // Add a 'close' event handler for the TCPClient socket
         socket.on('close', function() {
 
-            socket.removeListener('data');
-            self.removeListener('message');
-            logger.info('TCP socket disconnected');
+            // There may be multiple messages in each chunk of TCP data.
+            var messageArray = JSON.parse('[' + jsonMessage.replace('}\r\n{', '},{') + ']');
+
+            _.each(messageArray, function(message) {
+                console.log('Received message', message);
+                var message = new Message(message);
+                self.emit('message', message);
+            }); 
         });
 
         self.socket = socket;
