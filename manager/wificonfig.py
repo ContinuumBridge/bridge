@@ -19,6 +19,7 @@ from twisted.web.resource import Resource
 from twisted.web.server import Site
 from twisted.internet.task import deferLater
 from twisted.web.server import NOT_DONE_YET
+from cbconfig import *
 
 class RootResource(Resource):
     isLeaf = True
@@ -41,8 +42,7 @@ class RootResource(Resource):
 
 class WifiConfig():
     def __init__(self, argv):
-        self.bridgeRoot = os.getenv('CB_BRIDGE_ROOT', "/home/bridge/bridge")
-        #print ModuleName, "CB_BRIDGE_ROOT = ", self.bridgeRoot
+        self.bridgeRoot = 'CB_BRIDGE_ROOT'
         reactor.listenTCP(80, Site(RootResource(self.bridgeRoot)))
         reactor.run()
 
@@ -55,4 +55,4 @@ class WifiConfig():
         sys.exit
 
 if __name__ == '__main__':
-    wifiConfig = WifiConfig(sys.argv)
+    WifiConfig(sys.argv)
