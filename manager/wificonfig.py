@@ -5,7 +5,7 @@
 # Proprietary and confidential
 # Written by Peter Claydon
 #
-ModuleName = "WiFiConfig          "
+ModuleName = "WiFiConfig"
 
 import sys
 import time
@@ -19,16 +19,16 @@ from twisted.web.resource import Resource
 from twisted.web.server import Site
 from twisted.internet.task import deferLater
 from twisted.web.server import NOT_DONE_YET
+from cbconfig import *
 
 class RootResource(Resource):
     isLeaf = True
-    def __init__(self, bridgeRoot):
-        self.bridgeRoot = bridgeRoot
+    def __init__(self, htmlfile):
+        self.htmlfile = htmlfile
         Resource.__init__(self)
 
     def render_GET(self, request):
-        htmlFile = self.bridgeRoot + "/manager/ssidform.html" 
-        with open(htmlFile, 'r') as f:
+        with open(self.htmlfile, 'r') as f:
             html = f.read()
         return html
 
@@ -41,9 +41,11 @@ class RootResource(Resource):
 
 class WifiConfig():
     def __init__(self, argv):
-        self.bridgeRoot = os.getenv('CB_BRIDGE_ROOT', "/home/bridge/bridge")
-        #print ModuleName, "CB_BRIDGE_ROOT = ", self.bridgeRoot
-        reactor.listenTCP(80, Site(RootResource(self.bridgeRoot)))
+        if len(argv) < 2:
+            logging.error("%s cbAdaptor improper number of arguments", ModuleName)
+            exit(1)
+        htmlfile = argv[1]
+        reactor.listenTCP(80, Site(RootResource(htmlfile)))
         reactor.run()
 
     def stopReactor(self):
@@ -55,4 +57,4 @@ class WifiConfig():
         sys.exit
 
 if __name__ == '__main__':
-    wifiConfig = WifiConfig(sys.argv)
+    WifiConfig(sys.argv)

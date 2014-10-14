@@ -17,7 +17,27 @@ from cbconfig import *
 import logging
 
 
-def checkInterface():
+def checkwlan0():
+    cmd = 'ifconfig wlan0'
+    p = pexpect.spawn(cmd)
+    index = p.expect(['Bcast', pexpect.TIMEOUT, pexpect.EOF], timeout=3)
+    if index == 1:
+        connected = False
+        logging.warning("%s pexpect timeout on ifconfig wlan0", ModuleName)
+    elif index == 2:
+        connected = False
+        logging.debug("%s Not connected by wlan0", ModuleName)
+    else:
+        raw = p.before.split()
+        logging.debug("%s raw from pexpect: %s", ModuleName, raw)
+        if raw[6] == "addr:10.0.0.1":
+            connected = False
+            logging.info("%s WiFi had server address", ModuleName)
+        else:
+            connected = True
+    return connected
+
+def checkInterface(startup=False):
     """ Determines if we have an ip address on eth0, wlan0, both or neither. """
     logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(message)s')
     logging.debug("%s checkInterface", ModuleName)
@@ -31,23 +51,16 @@ def checkInterface():
         logging.debug("%s Not connected by eth0", ModuleName)
     else:
         connectMode = "eth0"
-    cmd = 'ifconfig wlan0'
-    p = pexpect.spawn(cmd)
-    index = p.expect(['Bcast', pexpect.TIMEOUT, pexpect.EOF], timeout=3)
-    if index == 1:
-        logging.warning("%s pexpect timeout on ifconfig wlan0", ModuleName)
-    elif index == 2:
-        logging.debug("%s Not connected by wlan0", ModuleName)
-    else:
-        raw = p.before.split()
-        logging.debug("%s raw from pexpect: %s", ModuleName, raw)
-        if raw[6] == "addr:10.0.0.1":
-            logging.info("%s WiFi had server address", ModuleName)
+    wlan0 = checkwlan0()
+    if wlan0:
+        if connectMode == "eth0":
+            connectMode = "both"
         else:
-            if connectMode == "eth0":
-                connectMode = "both"
-            else:
-                connectMode = "wlan0"
+            connectMode = "wlan0"
+    if connectMode == "none" and "startup":
+        self.switchwlan0("client")
+        if checkwlan0():
+            connectMode = "wlan0"
     if CB_WLAN_TEST:
         if connectMode == "eth0":
             # Allows testing of WiFi while connected the eth0
@@ -80,21 +93,32 @@ def clientConnected():
     return False
  
 def getCredentials():
-    exe = CB_BRIDGE_ROOT + "/manager/wificonfig.py"
-    logging.debug("%s getCredentials exe = %s", ModuleName, exe)
+    exe = CB_BRIDGE_ROOT + "/manager/wificonfig.py "
+    htmlfile = CB_BRIDGE_ROOT + "/manager/ssidform.html"
+    cmd = exe + htmlfile
+    logging.debug("%s getCredentials exe = %s, htmlfile = %s", ModuleName, exe, htmlfile)
     try:
-        p = pexpect.spawn(exe)
+        p = pexpect.spawn(cmd)
     except:
         logging.error("%s Cannot run wificonfig.py", ModuleName)
     index = p.expect(['Credentials.*', pexpect.TIMEOUT, pexpect.EOF], timeout=CB_GET_SSID_TIMEOUT)
     if index == 1:
         logging.warning("%s SSID and WPA key not supplied before timeout", ModuleName)
         return False, "none", "none"
+    elif index == 2:
+        logging.warning("%s EOF when asking for SSID & WPA key", ModuleName)
+        return False, "none", "none"
     else:
         raw = p.after.split()
         logging.debug("%s Credentials = %s", ModuleName, raw)
+        if len(raw) < 3:
+            logging.warning("%s Badly formed SSID & WPA key: %s", ModuleName, raw)
+            return False, "none", "none"
         ssid = raw[2]
         wpa_key = raw[3]
+        if len(raw) > 4:
+            for i in range(4, len(raw)):
+                wpa_key += " " + raw[i]
         logging.info("%s SSID = %s, WPA = %s", ModuleName, ssid, wpa_key)
         return True, ssid, wpa_key
     p.sendcontrol("c")
@@ -114,18 +138,48 @@ def getConnected():
     if gotCreds:
         wpa_proto_file = CB_BRIDGE_ROOT + "/bridgeconfig/wpa_supplicant.conf.proto"
         wpa_config_file = "/etc/wpa_supplicant/wpa_supplicant.conf"
-        i = open(wpa_proto_file, 'r')
-        o = open(wpa_config_file, 'a')  #append new SSID to file
+        wpa_tmp_file = "/etc/wpa_supplicant/wpa_supplicant.conf.tmp"
+        # If SSID already in wpa_supplicant.conf, just change the WPA key
+        i = open(wpa_config_file, 'r')
+        o = open(wpa_tmp_file, 'w') 
+        found = False
+        replaced = False
         for line in i:
-            line = line.replace("XXXX", ssid)
-            line = line.replace("YYYY", wpa_key)
-            o.write(line) 
+            logging.debug("%s getConnected. line in:  %s", ModuleName, line)
+            if "ssid" in line or "SSID" in line:
+                l1 = [l.strip(' ') for l in line]
+                if l1[0] != "#":
+                    if ssid in line:
+                        found = True
+                        logging.debug("%s getConnected. found:  %s", ModuleName, line)
+            elif found:
+                if "psk=" in line or "psk =" in line:
+                    line = "   psk=\"" + wpa_key +"\"\n"
+                    logging.debug("%s getConnected. found, line out:  %s", ModuleName, line)
+                    found = False
+                    replaced = True
+            logging.debug("%s getConnected. line out:  %s", ModuleName, line)
+            o.write(line)
+        i.close()
+        o.close()
+        logging.debug("%s getConnected. replaced:  %s", ModuleName, replaced)
+        if replaced:
+            call(["mv", wpa_tmp_file, wpa_config_file])
+            logging.debug("%s getConnected. mv wpa_tmp file wpa_config_file", ModuleName)
+        else:
+            # If SSID is not found, add a new network to the list
+            i = open(wpa_proto_file, 'r')
+            o = open(wpa_config_file, 'a')  #append new SSID to file
+            for line in i:
+                line = line.replace("XXXX", ssid)
+                line = line.replace("YYYY", wpa_key)
+                o.write(line) 
         i.close()
         o.close()
     else:
         logging.info("%s Did not get WiFi SSID and WPA from a human", ModuleName)
     switchwlan0("client")
-    c = checkInterface()
+    c = checkInterface(False)
     if c != "none":
         logging.info("%s Client connected by %s", ModuleName, c)
         return True
@@ -141,16 +195,18 @@ def connectClient():
     else:
         index = p.expect(['bound',  pexpect.TIMEOUT, pexpect.EOF], timeout=120)
         if index == 0:
-            logging.info("%s wlan0 connected in client mode", ModuleName)
+            logging.info("%s connectClient. wlan0 connected in client mode", ModuleName)
             connected = True
         elif index == 2:
             for t in p.before.split():
                 if t == "already":
-                    logging.info("%s wlan0 already connected. No need to connect.", ModuleName)
+                    logging.info("%s connectClient. wlan0 already connected. No need to connect.", ModuleName)
                     connected = True
                     break
+            if not connected:
+                logging.info("%s connectClient. Timeout without being already connected", ModuleName)
         else:
-            logging.warning("%s DHCP timed out", ModuleName)
+            logging.warning("%s connectClient. DHCP timed out", ModuleName)
             p.sendcontrol("c")
     return connected
 

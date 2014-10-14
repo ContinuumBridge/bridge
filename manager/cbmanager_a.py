@@ -82,7 +82,8 @@ class ManageBridge:
         else:
             self.state = action
         logging.info('%s state = %s', ModuleName, self.state)
-        self.sendStatusMsg("Bridge state: " + self.state)
+        if self.state != "starting" and self.state != "running":
+            self.sendStatusMsg("Bridge state: " + self.state)
 
     def initBridge(self):
         if CB_NO_CLOUD != "True":
@@ -391,9 +392,11 @@ class ManageBridge:
     def discover(self):
         logging.debug('%s discover', ModuleName)
         # If there are peripherals report any that are not reported rather than discover
-        found = True
-        newPeripheral = ''
+        logging.debug('%s CB_PERIPHERALS: %s', ModuleName, CB_PERIPHERALS)
         if CB_PERIPHERALS != "none":
+            found = True
+            newPeripheral = ''
+            logging.debug('%s Checking for peripherals: %s', ModuleName, CB_PERIPHERALS)
             peripherals = CB_PERIPHERALS.split(',')
             peripherals = [p.strip(' ') for p in peripherals]
             for p in peripherals:
@@ -742,10 +745,11 @@ class ManageBridge:
         logging.info('%s Dropbox access token %s', ModuleName, access_token)
         try:
             self.client = DropboxClient(access_token)
-            status = "Logfile upload OK" 
+            status = "Log file uploaded OK" 
         except:
             logging.error('%s Dropbox access token did not work %s', ModuleName, access_token)
             status = "Dropbox access token did not work"
+            self.sendStatusMsg(status)
         else:
             hostname = "unknown"
             with open('/etc/hostname', 'r') as hostFile:
@@ -754,8 +758,7 @@ class ManageBridge:
                 hostname = hostname[:-1]
             dropboxPlace = '/' + hostname +'.log'
             logging.info('%s Uploading %s to %s', ModuleName, logFile, dropboxPlace)
-            status = reactor.callInThread(self.uploadLog, logFile, dropboxPlace, status)
-        self.sendStatusMsg(status)
+            reactor.callInThread(self.uploadLog, logFile, dropboxPlace, status)
 
     def doCall(self, cmd):
         try:
@@ -982,7 +985,7 @@ class ManageBridge:
         sys.exit
 
     def sendStatusMsg(self, status):
-        now = time.strftime('%H:%M:%S', time.localtime(time.time()))
+        now = str(time.strftime('%H:%M:%S', time.localtime(time.time())))
         msg = {"cmd": "msg",
                "msg": {"source": self.bridge_id,
                        "destination": "broadcast",
