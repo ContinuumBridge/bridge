@@ -732,7 +732,6 @@ class ManageBridge:
             except:
                 status = "Could not upload log file: " + logFile
         reactor.callFromThread(self.sendStatusMsg, status)
-        return status
 
     def sendLog(self, logFile):
         status = "Logfile upload failed"
@@ -740,10 +739,11 @@ class ManageBridge:
         logging.info('%s Dropbox access token %s', ModuleName, access_token)
         try:
             self.client = DropboxClient(access_token)
-            status = "Logfile upload OK" 
+            status = "Log file uploaded OK" 
         except:
             logging.error('%s Dropbox access token did not work %s', ModuleName, access_token)
             status = "Dropbox access token did not work"
+            self.sendStatusMsg(status)
         else:
             hostname = "unknown"
             with open('/etc/hostname', 'r') as hostFile:
@@ -752,8 +752,7 @@ class ManageBridge:
                 hostname = hostname[:-1]
             dropboxPlace = '/' + hostname +'.log'
             logging.info('%s Uploading %s to %s', ModuleName, logFile, dropboxPlace)
-            status = reactor.callInThread(self.uploadLog, logFile, dropboxPlace, status)
-        self.sendStatusMsg(status)
+            reactor.callInThread(self.uploadLog, logFile, dropboxPlace, status)
 
     def doCall(self, cmd):
         try:
@@ -973,7 +972,7 @@ class ManageBridge:
         sys.exit
 
     def sendStatusMsg(self, status):
-        now = time.strftime('%H:%M:%S', time.localtime(time.time()))
+        now = str(time.strftime('%H:%M:%S', time.localtime(time.time())))
         msg = {"cmd": "msg",
                "msg": {"type": "status",
                        "channel": "bridge_manager",
