@@ -392,7 +392,7 @@ class ManageBridge:
         if CB_PERIPHERALS != "none":
             found = True
             newPeripheral = ''
-            logging.debug('%s Checcking for peripherals: %s', ModuleName, CB_PERIPHERALS)
+            logging.debug('%s Checking for peripherals: %s', ModuleName, CB_PERIPHERALS)
             peripherals = CB_PERIPHERALS.split(',')
             peripherals = [p.strip(' ') for p in peripherals]
             for p in peripherals:
@@ -732,6 +732,7 @@ class ManageBridge:
             except:
                 status = "Could not upload log file: " + logFile
         reactor.callFromThread(self.sendStatusMsg, status)
+        return status
 
     def sendLog(self, logFile):
         status = "Logfile upload failed"

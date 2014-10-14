@@ -10,8 +10,8 @@ ModuleName = "Supervisor"
 MANAGER_START_TIME = 3            # Time to allow for manager to start before starting to monitor it (secs)
 TIME_TO_IFUP = 90                 # Time to wait before checking if we have an Internet connection (secs)
 WATCHDOG_INTERVAL = 30            # Time between manager checks (secs)
-MAX_NO_SERVER_COUNT = 10          # Used when making decisions about rebooting
-MIN_TIME_BETWEEN_REBOOTS = 10000  # Stops constant rebooting (secs)
+MIN_TIME_BETWEEN_REBOOTS = 600    # Stops constant rebooting (secs)
+#MIN_TIME_BETWEEN_REBOOTS = 10000  # Stops constant rebooting (secs)
 REBOOT_WAIT = 10                  # Time to allow bridge to stop before rebooting
 RESTART_INTERVAL = 10             # Time between telling manager to stop and starting it again
 MAX_INTERFACE_CHECKS = 10         # No times to check interface before rebooting
@@ -166,10 +166,11 @@ class Supervisor:
         logging.debug("%s recheckManager", ModuleName)
         # Whatever happened, stop listening on manager port.
         self.mgrPort.stopListening()
-        if self.timeStamp > startTime - 1:
-            # Manager responded to request to stop. Restart it.
-            logging.info("%s Manager stopped sucessfully. Restarting ...", ModuleName)
-            reactor.callLater(1, self.startManager,True) 
+        # Manager responded to request to stop. Restart it.
+        if self.timeStamp > startTime - 1 and os.path.exists(CB_MANAGER_EXIT):
+            logging.info("%s recheckManager. Manager stopped sucessfully. Restarting ...", ModuleName)
+            os.remove(CB_MANAGER_EXIT)
+            self.startManager(True)
         else:
             # Manager is well and truely dead.
             logging.warning("%s Manager is well and truly dead. Rebooting", ModuleName)
@@ -178,7 +179,7 @@ class Supervisor:
     def checkInterface(self):
         # Defer to thread - it could take several seconds
         logging.debug("%s checkInterface called", ModuleName)
-        d1 = threads.deferToThread(wifisetup.checkInterface)
+        d1 = threads.deferToThread(wifisetup.checkInterface, True)
         d1.addCallback(self.onInterfaceChecked)
 
     def onInterfaceChecked(self, mode):
@@ -198,7 +199,7 @@ class Supervisor:
             reactor.callLater(CHECK_INTERFACE_DELAY, self.recheckInterface)
 
     def recheckInterface(self):
-        d1 = threads.deferToThread(wifisetup.checkInterface)
+        d1 = threads.deferToThread(wifisetup.checkInterface, False)
         d1.addCallback(self.onInterfaceRechecked)
 
     def onInterfaceRechecked(self, mode):
@@ -218,7 +219,7 @@ class Supervisor:
         if connected:
             self.connecting = False
         else:
-            reactor.callLater(CHECK_INTERFACE_DELAY, self.recheckInterfaces)
+            reactor.callLater(CHECK_INTERFACE_DELAY, self.recheckInterface)
 
     def doReboot(self):
         """ Give bridge manager a chance to tidy up nicely before rebooting. """

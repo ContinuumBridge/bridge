@@ -5,7 +5,7 @@
 # Proprietary and confidential
 # Written by Peter Claydon
 #
-ModuleName = "WiFiConfig          "
+ModuleName = "WiFiConfig"
 
 import sys
 import time
@@ -23,13 +23,12 @@ from cbconfig import *
 
 class RootResource(Resource):
     isLeaf = True
-    def __init__(self, bridgeRoot):
-        self.bridgeRoot = bridgeRoot
+    def __init__(self, htmlfile):
+        self.htmlfile = htmlfile
         Resource.__init__(self)
 
     def render_GET(self, request):
-        htmlFile = self.bridgeRoot + "/manager/ssidform.html" 
-        with open(htmlFile, 'r') as f:
+        with open(self.htmlfile, 'r') as f:
             html = f.read()
         return html
 
@@ -42,8 +41,11 @@ class RootResource(Resource):
 
 class WifiConfig():
     def __init__(self, argv):
-        self.bridgeRoot = 'CB_BRIDGE_ROOT'
-        reactor.listenTCP(80, Site(RootResource(self.bridgeRoot)))
+        if len(argv) < 2:
+            logging.error("%s cbAdaptor improper number of arguments", ModuleName)
+            exit(1)
+        htmlfile = argv[1]
+        reactor.listenTCP(80, Site(RootResource(htmlfile)))
         reactor.run()
 
     def stopReactor(self):

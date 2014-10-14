@@ -180,6 +180,9 @@ def cb(bridge, app, device, user, password, name):
         config = loadJSON(configFile)
         if action == "post":
             appData = checkConfig(config, ['description', 'exe', 'name', 'provider', 'url', 'version'])
+            if "app_resource" in config:
+                print "App already exists. Use cb --app patch to modify."
+                exit()
         elif action == "patch":
             appData = checkConfig(config, ['description', 'exe', 'name', 'provider', 'url', 'version', 'app_resource'])
         elif action == "delete" or action == "get":
@@ -238,6 +241,9 @@ def cb(bridge, app, device, user, password, name):
         config = loadJSON(configFile)
         if action == "post":
             deviceData = checkConfig(config, ['description', 'name', 'protocol'])
+            if "device_resource" in config:
+                print "Device already exists. Use cb --device patch to modify."
+                exit()
             adaptorData = checkConfig(config, ['description', 'exe', 'name', 'provider', 'url', 'version', 'protocol'])
         elif action == "patch":
             deviceData = checkConfig(config, ['description', 'name', 'protocol', 'device_resource'])
