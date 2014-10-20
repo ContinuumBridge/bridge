@@ -82,8 +82,7 @@ class ManageBridge:
         else:
             self.state = action
         logging.info('%s state = %s', ModuleName, self.state)
-        if self.state != "starting" and self.state != "running":
-            self.sendStatusMsg("Bridge state: " + self.state)
+        self.sendStatusMsg("Bridge state: " + self.state)
 
     def initBridge(self):
         if CB_NO_CLOUD != "True":
@@ -828,6 +827,7 @@ class ManageBridge:
                 logging.info('%s No BID from bridge.config - used %s from incoming message', ModuleName, msg["destination"])
                 self.bridge_id = msg["destination"]
         if "connected" in msg["body"]:
+            self.processConduitStatus(msg)
             return
         logging.info('%s msg received from controller: %s', ModuleName, msg)
         if "command" in msg["body"]:
@@ -899,12 +899,6 @@ class ManageBridge:
         elif "resource" in msg["body"]:
             # Call in thread to prevent problems with blocking
             reactor.callInThread(self.updateConfig, msg)
-        elif not "status" in msg["body"]:
-            if not "source" in msg:
-                logging.warning('%s Unrecognised command received from controller: %s', ModuleName, msg)
-                return
-            else:
-                self.processConduitStatus(msg)
         else:
             logging.info('%s Unrecognised message received from server: %s', ModuleName, msg)
             self.sendStatusMsg("Unrecognised message received from controller")
