@@ -98,7 +98,7 @@ class ManageBridge:
         else:
             logging.info('%s Running without Cloud Server', ModuleName)
         # Give time for node interface to start
-        reactor.callLater(START_DELAY, self.startElements)
+        reactor.callLater(START_DELAY + 5, self.startElements)
         reactor.run()
 
     def resetBluetooth(self):

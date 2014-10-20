@@ -52,7 +52,7 @@ class Concentrator():
                    "time_sent": isotime(),
                    "body": "bridge manager started"}
         self.concFactory = CbClientFactory(self.processServerMsg, initMsg)
-        self.jsConnect = reactor.connectTCP("localhost", 5000, self.concFactory, timeout=10)
+        self.jsConnect = reactor.connectTCP("localhost", 5000, self.concFactory, timeout=30)
 
         reactor.run()
 
