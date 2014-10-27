@@ -54,10 +54,11 @@ def changeLine(key, value):
     with open(THISBRIDGE, "r") as fi:
         with open(tmpfile, "w") as fo:
             for line in fi:
-                if key in line:
-                    line = newline
-                    replaced = True
-                fo.write(line)
+                if line[0] != "#":
+                    if key in line:
+                        line = newline
+                        replaced = True
+                    fo.write(line)
             if not replaced:
                 fo.write(newline)
     rename(tmpfile, THISBRIDGE)
@@ -66,9 +67,10 @@ def keyExists(key):
     found = False
     with open(THISBRIDGE, "r") as fi:
         for line in fi:
-            if key in line:
-                found = True
-                break
+            if line[0] != "#":
+                if key in line:
+                    found = True
+                    break
     return found
 
 def getBridgeEnv(key):
