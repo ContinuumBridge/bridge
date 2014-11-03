@@ -25,6 +25,7 @@ import urllib
 import pexpect
 from twisted.internet import threads
 from twisted.internet import reactor, defer
+from twisted.internet import task
 from cbcommslib import CbClientProtocol
 from cbcommslib import CbClientFactory
 from cbcommslib import CbServerProtocol
