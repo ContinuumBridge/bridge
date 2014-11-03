@@ -485,7 +485,7 @@ class ManageBridge:
             success= False
         if configRead:
             try:
-                self.bridge_id = "BID" + str(config["body"]["body"]["id"])
+                #self.bridge_id = "BID" + str(config["body"]["body"]["id"])
                 self.apps = config["body"]["body"]["apps"]
                 self.devices = config["body"]["body"]["devices"]
                 success = True
@@ -1020,8 +1020,8 @@ class ManageBridge:
                     self.elements[e] = False
         reactor.callLater(ELEMENT_WATCHDOG_INTERVAL, self.elementWatchdog)
         if self.firstWatchdog:
-            reactor.callLater(ELEMENT_POLL_INTERVAL, self.pollElement)
-        else:
+            l = task.LoopingCall(self.pollElement)
+            l.start(ELEMENT_POLL_INTERVAL) # call every second
             self.firstWatchdog = False
 
     def pollElement(self):
@@ -1034,7 +1034,6 @@ class ManageBridge:
                     self.elFactory["zwave"].sendMsg({"cmd": "status"})
                 else:
                     self.cbSendMsg({"cmd": "status"}, e)
-        reactor.callLater(ELEMENT_POLL_INTERVAL, self.pollElement)
 
     def onLogMessage(self, msg):
         if "body" in msg:
