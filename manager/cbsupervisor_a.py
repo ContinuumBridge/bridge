@@ -24,7 +24,7 @@ RESTART_INTERVAL = 10             # Time between telling manager to stop and sta
 MAX_INTERFACE_CHECKS = 10         # No times to check interface before rebooting
 EXIT_WAIT = 2                     # On SIGINT, time to wait before exit after manager signalled to stop
 SAFETY_INTERVAL = 300             # Delay before rebooting if manager failed to start
-CHECK_INTERFACE_DELAY = 300       # Time bewteen connection checks if not connected to Internet
+CHECK_INTERFACE_DELAY = 240       # Time bewteen connection checks if not connected to Internet
 
 import sys
 import signal
@@ -129,9 +129,9 @@ class Supervisor:
             self.doReboot()
         elif msg["msg"] == "status":
             if msg["status"] == "disconnected":
-                logging.info("%s onManagerMessage. status = %s, disconnected = %s", ModuleName, msg["status"], self.disconnected)
+                logging.info("%s onManagerMessage. status = %s, disconnected = %s, connecting = %s", \
+                              ModuleName, msg["status"], self.disconnected, self.connecting)
                 if not self.connecting or not self.disconnected:
-                    self.connecting = True
                     self.disconnected = True
                     self.interfaceDownTime = time.time()
                     self.recheckInterface()
