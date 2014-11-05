@@ -130,7 +130,7 @@ class Supervisor:
         elif msg["msg"] == "status":
             if msg["status"] == "disconnected":
                 logging.info("%s onManagerMessage. status = %s, disconnected = %s", ModuleName, msg["status"], self.disconnected)
-                if not (self.connecting or self.disconnected):
+                if not self.connecting or not self.disconnected:
                     self.connecting = True
                     self.disconnected = True
                     self.interfaceDownTime = time.time()
