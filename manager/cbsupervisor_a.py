@@ -5,6 +5,13 @@
 # Proprietary and confidential
 # Written by Peter Claydon
 #
+"""
+Revised behaviour:
+If manager not connected, start the clock.
+After CHECK_INTERFACE_DELAY and then every CHECK_INTERFACE_DELAY, restart interface.
+If no connection after MIN_TIME_BETWEEN_REBOOTS, reboot.
+If manager not talking, kill and restart.
+"""
 ModuleName = "Supervisor"
 
 MANAGER_START_TIME = 3            # Time to allow for manager to start before starting to monitor it (secs)
@@ -55,6 +62,7 @@ class Supervisor:
         logging.info("%s ************************************************************", ModuleName)
         self.starting = True                    # Don't check manager watchdog when manager not running
         self.connecting = True                  # Ignore conduit not connected messages if trying to connect
+        self.disconnected = False               # We are disconnected from the bridge controller
         self.timeStamp = time.time()            # Keeps track of when manager last communicated
         self.interfaceDownTime = time.time()    # Last time interface was known to be connected
         self.beginningOfTime = time.time()      # Used when making decisions about rebooting
@@ -121,11 +129,14 @@ class Supervisor:
             self.doReboot()
         elif msg["msg"] == "status":
             if msg["status"] == "disconnected":
-                logging.info("%s status = %s, connecting = %s", ModuleName, msg["status"], self.connecting)
-                if not self.connecting:
+                logging.info("%s onManagerMessage. status = %s, disconnected = %s", ModuleName, msg["status"], self.disconnected)
+                if not (self.connecting or self.disconnected):
                     self.connecting = True
+                    self.disconnected = True
                     self.interfaceDownTime = time.time()
                     self.recheckInterface()
+            else:
+                self.disconnected = False
 
     def checkManagerStopped(self, count):
         if os.path.exists(CB_MANAGER_EXIT):
@@ -177,6 +188,7 @@ class Supervisor:
             self.reboot()
 
     def checkInterface(self):
+        # Called only at start to check we have an Internet connection
         # Defer to thread - it could take several seconds
         logging.debug("%s checkInterface called", ModuleName)
         d1 = threads.deferToThread(wifisetup.checkInterface, True)
@@ -192,33 +204,29 @@ class Supervisor:
             self.connecting = False
 
     def checkConnected(self, connected):
+        # At this point reset self.connecting regardless & let recheckInterface process take over
         logging.info("%s checkConnected, connected: %s", ModuleName, connected)
-        if connected:
-            self.connecting = False
-        else:
-            reactor.callLater(CHECK_INTERFACE_DELAY, self.recheckInterface)
+        self.connecting = False
 
     def recheckInterface(self):
+        # Callled when manger is disconnected from the server
+        logging.debug("%s recheckInterface", ModuleName)
         d1 = threads.deferToThread(wifisetup.checkInterface, False)
         d1.addCallback(self.onInterfaceRechecked)
 
     def onInterfaceRechecked(self, mode):
         logging.info("%s onInterfaceRechecked. Connected by %s", ModuleName, mode)
-        if mode == "none":
+        if mode == "none" or self.disconnected:
             if time.time() - self.interfaceDownTime > MIN_TIME_BETWEEN_REBOOTS:
                 logging.info("%s onInterfaceRechecked. Not connected for a very long time. Rebooting.", ModuleName)
                 self.doReboot
             else:
                 d1 = threads.deferToThread(wifisetup.switchwlan0, "client")
                 d1.addCallback(self.onInterfaceReset)
-        else:
-            self.connecting = False
 
     def onInterfaceReset(self, connected):
         logging.info("%s onInterfaceReset, connected: %s", ModuleName, connected)
-        if connected:
-            self.connecting = False
-        else:
+        if self.disconnected:
             reactor.callLater(CHECK_INTERFACE_DELAY, self.recheckInterface)
 
     def doReboot(self):

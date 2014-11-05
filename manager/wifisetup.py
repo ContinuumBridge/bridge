@@ -58,7 +58,7 @@ def checkInterface(startup=False):
         else:
             connectMode = "wlan0"
     if connectMode == "none" and "startup":
-        self.switchwlan0("client")
+        switchwlan0("client")
         if checkwlan0():
             connectMode = "wlan0"
     if CB_WLAN_TEST:
