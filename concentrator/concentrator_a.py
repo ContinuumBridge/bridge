@@ -44,21 +44,21 @@ class Concentrator():
         initMsg = {"id": self.id,
                    "type": "conc",
                    "status": "req-config"} 
-        self.managerFactory = CbClientFactory(self.processManager, initMsg)
+        self.managerFactory = CbClientFactory(self.onManager, initMsg)
         self.managerConnect = reactor.connectUNIX(managerSocket, self.managerFactory, timeout=10)
 
         # Connection to conduit process
         initMsg = {"type": "status",
                    "time_sent": isotime(),
                    "body": "bridge manager started"}
-        self.concFactory = CbClientFactory(self.processServerMsg, initMsg)
+        self.concFactory = CbClientFactory(self.onControllerMessage, initMsg)
         self.jsConnect = reactor.connectTCP("localhost", 5000, self.concFactory, timeout=30)
 
         reactor.run()
 
-    def processConf(self, config):
+    def onConfigure(self, config):
         """Config is based on what apps are available."""
-        #logging.info("%s processConf: %s", ModuleName, config)
+        #logging.info("%s onConfigure: %s", ModuleName, config)
         if config != "no_apps":
             self.bridge_id = config["bridge_id"]
             self.cbFactory = {}
@@ -71,16 +71,25 @@ class Concentrator():
                     self.appInstances.append(iName)
                     self.cbFactory[iName] = CbServerFactory(self.onAppData)
                     reactor.listenUNIX(appConcSoc, self.cbFactory[iName])
+        logging.info("%s onConfigure. appInstances: %s", ModuleName, self.appInstances)
 
-    def processServerMsg(self, msg):
-        #logging.debug("%s Received from controller: %s", ModuleName, str(msg)[:100])
-        msg["status"] = "control_msg"
-        msg["id"] = self.id
-        if "message" in msg:
-            msg["type"] = msg.pop("message")
-        self.cbSendManagerMsg(msg)
+    def onControllerMessage(self, msg):
+        logging.debug("%s Received from controller: %s", ModuleName, str(msg)[:100])
+        if not "desination" in msg:
+            msg["destination"] = self.bridge_id
+        if msg["destination"] == self.bridge_id:
+            msg["status"] = "control_msg"
+            msg["id"] = self.id
+            if "message" in msg:
+                msg["type"] = msg.pop("message")
+            self.cbSendManagerMsg(msg)
+        else:
+            dest = msg["desination"].split('/')
+            if dest[1] in self.appInstances:
+                msg["destination"] = dest[1]
+            
 
-    def processManagerMsg(self, msg):
+    def onManagerMessage(self, msg):
         #logging.debug("%s Received from manager: %s", ModuleName, msg)
         msg["time_sent"] = isotime()
         try:
@@ -90,10 +99,10 @@ class Concentrator():
             logging.warning("%s Exception type: %s", ModuleName, type(inst))
             logging.warning("%s Exception args: %s", ModuleName, str(inst.args))
 
-    def processManager(self, cmd):
+    def onManager(self, cmd):
         #logging.debug("%s Received from manager: %s", ModuleName, cmd)
         if cmd["cmd"] == "msg":
-            self.processManagerMsg(cmd["msg"])
+            self.onManagerMessage(cmd["msg"])
             msg = {"id": self.id,
                    "status": "ok"}
         elif cmd["cmd"] == "stop":
@@ -101,7 +110,7 @@ class Concentrator():
                    "status": "stopping"}
             reactor.callLater(0.2, self.doStop)
         elif cmd["cmd"] == "config":
-            self.processConf(cmd["config"])
+            self.onConfigure(cmd["config"])
             msg = {"id": self.id,
                    "status": "ready"}
         else:
@@ -137,7 +146,13 @@ class Concentrator():
         Processes requests from apps.
         Called separately for every app that can make msguests.
         """
-        if not "destination" in msg:
+        if "msg" in msg:
+            if msg["msg"] == "init":
+                if "appID" in msg:
+                    self.appInit(msg["appID"])
+                else:
+                    logging.warning("%s Message from app with no ID: %s", ModuleName, str(msg))
+        elif not "destination" in msg:
             logging.warning("%s Message from app with no destination: %s", ModuleName, str(msg))
         else:
             if msg["destination"].startswith("CID"):

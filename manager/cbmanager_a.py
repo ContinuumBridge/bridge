@@ -54,6 +54,7 @@ class ManageBridge:
         self.bridgeStatus = "ok" # Used to set status for sending to supervisor
         self.timeLastConduitMsg = time.time()  # For watchdog
         self.disconnectedCount = 0  # Used to count "disconnected" messages from conduit
+        self.controllerConnected = False
         self.zwaveDiscovered = False
         self.bleDiscovered = False
         self.configured = False
@@ -65,6 +66,7 @@ class ManageBridge:
         self.elements = {}
         self.appProcs = []
         self.concConfig = []
+        self.appConfigured = []
         self.cbFactory = {} 
         self.appListen = {}
         self.zwaveDevices = []
@@ -814,8 +816,14 @@ class ManageBridge:
             return
         else:
             if msg["body"]["connected"] == True:
+                if self.controllerConnected == False:
+                    self.notifyApps(True)
+                self.controllerConnected = True
                 self.disconnectedCount = 0
             else:
+                if self.controllerConnected == True:
+                    self.notifyApps(False)
+                self.controllerConnected = False
                 self.disconnectedCount += 1
  
     def processControlMsg(self, msg):
@@ -1044,6 +1052,14 @@ class ManageBridge:
         logging.warning('%s %s', ModuleName, logMsg)
         self.sendStatusMsg(logMsg)
 
+    def notifyApps(self, connected):
+        for a in self.appConfigured:
+            msg = {
+                   "cmd": "status",
+                   "status": connected
+                  }
+            self.cbSendMsg(msg, a)
+
     def processClient(self, msg):
         #logging.debug('%s Received msg; %s', ModuleName, msg)
         # Set watchdog flag
@@ -1073,9 +1089,11 @@ class ManageBridge:
                                             "sim": CB_SIM_LEVEL,
                                             "config": {"adaptors": a["device_permissions"],
                                                        "bridge_id": self.bridge_id,
+                                                       "connected": self.controllerConnected,
                                                        "concentrator": conc}}
                                 #logging.debug('%s Response: %s %s', ModuleName, msg['id'], response)
                                 self.cbSendMsg(response, msg["id"])
+                                self.appConfigured.append(msg["id"])
                                 break
                         break
             elif msg["type"] == "adt": 

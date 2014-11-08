@@ -224,6 +224,10 @@ class CbApp:
         """The app should overwrite this and do all configuration in it."""
         pass
 
+    def onManagerStatus(self, status):
+        """The app should overwrite this if it needs to use manager status messages."""
+        pass
+
     def onAdaptorService(self, message):
         """This should be overridden by the actual app."""
         logging.warning("%s %s should subclass onAdaptorService method", ModuleName, self.id)
@@ -276,6 +280,7 @@ class CbApp:
             # Now call the app's configure method & set self.configured = True
             self.onConfigureMessage(config)
             self.configured = True
+            reactor.callFromThread(self.onManagerStatus, config["connected"])
 
     def processManager(self, cmd):
         #logging.debug("%s %s Received from manager: %s", ModuleName, self.id, cmd)
@@ -291,7 +296,9 @@ class CbApp:
             reactor.callInThread(self.cbConfigure, cmd["config"]) 
             msg = {"id": self.id,
                    "status": "ok"}
-        else:
+        elif cmd["cmd"] == "status":
+            if "status" in cmd:
+                self.onManagerStatus(cmd["status"])
             msg = {"id": self.id,
                    "status": self.status}
         self.sendManagerMessage(msg)
