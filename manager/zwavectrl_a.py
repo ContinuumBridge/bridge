@@ -94,10 +94,11 @@ class ZwaveCtrl():
                "state": self.state}
         self.cbSendManagerMsg(msg)
 
-    def sendParameter(self, data, timeStamp, a, commandClass):
+    def sendParameter(self, data, timeStamp, a, commandClass, instance):
         msg = {"id": "zwave",
                "content": "data",
                "commandClass": commandClass,
+               "instance": instance,
                "data": data,
                "timeStamp": timeStamp}
         #logging.debug("%s sendParameter: %s %s", ModuleName, str(msg), a)
@@ -307,7 +308,7 @@ class ZwaveCtrl():
                         for g in self.getStrs:
                             if g["match"] in dat:
                                 #logging.debug("%s found: %s %s", ModuleName, g["address"], g["commandClass"])
-                                self.sendParameter(dat[g["match"]], time.time(), g["address"], g["commandClass"])
+                                self.sendParameter(dat[g["match"]], time.time(), g["address"], g["commandClass"], g["instance"])
                 if posting:
                     posting = False
                 else:
@@ -350,8 +351,21 @@ class ZwaveCtrl():
                 postToUrl = postUrl + msg["address"] + "].instances[" + msg["instance"] + \
                             "].commandClasses[" + msg["commandClass"] + "]." + msg["action"] + "(" + \
                             msg["value"] + ")"
-                #logging.debug("%s postToUrl: %s", ModuleName, str(postToUrl))
+                logging.debug("%s postToUrl: %s", ModuleName, str(postToUrl))
                 self.postToUrls.insert(0, postToUrl)
+            elif msg["request"] == "check":
+                postToUrl = postUrl + msg["address"] + "].SendNoOperation()"
+                logging.debug("%s postToUrl: %s", ModuleName, str(postToUrl))
+                self.postToUrls.insert(0, postToUrl)
+            elif msg["request"] == "getc":
+                g = "devices." + msg["address"] + ".data.isFailed"
+                getStr = {"address": msg["id"],
+                          "match": g, 
+                          "commandClass": msg["commandClass"],
+                          "instance": msg["instance"]
+                         }
+                logging.debug("%s New getStr (check): %s", ModuleName, str(getStr))
+                self.getStrs.append(getStr)
             elif msg["request"] == "get":
                 g = "devices." + msg["address"] + ".instances." + msg["instance"] + \
                     ".commandClasses." + msg["commandClass"] + ".data"
@@ -361,7 +375,8 @@ class ZwaveCtrl():
                     g += "." + msg["name"]
                 getStr = {"address": msg["id"],
                           "match": g, 
-                          "commandClass": msg["commandClass"]
+                          "commandClass": msg["commandClass"],
+                          "instance": msg["instance"]
                          }
                 #logging.debug("%s New getStr: %s", ModuleName, str(getStr))
                 self.getStrs.append(getStr)

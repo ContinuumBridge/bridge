@@ -1121,15 +1121,15 @@ class ManageBridge:
                     for a in self.apps:
                         self.concConfig.append({"id": a["app"]["id"], "appConcSoc": a["app"]["concSoc"]})
                     response = {"cmd": "config",
-                                "config": {"bridge_id": self.bridge_id,
-                                           "apps": self.concConfig} 
+                                       "config": {"bridge_id": self.bridge_id,
+                                                  "apps": self.concConfig}
                                }
                 else:
                     self.concNoApps = True
                     response = {"cmd": "config",
-                                "config": "no_apps"
+                                "config": {"bridge_id": self.bridge_id}
                                }
-                #logging.debug('%s Sending config to conc:  %s', ModuleName, response)
+                logging.debug('%s Sending config to conc:  %s', ModuleName, response)
                 self.cbSendConcMsg(response)
                 # Only start apps & adaptors after concentrator has responded
                 if self.configured:

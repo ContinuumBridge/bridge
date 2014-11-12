@@ -59,8 +59,8 @@ class Concentrator():
     def onConfigure(self, config):
         """Config is based on what apps are available."""
         #logging.info("%s onConfigure: %s", ModuleName, config)
-        if config != "no_apps":
-            self.bridge_id = config["bridge_id"]
+        self.bridge_id = config["bridge_id"]
+        if "apps" in config:
             self.cbFactory = {}
             self.appInstances = []
             for app in config["apps"]:
@@ -71,10 +71,10 @@ class Concentrator():
                     self.appInstances.append(iName)
                     self.cbFactory[iName] = CbServerFactory(self.onAppData)
                     reactor.listenUNIX(appConcSoc, self.cbFactory[iName])
-        logging.info("%s onConfigure. appInstances: %s", ModuleName, self.appInstances)
+            logging.info("%s onConfigure. appInstances: %s", ModuleName, self.appInstances)
 
     def onControllerMessage(self, msg):
-        logging.debug("%s Received from controller: %s", ModuleName, str(msg)[:100])
+        #logging.debug("%s Received from controller: %s", ModuleName, str(msg)[:100])
         if not "desination" in msg:
             msg["destination"] = self.bridge_id
         if msg["destination"] == self.bridge_id:
@@ -87,7 +87,8 @@ class Concentrator():
             dest = msg["desination"].split('/')
             if dest[1] in self.appInstances:
                 msg["destination"] = dest[1]
-            
+                logging.debug("%s onControllerMessage, sending to: %s %s", ModuleName, dest[1], msg)
+                self.cbSendMsg(msg, dest[1])
 
     def onManagerMessage(self, msg):
         #logging.debug("%s Received from manager: %s", ModuleName, msg)
