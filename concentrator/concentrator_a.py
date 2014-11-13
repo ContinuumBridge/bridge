@@ -30,6 +30,7 @@ class Concentrator():
         procname.setprocname('concentrator')
         logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(message)s')
         self.status = "ok"
+        self.readyApps = []
         self.conc_mode = os.getenv('CB_CONCENTRATOR', 'client')
         logging.info("%s CB_CONCENTRATOR = %s", ModuleName, self.conc_mode)
 
@@ -75,20 +76,36 @@ class Concentrator():
 
     def onControllerMessage(self, msg):
         #logging.debug("%s Received from controller: %s", ModuleName, str(msg)[:100])
-        if not "desination" in msg:
-            msg["destination"] = self.bridge_id
+        try:
+            if not "destination" in msg:
+                msg["destination"] = self.bridge_id
+        except Exception as inst:
+            logging.warning("%s onControllerMessage. Unexpected message: %s", ModuleName, str(msg)[:100])
+            logging.warning("%s Exception: %s %s", ModuleName, type(inst), str(inst.args))
+            return
         if msg["destination"] == self.bridge_id:
-            msg["status"] = "control_msg"
-            msg["id"] = self.id
-            if "message" in msg:
-                msg["type"] = msg.pop("message")
-            self.cbSendManagerMsg(msg)
+            try:
+                msg["status"] = "control_msg"
+                msg["id"] = self.id
+                if "message" in msg:
+                    msg["type"] = msg.pop("message")
+                self.cbSendManagerMsg(msg)
+            except Exception as inst:
+                logging.warning("%s onControllerMessage. Unexpected message: %s", ModuleName, str(msg)[:100])
+                logging.warning("%s Exception: %s %s", ModuleName, type(inst), str(inst.args))
         else:
-            dest = msg["desination"].split('/')
-            if dest[1] in self.appInstances:
-                msg["destination"] = dest[1]
-                logging.debug("%s onControllerMessage, sending to: %s %s", ModuleName, dest[1], msg)
-                self.cbSendMsg(msg, dest[1])
+            try:
+                dest = msg["destination"].split('/')
+                if dest[1] in self.appInstances:
+                    msg["destination"] = dest[1]
+                    if dest[1] in self.readyApps:
+                        logging.debug("%s onControllerMessage, sending to: %s %s", ModuleName, dest[1], str(msg)[:100])
+                        self.cbSendMsg(msg, dest[1])
+                    else:
+                        logging.info("%s Received message before app ready: %s %s", ModuleName, dest[1], str(msg)[:100])
+            except Exception as inst:
+                logging.warning("%s onControllerMessage. Unexpected message: %s", ModuleName, str(msg)[:100])
+                logging.warning("%s Exception: %s %s", ModuleName, type(inst), str(inst.args))
 
     def onManagerMessage(self, msg):
         #logging.debug("%s Received from manager: %s", ModuleName, msg)
@@ -137,31 +154,35 @@ class Concentrator():
         self.managerFactory.sendMsg(msg)
 
     def appInit(self, appID):
-        """ Request delayed to give app time to configure. """
         resp = {"id": "conc",
                 "resp": "config"}
         self.cbSendMsg(resp, appID)
+        self.readyApps.append(appID)
 
     def onAppData(self, msg):
         """
         Processes requests from apps.
         Called separately for every app that can make msguests.
         """
-        if "msg" in msg:
-            if msg["msg"] == "init":
-                if "appID" in msg:
-                    self.appInit(msg["appID"])
-                else:
-                    logging.warning("%s Message from app with no ID: %s", ModuleName, str(msg))
-        elif not "destination" in msg:
-            logging.warning("%s Message from app with no destination: %s", ModuleName, str(msg))
-        else:
-            if msg["destination"].startswith("CID"):
-                msg["source"] = self.bridge_id + "/" + msg["source"]
-                logging.debug("%s Sending msg to cb: %s", ModuleName, str(msg))
-                self.concFactory.sendMsg(msg)
+        try:
+            if "msg" in msg:
+                if msg["msg"] == "init":
+                    if "appID" in msg:
+                        self.appInit(msg["appID"])
+                    else:
+                        logging.warning("%s Message from app with no ID: %s", ModuleName, str(msg)[:100])
+            elif not "destination" in msg:
+                logging.warning("%s Message from app with no destination: %s", ModuleName, str(msg)[:100])
             else:
-                logging.warning("%s Illegal desination in app message: %s", ModuleName, str(msg))
-
+                if msg["destination"].startswith("CID"):
+                    msg["source"] = self.bridge_id + "/" + msg["source"]
+                    logging.debug("%s Sending msg to cb: %s", ModuleName, str(msg)[:100])
+                    self.concFactory.sendMsg(msg)
+                else:
+                    logging.warning("%s Illegal desination in app message: %s", ModuleName, str(msg)[:100])
+        except Exception as inst:
+            logging.warning("%s onAppData. Malformed message: %s", ModuleName, str(msg)[:100])
+            logging.warning("%s Exception: %s %s", ModuleName, type(inst), str(inst.args))
+    
 if __name__ == '__main__':
     Concentrator(sys.argv)
