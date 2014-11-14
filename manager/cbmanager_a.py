@@ -1037,12 +1037,16 @@ class ManageBridge:
         for e in self.elements:
             if self.elements[e] == False:
                 #logging.debug('%s pollElement, elements: %s', ModuleName, e)
-                if e == "conc":
-                    self.cbSendConcMsg({"cmd": "status"})
-                elif e == "zwave":
-                    self.elFactory["zwave"].sendMsg({"cmd": "status"})
-                else:
-                    self.cbSendMsg({"cmd": "status"}, e)
+                try:
+                    if e == "conc":
+                        self.cbSendConcMsg({"cmd": "status"})
+                    elif e == "zwave":
+                        self.elFactory["zwave"].sendMsg({"cmd": "status"})
+                    else:
+                        self.cbSendMsg({"cmd": "status"}, e)
+                except Exception as inst:
+                    logging.warning("%s pollElement. Could not send message to: %s", ModuleName, e)
+                    logging.warning("%s Exception: %s %s", ModuleName, type(inst), str(inst.args))
 
     def onLogMessage(self, msg):
         if "body" in msg:
