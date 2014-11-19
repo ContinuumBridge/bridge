@@ -35,6 +35,7 @@ import procname
 import wifisetup
 from subprocess import call
 from subprocess import Popen
+from subprocess import check_output
 from twisted.internet import threads
 from twisted.internet import reactor, defer
 from cbcommslib import CbServerProtocol
@@ -72,10 +73,13 @@ class Supervisor:
         signal.signal(signal.SIGINT, self.signalHandler)  # For catching SIGINT
         signal.signal(signal.SIGTERM, self.signalHandler)  # For catching SIGTERM
         if not CB_DEV_BRIDGE:
-            try:
-                reactor.callLater(TIME_TO_IFUP, self.checkInterface)
-            except:
-                logging.error("%s iUnable to call checkInterface", ModuleName)
+            if CB_CELLULAR_BRIDGE:
+                reactor.callInThread(self.startModem)
+            else:
+                try:
+                    reactor.callLater(TIME_TO_IFUP, self.checkInterface)
+                except:
+                    logging.error("%s iUnable to call checkInterface", ModuleName)
 
         reactor.callLater(0.1, self.startManager, False)
         reactor.run()
@@ -134,7 +138,10 @@ class Supervisor:
                     self.connecting = True
                     self.disconnected = True
                     self.interfaceDownTime = time.time()
-                    self.recheckInterface()
+                    if CB_CELLULAR_BRIDGE:
+                        reactor.callInThread(self.startModem)
+                    else:
+                        self.recheckInterface()
             else:
                 self.disconnected = False
 
@@ -187,6 +194,32 @@ class Supervisor:
             logging.warning("%s Manager is well and truly dead. Rebooting", ModuleName)
             self.reboot()
 
+    def startModem(self):
+        # Called in a thread because it blocks on sakis3g
+        for attempt in range (2):
+            try:
+                # sakis3g requires --sudo despite being run by root
+                s = check_output(["/usr/bin/modem3g/sakis3g", "--sudo", "reconnect", "APN=\"3internet\""])
+                logging.debug("%s startModem, attempt %s. s: %s", ModuleName, str(attempt), s)
+                if "connected" in s.lower() or "reconnected" in s.lower():
+                    logging.info("%s startModem: %s", ModuleName, s)
+                    self.connecting = False
+                    break
+            except Exception as inst:
+                logging.warning("%s startModem failed", ModuleName)
+                logging.warning("%s Exception: %s %s", ModuleName, type(inst), str(inst.args))
+
+    def checkModem(self):
+        logging.info("%s checkModem", ModuleName)
+        if time.time() - self.interfaceDownTime > MIN_TIME_BETWEEN_REBOOTS:
+            logging.info("%s checkModem. Not connected for a very long time. Rebooting.", ModuleName)
+            self.doReboot
+        else:
+            reactor.callLater(CHECK_INTERFACE_DELAY, self.restartModem) 
+
+    def restartModem(self):
+        reactor.callInThread(self.startModem)
+
     def checkInterface(self):
         # Called only at start to check we have an Internet connection
         # Defer to thread - it could take several seconds
@@ -231,6 +264,12 @@ class Supervisor:
 
     def doReboot(self):
         """ Give bridge manager a chance to tidy up nicely before rebooting. """
+        if CB_CELLULAR_BRIDGE:
+            try:
+                Popen(["/usr/bin/modem3g/sakis3g", "--sudo", "disconnect"])
+            except Exception as inst:
+                logging.warning("%s deReboot. sakis3g disconnect failed", ModuleName)
+                logging.warning("%s Exception: %s %s", ModuleName, type(inst), str(inst.args))
         try:
             self.cbSendManagerMsg({"msg": "stopall"})
         except:
