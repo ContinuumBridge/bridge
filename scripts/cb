@@ -9,8 +9,7 @@ The cb command allows a user to create and modify bridges, app and devices.
 """
 
 THISBRIDGE = "/opt/cbridge/thisbridge/thisbridge.sh"
-#ADDRESS = "http://54.72.38.223"
-ADDRESS = "http://54.76.145.70"
+ADDRESS = "http://portal.continuumbridge.com/"
 import requests
 from requests.auth import HTTPBasicAuth
 from datetime import datetime
@@ -117,11 +116,13 @@ def checkget(get, expected, action, obj, sessionid, doExit):
 @click.option('--name', nargs=1, help='The name to give a bridge.')
 @click.option('--app', nargs=2, help='Usage: post|patch|get|delete <config file name>.')
 @click.option('--device', nargs=2, help='Usage: post|patch|get|delete <config file name>.')
+@click.option('--staging', nargs=1, help='Options: True|False.')
 @click.option('--user', prompt='User name', help='Username. If not specified a prompt will be given.')
 @click.option('--password', prompt=True, hide_input=True, help='Password. If not specified a prompt will be given.')
 
-def cb(bridge, app, device, user, password, name):
+def cb(bridge, app, device, user, staging, password, name):
 
+    global ADDRESS
     if bridge:
         if not user or not password:
             print "Usage: cb --bridge [post|rm] --user <user_name> --password <password>"
@@ -134,6 +135,8 @@ def cb(bridge, app, device, user, password, name):
         if not user or not password:
             print "Usage: cb --device [post|patch|rm] --user <user_name> --password <password>"
             exit()
+    if staging:
+        ADDRESS = "http://staging.continuumbridge.com/"
     if bridge:
         action = bridge
         if action == "post" or action == "patch":
