@@ -136,6 +136,7 @@ class ZwaveCtrl():
                     foundDevice = False
                     foundData = False
                     losEndos = False
+                    nodeInfoFrameFound = False
                     includeState = "waitInclude"
                     incStartTime = str(int(time.time()))
                     includedDevice = ""
@@ -145,7 +146,7 @@ class ZwaveCtrl():
                     includeTick = 0
                     logging.debug("%s started including", ModuleName)
                 elif includeState == "waitInclude":
-                    logging.debug("%s waitInclude, includeTick: %s foundData: %s", ModuleName, str(includeTick), foundData)
+                    #logging.debug("%s waitInclude, includeTick: %s foundData: %s", ModuleName, str(includeTick), foundData)
                     URL = dataUrl + incStartTime
                     if foundData:
                         includeState = "tidyUp"
@@ -257,6 +258,7 @@ class ZwaveCtrl():
                                         for j in dat["devices"][d][k].keys():
                                             if j == "nodeInfoFrame":
                                                 command_classes = dat["devices"][d][k][j]["value"]
+                                                nodeInfoFrameFound = True
                                                 logging.debug("%s command_classes: %s", ModuleName, command_classes)
                                             elif j == "vendorString":
                                                 vendorString = dat["devices"][d][k][j]["value"]
@@ -270,11 +272,15 @@ class ZwaveCtrl():
                                             elif j == "manufacturerProductType":
                                                 manufacturerProductType = dat["devices"][d][k][j]["value"]
                                                 logging.debug("%s manufacturerProductType : %s", ModuleName, manufacturerProductType )
-                                    if (vendorString != "" or losEndos) and not foundData:
-                                        if losEndos:
+                                    if nodeInfoFrameFound and not foundData:
+                                        if vendorString == "":
                                             for dev in self.zwave_devices:
                                                 logging.debug("%s zwave_device : %s", ModuleName, str(dev))
-                                                found = True
+                                                if len(dev["command_classes"]) != len(command_classes):
+                                                    found = False
+                                                    break
+                                                else:
+                                                    found = True
                                                 for c in dev["command_classes"]:
                                                     logging.debug("%s command_class : %s", ModuleName, str(c))
                                                     if c not in command_classes:
@@ -307,7 +313,7 @@ class ZwaveCtrl():
                         #logging.debug("%s dat: %s", ModuleName, str(dat))
                         for g in self.getStrs:
                             if g["match"] in dat:
-                                #logging.debug("%s found: %s %s", ModuleName, g["address"], g["commandClass"])
+                                logging.debug("%s found: %s %s", ModuleName, g["address"], g["commandClass"])
                                 self.sendParameter(dat[g["match"]], time.time(), g["address"], g["commandClass"], g["instance"])
                 if posting:
                     posting = False
@@ -355,7 +361,7 @@ class ZwaveCtrl():
                 self.postToUrls.insert(0, postToUrl)
             elif msg["request"] == "check":
                 postToUrl = postUrl + msg["address"] + "].SendNoOperation()"
-                logging.debug("%s postToUrl: %s", ModuleName, str(postToUrl))
+                #logging.debug("%s postToUrl: %s", ModuleName, str(postToUrl))
                 self.postToUrls.insert(0, postToUrl)
             elif msg["request"] == "getc":
                 g = "devices." + msg["address"] + ".data.isFailed"
@@ -378,7 +384,7 @@ class ZwaveCtrl():
                           "commandClass": msg["commandClass"],
                           "instance": msg["instance"]
                          }
-                #logging.debug("%s New getStr: %s", ModuleName, str(getStr))
+                logging.debug("%s New getStr: %s", ModuleName, str(getStr))
                 self.getStrs.append(getStr)
                 #logging.debug("%s getStrs: %s", ModuleName, str(self.getStrs))
         else:
