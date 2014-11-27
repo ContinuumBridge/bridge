@@ -17,8 +17,8 @@ ModuleName = "Supervisor"
 MANAGER_START_TIME = 3            # Time to allow for manager to start before starting to monitor it (secs)
 TIME_TO_IFUP = 90                 # Time to wait before checking if we have an Internet connection (secs)
 WATCHDOG_INTERVAL = 30            # Time between manager checks (secs)
-MIN_TIME_BETWEEN_REBOOTS = 600    # Stops constant rebooting (secs)
-#MIN_TIME_BETWEEN_REBOOTS = 10000  # Stops constant rebooting (secs)
+#MIN_TIME_BETWEEN_REBOOTS = 240    # Stops constant rebooting (secs)
+MIN_TIME_BETWEEN_REBOOTS = 3600  # Stops constant rebooting (secs)
 REBOOT_WAIT = 10                  # Time to allow bridge to stop before rebooting
 RESTART_INTERVAL = 10             # Time between telling manager to stop and starting it again
 MAX_INTERFACE_CHECKS = 10         # No times to check interface before rebooting
@@ -119,7 +119,7 @@ class Supervisor:
         self.cbManagerFactory.sendMsg(msg)
 
     def onManagerMessage(self, msg):
-        #logging.debug("%s onManagerMessage received message: %s", ModuleName, msg)
+        logging.debug("%s onManagerMessage received message: %s", ModuleName, msg)
         # Regardless of message content, timeStamp is the time when we last heard from the manager
         self.timeStamp = time.time()
         if msg["msg"] == "restart":
@@ -134,7 +134,7 @@ class Supervisor:
         elif msg["msg"] == "status":
             if msg["status"] == "disconnected":
                 logging.info("%s onManagerMessage. status = %s, disconnected = %s", ModuleName, msg["status"], self.disconnected)
-                if not (self.connecting or self.disconnected):
+                if not self.connecting or not self.disconnected:
                     self.connecting = True
                     self.disconnected = True
                     self.interfaceDownTime = time.time()
@@ -213,7 +213,7 @@ class Supervisor:
         logging.info("%s checkModem", ModuleName)
         if time.time() - self.interfaceDownTime > MIN_TIME_BETWEEN_REBOOTS:
             logging.info("%s checkModem. Not connected for a very long time. Rebooting.", ModuleName)
-            self.doReboot
+            reactor.callFromThread(self.doReboot)
         else:
             reactor.callLater(CHECK_INTERFACE_DELAY, self.restartModem) 
 
@@ -249,10 +249,11 @@ class Supervisor:
 
     def onInterfaceRechecked(self, mode):
         logging.info("%s onInterfaceRechecked. Connected by %s", ModuleName, mode)
+        logging.debug("%s onInterfaceRechecked. time: %s, interfaceDownTime: %s", ModuleName, time.time(), self.interfaceDownTime)
         if mode == "none" or self.disconnected:
             if time.time() - self.interfaceDownTime > MIN_TIME_BETWEEN_REBOOTS:
                 logging.info("%s onInterfaceRechecked. Not connected for a very long time. Rebooting.", ModuleName)
-                self.doReboot
+                reactor.callFromThread(self.doReboot)
             else:
                 d1 = threads.deferToThread(wifisetup.switchwlan0, "client")
                 d1.addCallback(self.onInterfaceReset)
@@ -264,16 +265,18 @@ class Supervisor:
 
     def doReboot(self):
         """ Give bridge manager a chance to tidy up nicely before rebooting. """
+        logging.info("%s doReboot", ModuleName)
         if CB_CELLULAR_BRIDGE:
             try:
                 Popen(["/usr/bin/modem3g/sakis3g", "--sudo", "disconnect"])
-            except Exception as inst:
+            except Exception as ex:
                 logging.warning("%s deReboot. sakis3g disconnect failed", ModuleName)
-                logging.warning("%s Exception: %s %s", ModuleName, type(inst), str(inst.args))
+                logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
         try:
             self.cbSendManagerMsg({"msg": "stopall"})
-        except:
-            logging.info("%s Cannot tell manager to stop, just rebooting", ModuleName)
+        except Exception as ex:
+            logging.warning("%s Cannot tell manager to stop, just rebooting", ModuleName)
+            logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
         # Tidy up
         #self.mgrPort.stopListening()
         reactor.callLater(REBOOT_WAIT, self.reboot)
@@ -282,8 +285,9 @@ class Supervisor:
         logging.info("%s Rebooting", ModuleName)
         try:
             reactor.stop()
-        except:
-            logging.info("%s Unable to stop reactor, just rebooting", ModuleName)
+        except Exception as ex:
+            logging.warning("%s Unable to stop reactor, just rebooting", ModuleName)
+            logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
         if CB_SIM_LEVEL == '0':
             try:
                 logging.info("%s Rebooting now. Goodbye ...", ModuleName)
