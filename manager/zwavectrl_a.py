@@ -323,7 +323,7 @@ class ZwaveCtrl():
                         #logging.debug("%s dat: %s", ModuleName, str(dat))
                         for g in self.getStrs:
                             if g["match"] in dat:
-                                logging.debug("%s found: %s %s", ModuleName, g["address"], g["commandClass"])
+                                #logging.debug("%s found: %s %s", ModuleName, g["address"], g["commandClass"])
                                 self.sendParameter(dat[g["match"]], time.time(), g["address"], g["commandClass"], g["instance"])
                 if posting:
                     posting = False
