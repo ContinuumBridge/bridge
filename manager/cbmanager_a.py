@@ -449,10 +449,14 @@ class ManageBridge:
         if address == "":
             msg= "No Z-wave device was excluded. Did it need one or three button clicks?"
         else:
+            found = False
             for d in self.devices:
                 if d["address"] == address:
                     msg= "Excluded " + d["friendly_name"] + ". Please remove it from the devices list."
+                    found = True
                     break
+            if not found:
+                msg= "Excluded Z-Wave device at address " + address + " Device not known to bridge."
         self.sendStatusMsg(msg)
 
     def zwaveExclude(self):

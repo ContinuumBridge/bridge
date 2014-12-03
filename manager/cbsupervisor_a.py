@@ -133,7 +133,7 @@ class Supervisor:
         elif msg["msg"] == "reboot":
             logging.info("%s Reboot message received from manager", ModuleName)
             self.starting = True
-            self.doReboot()
+            reactor.callFromThread(self.doReboot)
         elif msg["msg"] == "status":
             if msg["status"] == "disconnected":
                 logging.info("%s onManagerMessage. status = %s, disconnected = %s", ModuleName, msg["status"], self.disconnected)
