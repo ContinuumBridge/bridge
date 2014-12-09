@@ -41,6 +41,7 @@ CB_UPGRADE_URL = 'https://github.com/ContinuumBridge/cbridge/releases/download/v
 CB_DEV_UPGRADE_URL = 'https://github.com/ContinuumBridge/cbridge/releases/download/v0.0.1/bridge_clone.tar.gz'
 CONCENTRATOR_PATH = CB_BRIDGE_ROOT + "/concentrator/concentrator.py"
 ZWAVE_PATH = CB_BRIDGE_ROOT + "/manager/z-wave-ctrl.py"
+USB_DEVICES_FILE = CB_BRIDGE_ROOT + "/manager/usb_devices.json"
 
 class ManageBridge:
 
@@ -347,6 +348,47 @@ class ManageBridge:
             self.discovered = True
             return
     
+    def usbDiscover(self):
+        self.usbDiscovered = False
+        usb_devices = []    # In case file doesn't load
+        self.usbDiscoveredData = []
+        try:
+            with open(USB_DEVICES_FILE, 'r') as f:
+                usb_devices = json.load(f)
+                logging.info('%s Read usb devices file', ModuleName)
+        except:
+            logging.warning('%s No usb devices file exists or file is corrupt', ModuleName)
+        lsusb = subprocess.check_output(["lsusb"])
+        devs = lsusb.split("\n")
+        for d in devs:
+            details = d.split()
+            logging.debug('%s usbDiscover. details: %s', ModuleName, details)
+            if details != []:
+                for known_device in usb_devices:
+                    if details[5] == known_device["id"]:
+                        if self.configured:
+                            addrFound = False
+                            address = details[3][:3]
+                            for oldDev in self.devices:
+                                if oldDev["device"]["protocol"] == "zwave":
+                                        if address == oldDev["address"]:
+                                            addrFound = True
+                                            break
+                            if addrFound == False:
+                                self.usbDiscovered = True
+                                self.usbDiscoveredData.append({"protocol": "zwave",
+                                                               "name": known_device["name"],
+                                                               "mac_addr": address
+                                                             })
+                                reactor.callFromThread(self.gatherDiscovered)
+                        else:
+                            self.usbDiscovered = True
+                            self.usbDiscoveredData.append({"protocol": "zwave",
+                                                           "name": known_device["name"],
+                                                           "mac_addr": address
+                                                         })
+                            reactor.callFromThread(self.gatherDiscovered)
+    
     def onZwaveDiscovering(self, msg):
         logging.debug('%s onZwaveDiscovering', ModuleName)
         self.zwaveDiscovering = True
@@ -374,25 +416,28 @@ class ManageBridge:
         d["body"]["resource"] = "/api/bridge/v1/device_discovery/"
         d["body"]["verb"] = "post"
         d["body"]["body"] = []
-        if self.bleDiscovered and not self.zwaveDiscovered:
-            if self.bleDiscoveredData:
-                for b in self.bleDiscoveredData:
+        if self.usbDiscovered:
+            d["body"]["body"] = self.usbDiscoveredData
+        else:
+            if self.bleDiscovered and not self.zwaveDiscovered:
+                if self.bleDiscoveredData:
+                    for b in self.bleDiscoveredData:
+                        d["body"]["body"].append(b)
+                else:
+                    self.sendStatusMsg("No Bluetooth devices found.")
+            if self.zwaveDiscovered and CB_SIM_LEVEL == '0':
+                for b in self.zwaveDiscoveredData:
                     d["body"]["body"].append(b)
-            else:
-                self.sendStatusMsg("No Bluetooth devices found.")
-        if self.zwaveDiscovered and CB_SIM_LEVEL == '0':
-            for b in self.zwaveDiscoveredData:
+            elif CB_SIM_LEVEL == '1':
+                b = {'manufacturer_name': 0,
+                     'protocol': 'zwave',
+                     'mac_addr': '40',
+                     'name': 'Binary Power Switch',
+                     'model_number': 0
+                    }
                 d["body"]["body"].append(b)
-        elif CB_SIM_LEVEL == '1':
-            b = {'manufacturer_name': 0,
-                 'protocol': 'zwave',
-                 'mac_addr': '40',
-                 'name': 'Binary Power Switch',
-                 'model_number': 0
-                }
-            d["body"]["body"].append(b)
-        self.zwaveDiscovered = False
-        self.bleDiscovered = False
+            self.zwaveDiscovered = False
+            self.bleDiscovered = False
         logging.debug('%s Discovered: %s', ModuleName, str(d))
         if d["body"] != []:
             msg = {"cmd": "msg",
@@ -442,6 +487,7 @@ class ManageBridge:
                 self.elFactory["zwave"].sendMsg({"cmd": "discover"})
                 self.zwaveDiscovering = False
             reactor.callInThread(self.bleDiscover)
+            reactor.callInThread(self.usbDiscover)
             self.sendStatusMsg("Follow manufacturer's instructions for device to be connected now.")
 
     def onZwaveExcluded(self, address):
