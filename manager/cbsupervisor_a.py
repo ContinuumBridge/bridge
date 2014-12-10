@@ -16,7 +16,7 @@ ModuleName = "Supervisor"
 
 MANAGER_START_TIME = 3            # Time to allow for manager to start before starting to monitor it (secs)
 TIME_TO_IFUP = 90                 # Time to wait before checking if we have an Internet connection (secs)
-TIME_TO_MODEM_UP = 30             # Time to wait before starting 3G modem
+TIME_TO_MODEM_UP = 10             # Time to wait before starting 3G modem
 WATCHDOG_INTERVAL = 30            # Time between manager checks (secs)
 #MIN_TIME_BETWEEN_REBOOTS = 240   # Stops constant rebooting (secs)
 MIN_TIME_BETWEEN_REBOOTS = 3600   # Stops constant rebooting (secs)
@@ -75,14 +75,15 @@ class Supervisor:
         signal.signal(signal.SIGINT, self.signalHandler)  # For catching SIGINT
         signal.signal(signal.SIGTERM, self.signalHandler)  # For catching SIGTERM
         if not CB_DEV_BRIDGE:
+            logging.debug("%s  CB_CELLULAR_BRIDGE: %s", ModuleName, CB_CELLULAR_BRIDGE)
             if CB_CELLULAR_BRIDGE:
-                reactor.callLater(TIME_TO_MODEM_UP, self.restartModem)
-                reactor.callLater(MONITOR_MODEM_INTERVAL, self.monitorModem) 
+                logging.debug("%s  CB_CELLULAR_BRIDGE: %s", ModuleName, CB_CELLULAR_BRIDGE)
+                reactor.callLater(TIME_TO_MODEM_UP, self.startModem)
             else:
                 try:
                     reactor.callLater(TIME_TO_IFUP, self.checkInterface)
                 except:
-                    logging.error("%s iUnable to call checkInterface", ModuleName)
+                    logging.error("%s Unable to call checkInterface", ModuleName)
 
         reactor.callLater(0.1, self.startManager, False)
         reactor.run()
@@ -142,7 +143,7 @@ class Supervisor:
                     self.disconnected = True
                     self.interfaceDownTime = time.time()
                     if CB_CELLULAR_BRIDGE:
-                        reactor.callInThread(self.startModem)
+                        reactor.callInThread(self.checkModem)
                     else:
                         self.recheckInterface()
             else:
@@ -197,26 +198,29 @@ class Supervisor:
             logging.warning("%s Manager is well and truly dead. Rebooting", ModuleName)
             self.reboot()
 
-    def startModem(self):
-        # Called in a thread because it blocks on sakis3g
+    def startModemThread(self):
+        # Called in a thread
+        logging.debug("%s startModem", ModuleName)
         try:
             s = check_output(["sudo", "/usr/bin/sg_raw", "/dev/sr0", "11", "06", "20", "00", "00", "00", "00", "00", "01", "00"])
             logging.debug("%s startModem, sg_raw output: %s", ModuleName, s)
         except Exception as ex:
             logging.warning("%s startModem sg_raw call failed", ModuleName)
             logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
-        for attempt in range (2):
-            try:
-                # sakis3g requires --sudo despite being run by root. Config from /etc/sakis3g.conf
-                s = check_output(["/usr/bin/modem3g/sakis3g", "--sudo", "reconnect", "--debug"])
-                logging.debug("%s startModem, attempt %s. s: %s", ModuleName, str(attempt), s)
-                if "connected" in s.lower() or "reconnected" in s.lower():
-                    logging.info("%s startModem: %s", ModuleName, s)
-                    self.connecting = False
-                    break
-            except Exception as ex:
-                logging.warning("%s startModem failed", ModuleName)
-                logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
+        try:
+            s = check_output(["dhclient", "eth1"])
+            logging.debug("%s startModem, dhclient eth1: %s", ModuleName, s)
+        except Exception as ex:
+            logging.warning("%s startModem dhclient failed", ModuleName)
+            logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
+        try:
+            # This is zwave.me
+            ip_to_block = "46.20.244.72"
+            s = check_output(["iptables", "-A", "INPUT", "-s", ip_to_block, "-j", "DROP"])
+            s = check_output(["iptables", "-A", "OUTPUT", "-s", ip_to_block, "-j", "DROP"])
+        except Exception as ex:
+            logging.warning("%s iptables setup failed", ModuleName)
+            logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
 
     def checkModem(self):
         logging.info("%s checkModem", ModuleName)
@@ -226,17 +230,8 @@ class Supervisor:
         else:
             reactor.callLater(CHECK_INTERFACE_DELAY, self.restartModem) 
 
-    def restartModem(self):
-        reactor.callInThread(self.startModem)
-
-    def monitorModem(self):
-        try:
-            s = check_output(["/usr/bin/modem3g/sakis3g", "--sudo", "info"])
-            logging.info("%s monitorModem: %s", ModuleName, s)
-        except Exception as ex:
-            logging.warning("%s monitorModem failed", ModuleName)
-            logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
-        reactor.callLater(MONITOR_MODEM_INTERVAL, self.monitorModem) 
+    def startModem(self):
+        reactor.callInThread(self.startModemThread)
 
     def checkInterface(self):
         # Called only at start to check we have an Internet connection
