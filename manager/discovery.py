@@ -39,78 +39,54 @@ if __name__ == '__main__':
     names = []
     manufacturers = []
     protocols = []
-    if sim == "0":
+    try:
+        cmd = "hcitool lescan"
+        p = pexpect.spawn(cmd)
+    except:
+        logging.error('%s lescan failed to spawn', ModuleName)
+        d = {"status": "error"}        
+        print json.dumps(d)
+        sys.exit()
+    try:
+        p.expect('.*', timeout=3)
+        p.expect('.*', timeout=3)
+    except:
+        logging.error('%s Nothing returned from pexpect', ModuleName)
+        d = {"status": "error"}        
+        print json.dumps(d)
+        sys.exit()
+    startTime = time.time()
+    endTime = startTime + DISCOVERY_TIME
+    while time.time() < endTime:
         try:
-            cmd = "hcitool lescan"
-            p = pexpect.spawn(cmd)
-        except:
-            logging.error('%s lescan failed to spawn', ModuleName)
-            d = {"status": "error"}        
-            print json.dumps(d)
-            sys.exit()
-        try:
-            p.expect('.*', timeout=3)
-            p.expect('.*', timeout=3)
-        except:
-            logging.error('%s Nothing returned from pexpect', ModuleName)
-            d = {"status": "error"}        
-            print json.dumps(d)
-            sys.exit()
-        startTime = time.time()
-        endTime = startTime + DISCOVERY_TIME
-        while time.time() < endTime:
-            try:
-                p.expect('.*', timeout=10)
-                raw = p.after.split()
-                logging.debug('%s raw data: %s', ModuleName, raw)
-                addr = raw[0]
-                name = raw[1]
-                if name != "(unknown)":
-                    logging.debug('%s name: %s', ModuleName, name)
-                    found = False
-                    if len(discoveredAddresses) == 0:
+            p.expect('.*', timeout=10)
+            raw = p.after.split()
+            logging.debug('%s raw data: %s', ModuleName, raw)
+            addr = raw[0]
+            name = raw[1]
+            if name != "(unknown)":
+                logging.debug('%s name: %s', ModuleName, name)
+                found = False
+                if len(discoveredAddresses) == 0:
+                    discoveredAddresses.append(addr)
+                    names.append(name)
+                    protocols.append("ble")
+                    manufacturers.append("")
+                else:
+                    for a in discoveredAddresses:
+                        if addr == a:
+                            found = True
+                    if found == False:
                         discoveredAddresses.append(addr)
                         names.append(name)
                         protocols.append("ble")
                         manufacturers.append("")
-                    else:
-                        for a in discoveredAddresses:
-                            if addr == a:
-                                found = True
-                        if found == False:
-                            discoveredAddresses.append(addr)
-                            names.append(name)
-                            protocols.append("ble")
-                            manufacturers.append("")
-            except:
-                logging.debug('%s lescan skip', ModuleName)
-        try:
-            p.sendcontrol("c")
         except:
-            logging.debug('%s Could not kill lescan process', ModuleName)
-    else: 
-        # Simulation without real devices - just supply some sample data
-        names = ["SensorTag", "SensorTag", "Continuum"]
-        #manufacturers = ["Texas Instruments", "Texas Instruments", "Shenzhen Youhong Technology Co."]
-        protocols = ["ble", "ble", "ble"]
-        if simStep == 0:
-            discoveredAddresses = ["22.22.22.22.22.22"]
-        elif simStep == 1:
-            discoveredAddresses = ["33.33.33.33.33.33"]
-        elif simStep == 2:
-            discoveredAddresses = ["44.44.44.44.44.44"]
-        elif simStep == 3:
-            discoveredAddresses = ["55.55.55.55.55.55", "66.66.66.66.66.66"]
-        elif simStep == 4:
-            discoveredAddresses = ["77.77.77.77.77.77", "88.88.88.88.88.88", "99.99.99.99.99.99"]
-        elif simStep == 5:
-            discoveredAddresses = ["AA.AA.AA.AA.BB.BB", "CC.CC.CC.CC.CC.CC"]
-        simStep += 1
-        if simStep == 5:
-            simStep = 0
-        f = open(discoverySimFile, 'w')
-        f.write(str(simStep) + '\n')
-        f.close()
+            logging.debug('%s lescan skip', ModuleName)
+    try:
+        p.sendcontrol("c")
+    except:
+        logging.debug('%s Could not kill lescan process', ModuleName)
     d = {}
     d["status"] = "discovered"
     d["body"] = []

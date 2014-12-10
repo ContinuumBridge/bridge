@@ -36,6 +36,8 @@ from dropbox.client import DropboxClient, DropboxOAuth2Flow, DropboxOAuth2FlowNo
 from dropbox.rest import ErrorResponse, RESTSocketError
 from dropbox.datastore import DatastoreError, DatastoreManager, Date, Bytes
 import procname
+if CB_SIM_LEVEL == '1':
+    from simdiscover import SimDiscover
 
 CB_UPGRADE_URL = 'https://github.com/ContinuumBridge/cbridge/releases/download/v1.0.0/bridge_clone.tar.gz'
 CB_DEV_UPGRADE_URL = 'https://github.com/ContinuumBridge/cbridge/releases/download/v0.0.1/bridge_clone.tar.gz'
@@ -78,6 +80,8 @@ class ManageBridge:
 
         status = self.readConfig()
         logging.info('%s Read config status: %s', ModuleName, status)
+        if CB_SIM_LEVEL == '1':
+            self.simDiscover = SimDiscover(self.bridge_id)
         self.initBridge()
 
     def states(self, action):
@@ -413,8 +417,8 @@ class ManageBridge:
         d["destination"] = "cb"
         d["time_sent"] = isotime()
         d["body"] = {}
-        d["body"]["resource"] = "/api/bridge/v1/device_discovery/"
-        d["body"]["verb"] = "post"
+        d["body"]["resource"] = "/api/bridge/v1/discovered_device/"
+        d["body"]["verb"] = "patch"
         d["body"]["body"] = []
         if self.usbDiscovered:
             d["body"]["body"] = self.usbDiscoveredData
@@ -428,14 +432,6 @@ class ManageBridge:
             if self.zwaveDiscovered and CB_SIM_LEVEL == '0':
                 for b in self.zwaveDiscoveredData:
                     d["body"]["body"].append(b)
-            elif CB_SIM_LEVEL == '1':
-                b = {'manufacturer_name': 0,
-                     'protocol': 'zwave',
-                     'mac_addr': '40',
-                     'name': 'Binary Power Switch',
-                     'model_number': 0
-                    }
-                d["body"]["body"].append(b)
             self.zwaveDiscovered = False
             self.bleDiscovered = False
         logging.debug('%s Discovered: %s', ModuleName, str(d))
@@ -446,6 +442,13 @@ class ManageBridge:
 
     def discover(self):
         logging.debug('%s discover', ModuleName)
+        if CB_SIM_LEVEL == '1':
+            d = self.simDiscover.discover(isotime())
+            msg = {"cmd": "msg",
+                   "msg": d}
+            logging.debug('%s simulated discover: %s', ModuleName, msg)
+            self.cbSendConcMsg(msg)
+            return
         # If there are peripherals report any that are not reported rather than discover
         logging.debug('%s CB_PERIPHERALS: %s', ModuleName, CB_PERIPHERALS)
         if CB_PERIPHERALS != "none":
