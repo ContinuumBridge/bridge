@@ -94,10 +94,11 @@ class ZwaveCtrl():
                "state": self.state}
         self.cbSendManagerMsg(msg)
 
-    def sendParameter(self, data, timeStamp, a, commandClass):
+    def sendParameter(self, data, timeStamp, a, commandClass, instance):
         msg = {"id": "zwave",
                "content": "data",
                "commandClass": commandClass,
+               "instance": instance,
                "data": data,
                "timeStamp": timeStamp}
         #logging.debug("%s sendParameter: %s %s", ModuleName, str(msg), a)
@@ -135,6 +136,8 @@ class ZwaveCtrl():
                     foundDevice = False
                     foundData = False
                     losEndos = False
+                    waitForVendorString = 0
+                    nodeInfoFrameFound = False
                     includeState = "waitInclude"
                     incStartTime = str(int(time.time()))
                     includedDevice = ""
@@ -144,7 +147,7 @@ class ZwaveCtrl():
                     includeTick = 0
                     logging.debug("%s started including", ModuleName)
                 elif includeState == "waitInclude":
-                    logging.debug("%s waitInclude, includeTick: %s foundData: %s", ModuleName, str(includeTick), foundData)
+                    #logging.debug("%s waitInclude, includeTick: %s foundData: %s", ModuleName, str(includeTick), foundData)
                     URL = dataUrl + incStartTime
                     if foundData:
                         includeState = "tidyUp"
@@ -156,7 +159,7 @@ class ZwaveCtrl():
                               }
                         reactor.callFromThread(self.cbSendManagerMsg, msg)
                     elif includeTick > 3:
-                        self.endMessage = "No Z-wave device found."
+                        self.endMessage = "No Z-Wave device found."
                         includeState = "tidyUp"
                     else:
                         includeTick += 1
@@ -238,6 +241,7 @@ class ZwaveCtrl():
                         if "controller.data.lastExcludedDevice" in dat:
                             excludedDevice = str(dat["controller.data.lastExcludedDevice"]["value"])
                             if excludedDevice != "None" and excludedDevice != 0:
+                                logging.debug("%s found excludedDevice; %s", ModuleName, excludedDevice)
                                 foundDevice = True
                             logging.debug("%s lastExcludedDevice; %s", ModuleName, excludedDevice)
                     if self.include:
@@ -256,6 +260,7 @@ class ZwaveCtrl():
                                         for j in dat["devices"][d][k].keys():
                                             if j == "nodeInfoFrame":
                                                 command_classes = dat["devices"][d][k][j]["value"]
+                                                nodeInfoFrameFound = True
                                                 logging.debug("%s command_classes: %s", ModuleName, command_classes)
                                             elif j == "vendorString":
                                                 vendorString = dat["devices"][d][k][j]["value"]
@@ -268,46 +273,58 @@ class ZwaveCtrl():
                                                 logging.debug("%s manufacturerProductId: %s", ModuleName, manufacturerProductId)
                                             elif j == "manufacturerProductType":
                                                 manufacturerProductType = dat["devices"][d][k][j]["value"]
-                                                logging.debug("%s manufacturerProductType : %s", ModuleName, manufacturerProductType )
-                                    if (vendorString != "" or losEndos) and not foundData:
-                                        if losEndos:
-                                            for dev in self.zwave_devices:
-                                                logging.debug("%s zwave_device : %s", ModuleName, str(dev))
-                                                found = True
-                                                for c in dev["command_classes"]:
-                                                    logging.debug("%s command_class : %s", ModuleName, str(c))
-                                                    if c not in command_classes:
+                                                logging.debug("%s manufacturerProductType : %s", ModuleName, manufacturerProductType)
+                                    if nodeInfoFrameFound and not foundData:
+                                        if vendorString == "":
+                                            if waitForVendorString == 3:
+                                                logging.debug("%s found device with no vendorString", ModuleName)
+                                                for dev in self.zwave_devices:
+                                                    logging.debug("%s found device: %s", ModuleName, str(command_classes))
+                                                    logging.debug("%s comparing found device to : %s", ModuleName, str(dev))
+                                                    if len(dev["command_classes"]) != len(command_classes):
+                                                        logging.debug("%s lengths do not match", ModuleName)
                                                         found = False
-                                                        break
-                                                    if found:
-                                                        name = dev["name"]
-                                                        break
-                                            if not found:
-                                                if deviceTypeString == "":
+                                                    else:
+                                                        logging.debug("%s lengths match", ModuleName)
+                                                        found = True
+                                                        for c in dev["command_classes"]:
+                                                            logging.debug("%s command_class : %s", ModuleName, str(c))
+                                                            if c not in command_classes:
+                                                                found = False
+                                                                break
+                                                        if found:
+                                                            name = dev["name"]
+                                                            logging.debug("%s matched device. name : %s", ModuleName, name)
+                                                            self.endMessage = "Found Z-Wave device: " + name
+                                                            break
+                                                if not found:
+                                                    logging.debug("%s not found", ModuleName)
                                                     name = ""
-                                                    self.endMessage = "No Z-wave device found"
-                                                else:
-                                                    name = deviceTypeString
-                                                    self.endMessage = "Found Z-wave device: " + name
+                                                    self.endMessage = "No known Z-Wave device found"
+                                                foundData = True
+                                            else:
+                                                waitForVendorString += 1
                                         else:
                                             name = vendorString + " " + str(manufacturerProductId) + " " + str(manufacturerProductType)
-                                            self.endMessage = "Found Z-wave device: " + name
-                                        foundData = True
-                                        logging.debug("%s name: %s", ModuleName, name)
-                                        self.found.append({"protocol": "zwave",
-                                                           "name": name,
-                                                           #"mac_addr": "XXXXX" + str(d),
-                                                           "mac_addr": str(d),
-                                                           "manufacturer_name": vendorString,
-                                                           "model_number": manufacturerProductId,
-                                                           #"command_classes": command_classes
-                                                          })
+                                            logging.debug("%s found device with vendorString: %s", ModuleName, name)
+                                            self.endMessage = "Found Z-Wave device: " + name
+                                            foundData = True
+                                        if foundData:
+                                            logging.debug("%s found name: %s", ModuleName, name)
+                                            self.found.append({"protocol": "zwave",
+                                                               "name": name,
+                                                               #"mac_addr": "XXXXX" + str(d),
+                                                               "mac_addr": str(d),
+                                                               "manufacturer_name": vendorString,
+                                                               "model_number": manufacturerProductId,
+                                                               #"command_classes": command_classes
+                                                              })
                     else: # not including
                         #logging.debug("%s dat: %s", ModuleName, str(dat))
                         for g in self.getStrs:
                             if g["match"] in dat:
                                 #logging.debug("%s found: %s %s", ModuleName, g["address"], g["commandClass"])
-                                self.sendParameter(dat[g["match"]], time.time(), g["address"], g["commandClass"])
+                                self.sendParameter(dat[g["match"]], time.time(), g["address"], g["commandClass"], g["instance"])
                 if posting:
                     posting = False
                 else:
@@ -352,6 +369,19 @@ class ZwaveCtrl():
                             msg["value"] + ")"
                 #logging.debug("%s postToUrl: %s", ModuleName, str(postToUrl))
                 self.postToUrls.insert(0, postToUrl)
+            elif msg["request"] == "check":
+                postToUrl = postUrl + msg["address"] + "].SendNoOperation()"
+                #logging.debug("%s postToUrl: %s", ModuleName, str(postToUrl))
+                self.postToUrls.insert(0, postToUrl)
+            elif msg["request"] == "getc":
+                g = "devices." + msg["address"] + ".data.isFailed"
+                getStr = {"address": msg["id"],
+                          "match": g, 
+                          "commandClass": msg["commandClass"],
+                          "instance": msg["instance"]
+                         }
+                logging.debug("%s New getStr (check): %s", ModuleName, str(getStr))
+                self.getStrs.append(getStr)
             elif msg["request"] == "get":
                 g = "devices." + msg["address"] + ".instances." + msg["instance"] + \
                     ".commandClasses." + msg["commandClass"] + ".data"
@@ -361,9 +391,10 @@ class ZwaveCtrl():
                     g += "." + msg["name"]
                 getStr = {"address": msg["id"],
                           "match": g, 
-                          "commandClass": msg["commandClass"]
+                          "commandClass": msg["commandClass"],
+                          "instance": msg["instance"]
                          }
-                #logging.debug("%s New getStr: %s", ModuleName, str(getStr))
+                logging.debug("%s New getStr: %s", ModuleName, str(getStr))
                 self.getStrs.append(getStr)
                 #logging.debug("%s getStrs: %s", ModuleName, str(self.getStrs))
         else:
