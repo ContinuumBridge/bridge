@@ -19,14 +19,14 @@ class SimDiscover():
         d["body"] = {}
         d["body"]["resource"] = "/api/bridge/v1/discovered_device/"
         d["body"]["verb"] = "patch"
-        d["body"]["body"] = []
+        d["body"]["objects"] = []
         if self.step == 0:
             b = {'manufacturer_name': '',
                  'protocol': 'peripheral',
                  'address': '0',
                  'name': 'km_gpio_adaptor'
                 }
-            d["body"]["body"].append(b)
+            d["body"]["objects"].append(b)
         if self.step == 1:
             b = {'manufacturer_name': 'Hostmann Controls',
                  'protocol': 'zwave',
@@ -36,34 +36,34 @@ class SimDiscover():
                  'product_type': 3,
                  'command_classes': [114, 134, 64, 37]
                 }
-            d["body"]["body"].append(b)
+            d["body"]["objects"].append(b)
         elif self.step == 2:
             b = {'manufacturer_name': 'Texas Instruments',
                  'protocol': 'ble',
                  'address': "22.22.22.22.22.22",
                  'name': 'Continuum'
                 }
-            d["body"]["body"].append(b)
+            d["body"]["objects"].append(b)
         elif self.step == 3:
             b = {'manufacturer_name': 'Texas Instruments',
                  'protocol': 'ble',
                  'address': "33.33.33.33.33.33",
                  'name': 'Continuum'
                 }
-            d["body"]["body"].append(b)
+            d["body"]["objects"].append(b)
             b = {'manufacturer_name': 'Texas Instruments',
                  'protocol': 'ble',
                  'address': "44.44.44.44.44.44",
                  'name': 'Continuum'
                 }
-            d["body"]["body"].append(b)
+            d["body"]["objects"].append(b)
         elif self.step == 4:
             b = {'manufacturer_name': 'Temper',
                  'protocol': 'usb',
                  'address': "007",
                  'name': 'TEMPer1'
                 }
-            d["body"]["body"].append(b)
+            d["body"]["objects"].append(b)
         self.step = (self.step + 1) % 6
         return d
 
