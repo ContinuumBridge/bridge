@@ -64,13 +64,30 @@ class SimDiscover():
                  'name': 'TEMPer1'
                 }
             objects.append(b)
-        self.step = (self.step + 1) % 6
+        elif self.step == 5:
+            b = {'manufacturer_name': 'An Unknown Manufacturere',
+                 'protocol': 'ble',
+                 'address': "22.22.22.22.22.22",
+                 'name': 'A Nony Mouse'
+                }
+            objects.append(b)
+        elif self.step == 6:
+            b = {'manufacturer_name': 'A Z-Wave Manufacturer',
+                 'protocol': 'zwave',
+                 'address': '42',
+                 'name': 'The Ides of March',
+                 'product_id': 1,
+                 'product_type': 3,
+                 'command_classes': [2, 144, 74, 32]
+                }
+            objects.append(b)
+        self.step = (self.step + 1) % 7
         d["body"]["body"] = {"objects": objects}
         return d
 
 if __name__ == '__main__':
      import json
      s = SimDiscover("BID1")
-     for i in range(0, 7):
+     for i in range(0, 8):
          d = s.discover(1234567)
          print(json.dumps(d, indent=4))
