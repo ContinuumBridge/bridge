@@ -980,7 +980,10 @@ class ManageBridge:
                 self.sendStatusMsg("Unrecognised command received from controller")
         elif "resource" in msg["body"]:
             # Call in thread to prevent problems with blocking
-            reactor.callInThread(self.updateConfig, msg)
+            if msg["body"]["resource"] == "/api/bridge/v1/current_bridge/bridge":
+                reactor.callInThread(self.updateConfig, msg)
+            else:
+                logging.info('%s Unrecognised message received from server: %s', ModuleName, msg)
         else:
             logging.info('%s Unrecognised message received from server: %s', ModuleName, msg)
             self.sendStatusMsg("Unrecognised message received from controller")
