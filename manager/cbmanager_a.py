@@ -1003,8 +1003,12 @@ class ManageBridge:
             # Stop listing on sockets
             mgrSocs = self.listMgrSocs()
             for a in mgrSocs:
-               logging.debug('%s Stop listening on %s', ModuleName, a)
-               self.appListen[a].stopListening()
+                try:
+                    logging.debug('%s Stop listening on %s', ModuleName, a)
+                    self.appListen[a].stopListening()
+                except Exception as ex:
+                    logging.debug('%s Unable to stop listening on: %s', ModuleName, a)
+                    logging.debug("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
             # In case apps & adaptors have not shut down, kill their processes.
             for p in self.appProcs:
                 try:
