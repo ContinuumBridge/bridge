@@ -809,7 +809,7 @@ class ManageBridge:
                 status = "Could not upload log file: " + logFile
         reactor.callFromThread(self.sendStatusMsg, status)
 
-    def sendLog(self, logFile):
+    def sendLog(self, path, fileName):
         status = "Logfile upload failed"
         access_token = os.getenv('CB_DROPBOX_TOKEN', 'NO_TOKEN')
         logging.info('%s Dropbox access token %s', ModuleName, access_token)
@@ -827,9 +827,9 @@ class ManageBridge:
                 hostname = hostFile.read()
             if hostname.endswith('\n'):
                 hostname = hostname[:-1]
-            dropboxPlace = '/' + hostname +'.log'
-            logging.info('%s Uploading %s to %s', ModuleName, logFile, dropboxPlace)
-            reactor.callInThread(self.uploadLog, logFile, dropboxPlace, status)
+            dropboxPlace = '/' + hostname + '-' + fileName
+            logging.info('%s Uploading %s to %s', ModuleName, path, dropboxPlace)
+            reactor.callInThread(self.uploadLog, path, dropboxPlace, status)
 
     def doCall(self, cmd):
         try:
@@ -949,7 +949,7 @@ class ManageBridge:
                 reactor.callLater(APP_STOP_DELAY, self.killAppProcs)
                 reactor.callLater(APP_STOP_DELAY + MIN_DELAY, self.waitToUpgrade)
             elif command == "sendlog" or command == "send_log":
-                self.sendLog(CB_CONFIG_DIR + '/bridge.log')
+                self.sendLog(CB_CONFIG_DIR + '/bridge.log', 'bridge.log')
             elif command == "battery":
                 self.sendBatteryLevels()
             elif command.startswith("call"):
@@ -957,7 +957,9 @@ class ManageBridge:
                 reactor.callInThread(self.doCall, command[5:])
             elif command.startswith("upload"):
                 # Need to call in thread is case it hangs
-                reactor.callInThread(self.sendLog, command[7:])
+                path = command[7:]
+                fileName = path.split('/')[-1]
+                reactor.callInThread(self.sendLog, path, fileName)
             elif command == "update_config" or command == "update":
                 req = {"cmd": "msg",
                        "msg": {"source": self.bridge_id,
