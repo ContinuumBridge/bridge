@@ -983,7 +983,7 @@ class ManageBridge:
             if msg["body"]["resource"] == "/api/bridge/v1/current_bridge/bridge":
                 reactor.callInThread(self.updateConfig, msg)
             else:
-                logging.info('%s Unrecognised message received from server: %s', ModuleName, msg)
+                logging.info('%s Unrecognised message received from server', ModuleName)
         else:
             logging.info('%s Unrecognised message received from server: %s', ModuleName, msg)
             self.sendStatusMsg("Unrecognised message received from controller")
