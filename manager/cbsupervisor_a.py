@@ -217,8 +217,8 @@ class Supervisor:
             for attempt in range (2):
                 try:
                     # sakis3g requires --sudo despite being run by root. Config from /etc/sakis3g.conf
-                    #s = check_output(["/usr/bin/modem3g/sakis3g", "--sudo", "reconnect", "--debug"])
-                    s = check_output(["/usr/bin/modem3g/sakis3g", "--sudo", "reconnect"])
+                    #s = check_output(["/usr/bin/sakis3g", "--sudo", "reconnect", "--debug"])
+                    s = check_output(["/usr/bin/sakis3g", "--sudo", "reconnect"])
                     logging.debug("%s startModem, attempt %s. s: %s", ModuleName, str(attempt), s)
                     if "connected" in s.lower() or "reconnected" in s.lower():
                         logging.info("%s startModem succeeded using sakis3g: %s", ModuleName, s)
