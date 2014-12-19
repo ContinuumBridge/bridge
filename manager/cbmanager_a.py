@@ -976,16 +976,17 @@ class ManageBridge:
             elif command == "z-exclude":
                 self.zwaveExclude()
             else:
-                logging.warning('%s Unrecognised message received from server: %s', ModuleName, msg)
-                self.sendStatusMsg("Unrecognised command received from controller")
+                logging.warning('%s Unrecognised command message received from controller: %s', ModuleName, msg)
+                self.sendStatusMsg("Unrecognised command message received from controller")
         elif "resource" in msg["body"]:
             # Call in thread to prevent problems with blocking
             if msg["body"]["resource"] == "/api/bridge/v1/current_bridge/bridge":
                 reactor.callInThread(self.updateConfig, msg)
             else:
-                logging.info('%s Unrecognised message received from server', ModuleName)
+                logging.info('%s Unrecognised resource in message received from controller', ModuleName)
+                self.sendStatusMsg("Unrecognised resource in message received from controller")
         else:
-            logging.info('%s Unrecognised message received from server: %s', ModuleName, msg)
+            logging.info('%s Unrecognised message received from server', ModuleName)
             self.sendStatusMsg("Unrecognised message received from controller")
  
     def stopApps(self):
