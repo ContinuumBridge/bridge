@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# cbanager.py
+# cbanager_a.py
 # Copyright (C) ContinuumBridge Limited, 2013-14 - All Rights Reserved
 # Unauthorized copying of this file, via any medium is strictly prohibited
 # Proprietary and confidential
@@ -326,24 +326,35 @@ class ManageBridge:
             logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
             reactor.callFromThread(self.sendStatusMsg, "Error. Unable to load output from discovery.py")
         else:   
+            bleNames = ""
             if discOutput["status"] == "discovered":
                 if self.configured:
                     for d in discOutput["body"]:
                         addrFound = False
                         if d["protocol"] == "ble":
-                            for oldDev in self.devices:
-                                if oldDev["device"]["protocol"] == "btle" or oldDev["device"]["protocol"] == "ble": 
-                                    if d["address"] == oldDev["address"]:
-                                        addrFound = True
+                            if self.devices == []:
+                                bleNames += d["name"] + ", "
+                            else:
+                                for oldDev in self.devices:
+                                    if oldDev["device"]["protocol"] == "btle" or oldDev["device"]["protocol"] == "ble": 
+                                        if d["address"] == oldDev["address"]:
+                                            addrFound = True
+                                        else:
+                                            bleNames += d["name"] + ", "
                         if addrFound == False:
                             self.bleDiscoveredData.append(d)  
                 else:
                     for d in discOutput["body"]:
                         self.bleDiscoveredData.append(d)  
+                        bleNames += d["name"] + ", "
             else:
                 logging.warning('%s Error in ble discovery', ModuleName)
             logging.info('%s Discovered devices:', ModuleName)
             logging.info('%s %s', ModuleName, self.bleDiscoveredData)
+            if bleNames != "":
+                bleNames= bleNames[:-2]
+                logging.info('%s  BLE devices found: %s', ModuleName, bleNames)
+                reactor.callFromThread(self.sendStatusMsg, "BLE devices found: " + bleNames)
             reactor.callFromThread(self.onBLEDiscovered)
             self.discovered = True
             return
