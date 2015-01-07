@@ -223,12 +223,17 @@ class ZwaveCtrl():
             else:
                 URL = dataUrl + self.fromTime
             #logging.debug("%s URL: %s", ModuleName, URL)
-            resp, content = h.request(URL,
-                                     'POST',
-                                      headers={'Content-Type': 'application/json'})
-            if "value" in resp:
-                if resp["value"] != "200":
-                    logging.debug("%s non-200 response: %s", ModuleName, resp["value"])
+            try:
+                resp, content = h.request(URL,
+                                         'POST',
+                                          headers={'Content-Type': 'application/json'})
+            except Exception as ex:
+                logging.error('%s error in accessing z-way. URL: ', ModuleName, URL)
+                logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
+            else:
+                if "value" in resp:
+                    if resp["value"] != "200":
+                        logging.debug("%s non-200 response: %s", ModuleName, resp["value"])
             try:
                 dat = json.loads(content)
             except:
