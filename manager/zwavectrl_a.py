@@ -94,11 +94,12 @@ class ZwaveCtrl():
                "state": self.state}
         self.cbSendManagerMsg(msg)
 
-    def sendParameter(self, data, timeStamp, a, commandClass, instance):
+    def sendParameter(self, data, timeStamp, a, commandClass, instance, value):
         msg = {"id": "zwave",
                "content": "data",
                "commandClass": commandClass,
                "instance": instance,
+               "value": value,
                "data": data,
                "timeStamp": timeStamp}
         #logging.debug("%s sendParameter: %s %s", ModuleName, str(msg), a)
@@ -329,7 +330,7 @@ class ZwaveCtrl():
                         for g in self.getStrs:
                             if g["match"] in dat:
                                 #logging.debug("%s found: %s %s", ModuleName, g["address"], g["commandClass"])
-                                self.sendParameter(dat[g["match"]], time.time(), g["address"], g["commandClass"], g["instance"])
+                                self.sendParameter(dat[g["match"]], time.time(), g["address"], g["commandClass"], g["instance"], g["value"])
                 if posting:
                     posting = False
                 else:
@@ -392,11 +393,15 @@ class ZwaveCtrl():
                     ".commandClasses." + msg["commandClass"] + ".data"
                 if "value" in msg:
                     g += "." + msg["value"]
+                    value = msg["value"]
+                else: 
+                    value = ""
                 if "name" in msg:
                     g += "." + msg["name"]
                 getStr = {"address": msg["id"],
                           "match": g, 
                           "commandClass": msg["commandClass"],
+                          "value": value,
                           "instance": msg["instance"]
                          }
                 logging.debug("%s New getStr: %s", ModuleName, str(getStr))
