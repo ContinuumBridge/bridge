@@ -38,7 +38,7 @@ startIncludeUrl      = baseUrl + "/ZWaveAPI/Run/controller.AddNodeToNetwork(1)"
 stopIncludeUrl       = baseUrl + "/ZWaveAPI/Run/controller.AddNodeToNetwork(0)"
 startExcludeUrl      = baseUrl + "/ZWaveAPI/Run/controller.RemoveNodeFromNetwork(1)"
 stopExcludeUrl       = baseUrl + "/ZWaveAPI/Run/controller.RemoveNodeFromNetwork(0)"
-postUrl              = baseUrl + "ZwaveAPI/Run/devices["
+postUrl              = baseUrl + "ZWaveAPI/Run/devices["
 getURL               = baseUrl + "Run/devices[DDD].instances[III].commandClasses[CCC].Get()"
  
 class ZwaveCtrl():
@@ -238,7 +238,7 @@ class ZwaveCtrl():
             try:
                 dat = json.loads(content)
             except:
-                logging.debug("%s Could not load JSON in response: %s", ModuleName, str(content))
+                logging.warning("%s Could not load JSON in response, content: %s, URL: %s", ModuleName, str(content), URL)
             else:
                 if dat:
                     if "updateTime" in dat:
