@@ -210,9 +210,23 @@ class Supervisor:
         try:
             s = check_output(["dhclient", "eth1"])
             logging.debug("%s startModem, dhclient eth1: %s", ModuleName, s)
+            self.connecting = False
         except Exception as ex:
-            logging.warning("%s startModem dhclient failed", ModuleName)
+            logging.info("%s startModem dhclient failed on eth1, using sakis3g", ModuleName)
             logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
+            for attempt in range (2):
+                try:
+                    # sakis3g requires --sudo despite being run by root. Config from /etc/sakis3g.conf
+                    #s = check_output(["/usr/bin/sakis3g", "--sudo", "reconnect", "--debug"])
+                    s = check_output(["/usr/bin/sakis3g", "--sudo", "reconnect"])
+                    logging.debug("%s startModem, attempt %s. s: %s", ModuleName, str(attempt), s)
+                    if "connected" in s.lower() or "reconnected" in s.lower():
+                        logging.info("%s startModem succeeded using sakis3g: %s", ModuleName, s)
+                        self.connecting = False
+                        break
+                except Exception as ex:
+                    logging.warning("%s startModem sakis3g failed", ModuleName)
+                    logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
         try:
             # This is zwave.me
             ip_to_block = "46.20.244.72"

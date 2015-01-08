@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# cbanager.py
+# cbanager_a.py
 # Copyright (C) ContinuumBridge Limited, 2013-14 - All Rights Reserved
 # Unauthorized copying of this file, via any medium is strictly prohibited
 # Proprietary and confidential
@@ -326,24 +326,35 @@ class ManageBridge:
             logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
             reactor.callFromThread(self.sendStatusMsg, "Error. Unable to load output from discovery.py")
         else:   
+            bleNames = ""
             if discOutput["status"] == "discovered":
                 if self.configured:
                     for d in discOutput["body"]:
                         addrFound = False
                         if d["protocol"] == "ble":
-                            for oldDev in self.devices:
-                                if oldDev["device"]["protocol"] == "btle" or oldDev["device"]["protocol"] == "ble": 
-                                    if d["address"] == oldDev["address"]:
-                                        addrFound = True
+                            if self.devices == []:
+                                bleNames += d["name"] + ", "
+                            else:
+                                for oldDev in self.devices:
+                                    if oldDev["device"]["protocol"] == "btle" or oldDev["device"]["protocol"] == "ble": 
+                                        if d["address"] == oldDev["address"]:
+                                            addrFound = True
+                                        else:
+                                            bleNames += d["name"] + ", "
                         if addrFound == False:
                             self.bleDiscoveredData.append(d)  
                 else:
                     for d in discOutput["body"]:
                         self.bleDiscoveredData.append(d)  
+                        bleNames += d["name"] + ", "
             else:
                 logging.warning('%s Error in ble discovery', ModuleName)
             logging.info('%s Discovered devices:', ModuleName)
             logging.info('%s %s', ModuleName, self.bleDiscoveredData)
+            if bleNames != "":
+                bleNames= bleNames[:-2]
+                logging.info('%s  BLE devices found: %s', ModuleName, bleNames)
+                reactor.callFromThread(self.sendStatusMsg, "BLE devices found: " + bleNames)
             reactor.callFromThread(self.onBLEDiscovered)
             self.discovered = True
             return
@@ -809,7 +820,7 @@ class ManageBridge:
                 status = "Could not upload log file: " + logFile
         reactor.callFromThread(self.sendStatusMsg, status)
 
-    def sendLog(self, logFile):
+    def sendLog(self, path, fileName):
         status = "Logfile upload failed"
         access_token = os.getenv('CB_DROPBOX_TOKEN', 'NO_TOKEN')
         logging.info('%s Dropbox access token %s', ModuleName, access_token)
@@ -827,9 +838,9 @@ class ManageBridge:
                 hostname = hostFile.read()
             if hostname.endswith('\n'):
                 hostname = hostname[:-1]
-            dropboxPlace = '/' + hostname +'.log'
-            logging.info('%s Uploading %s to %s', ModuleName, logFile, dropboxPlace)
-            reactor.callInThread(self.uploadLog, logFile, dropboxPlace, status)
+            dropboxPlace = '/' + hostname + '-' + fileName
+            logging.info('%s Uploading %s to %s', ModuleName, path, dropboxPlace)
+            reactor.callInThread(self.uploadLog, path, dropboxPlace, status)
 
     def doCall(self, cmd):
         try:
@@ -949,7 +960,7 @@ class ManageBridge:
                 reactor.callLater(APP_STOP_DELAY, self.killAppProcs)
                 reactor.callLater(APP_STOP_DELAY + MIN_DELAY, self.waitToUpgrade)
             elif command == "sendlog" or command == "send_log":
-                self.sendLog(CB_CONFIG_DIR + '/bridge.log')
+                self.sendLog(CB_CONFIG_DIR + '/bridge.log', 'bridge.log')
             elif command == "battery":
                 self.sendBatteryLevels()
             elif command.startswith("call"):
@@ -957,7 +968,9 @@ class ManageBridge:
                 reactor.callInThread(self.doCall, command[5:])
             elif command.startswith("upload"):
                 # Need to call in thread is case it hangs
-                reactor.callInThread(self.sendLog, command[7:])
+                path = command[7:]
+                fileName = path.split('/')[-1]
+                reactor.callInThread(self.sendLog, path, fileName)
             elif command == "update_config" or command == "update":
                 req = {"cmd": "msg",
                        "msg": {"source": self.bridge_id,
@@ -1003,8 +1016,12 @@ class ManageBridge:
             # Stop listing on sockets
             mgrSocs = self.listMgrSocs()
             for a in mgrSocs:
-               logging.debug('%s Stop listening on %s', ModuleName, a)
-               self.appListen[a].stopListening()
+                try:
+                    logging.debug('%s Stop listening on %s', ModuleName, a)
+                    self.appListen[a].stopListening()
+                except Exception as ex:
+                    logging.debug('%s Unable to stop listening on: %s', ModuleName, a)
+                    logging.debug("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
             # In case apps & adaptors have not shut down, kill their processes.
             for p in self.appProcs:
                 try:

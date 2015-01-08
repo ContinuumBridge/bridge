@@ -38,7 +38,7 @@ startIncludeUrl      = baseUrl + "/ZWaveAPI/Run/controller.AddNodeToNetwork(1)"
 stopIncludeUrl       = baseUrl + "/ZWaveAPI/Run/controller.AddNodeToNetwork(0)"
 startExcludeUrl      = baseUrl + "/ZWaveAPI/Run/controller.RemoveNodeFromNetwork(1)"
 stopExcludeUrl       = baseUrl + "/ZWaveAPI/Run/controller.RemoveNodeFromNetwork(0)"
-postUrl              = baseUrl + "ZwaveAPI/Run/devices["
+postUrl              = baseUrl + "ZWaveAPI/Run/devices["
 getURL               = baseUrl + "Run/devices[DDD].instances[III].commandClasses[CCC].Get()"
  
 class ZwaveCtrl():
@@ -94,11 +94,12 @@ class ZwaveCtrl():
                "state": self.state}
         self.cbSendManagerMsg(msg)
 
-    def sendParameter(self, data, timeStamp, a, commandClass, instance):
+    def sendParameter(self, data, timeStamp, a, commandClass, instance, value):
         msg = {"id": "zwave",
                "content": "data",
                "commandClass": commandClass,
                "instance": instance,
+               "value": value,
                "data": data,
                "timeStamp": timeStamp}
         #logging.debug("%s sendParameter: %s %s", ModuleName, str(msg), a)
@@ -223,16 +224,21 @@ class ZwaveCtrl():
             else:
                 URL = dataUrl + self.fromTime
             #logging.debug("%s URL: %s", ModuleName, URL)
-            resp, content = h.request(URL,
-                                     'POST',
-                                      headers={'Content-Type': 'application/json'})
-            if "value" in resp:
-                if resp["value"] != "200":
-                    logging.debug("%s non-200 response: %s", ModuleName, resp["value"])
+            try:
+                resp, content = h.request(URL,
+                                         'POST',
+                                          headers={'Content-Type': 'application/json'})
+            except Exception as ex:
+                logging.error('%s error in accessing z-way. URL: ', ModuleName, URL)
+                logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
+            else:
+                if "value" in resp:
+                    if resp["value"] != "200":
+                        logging.debug("%s non-200 response: %s", ModuleName, resp["value"])
             try:
                 dat = json.loads(content)
             except:
-                logging.debug("%s Could not load JSON in response: %s", ModuleName, str(content))
+                logging.warning("%s Could not load JSON in response, content: %s, URL: %s", ModuleName, str(content), URL)
             else:
                 if dat:
                     if "updateTime" in dat:
@@ -324,7 +330,7 @@ class ZwaveCtrl():
                         for g in self.getStrs:
                             if g["match"] in dat:
                                 #logging.debug("%s found: %s %s", ModuleName, g["address"], g["commandClass"])
-                                self.sendParameter(dat[g["match"]], time.time(), g["address"], g["commandClass"], g["instance"])
+                                self.sendParameter(dat[g["match"]], time.time(), g["address"], g["commandClass"], g["instance"], g["value"])
                 if posting:
                     posting = False
                 else:
@@ -387,11 +393,15 @@ class ZwaveCtrl():
                     ".commandClasses." + msg["commandClass"] + ".data"
                 if "value" in msg:
                     g += "." + msg["value"]
+                    value = msg["value"]
+                else: 
+                    value = ""
                 if "name" in msg:
                     g += "." + msg["name"]
                 getStr = {"address": msg["id"],
                           "match": g, 
                           "commandClass": msg["commandClass"],
+                          "value": value,
                           "instance": msg["instance"]
                          }
                 logging.debug("%s New getStr: %s", ModuleName, str(getStr))

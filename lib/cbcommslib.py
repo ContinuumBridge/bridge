@@ -214,7 +214,6 @@ class CbApp:
 
     def onConcMessage(self, message):
         """This should be overridden by the actual app."""
-        logging.warning("%s %s should subclass onConcMessage method", ModuleName, self.id)
 
     def onConfigureMessage(self, config):
         """The app should overwrite this and do all configuration in it."""
