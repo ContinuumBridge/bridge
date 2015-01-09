@@ -804,7 +804,7 @@ class ManageBridge:
             return
         bridgeDir = CB_HOME + "/bridge"
         bridgeSave = CB_HOME + "/bridge_save"
-        bridgeClone = "bridge_clone"
+        bridgeClone = CB_HOME + "/bridge_clone"
         logging.info('%s Upgrade files: %s %s %s', ModuleName, bridgeDir, bridgeSave, bridgeClone)
         try:
             subprocess.call(["rm", "-rf", bridgeSave])
@@ -816,7 +816,7 @@ class ManageBridge:
             logging.info('%s Moved bridgeDir to bridgeSave', ModuleName)
             subprocess.call(["mv", bridgeClone, bridgeDir])
             logging.info('%s Moved bridgeClone to bridgeDir', ModuleName)
-            reactor.callFromThread(self.sendStatusMsg, "Upgrade successful. Rebooting")
+            reactor.callFromThread(self.sendStatusMsg, "Upgrade successful. Restarting")
             reactor.callFromThread(self.cbSendSuperMsg, {"msg": "reboot"})
         except Exception as ex:
             logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
