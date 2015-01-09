@@ -50,7 +50,7 @@ class CbAdaptor:
     ModuleName = "CbAdaptor           " 
 
     def __init__(self, argv):
-        logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(message)s')
+        logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(levelname)s: %(message)s')
         self.doStop = False
         self.status = "ok"
         self.configured = False
@@ -113,6 +113,13 @@ class CbAdaptor:
                "status": self.status}
         self.sendManagerMessage(msg)
         reactor.callLater(SEND_STATUS_INTERVAL, self.sendStatus)
+
+    def cbLog(self, level, log):
+        msg = {"id": self.id,
+               "status": "log",
+               "level": level,
+               "body": log}
+        self.sendManagerMessage(msg)
 
     def cbConfigure(self, config):
         """Config is based on what apps are available."""
@@ -241,6 +248,13 @@ class CbApp:
         else:
             self.onAdaptorData(message)
  
+    def cbLog(self, level, log):
+        msg = {"id": self.id,
+               "status": "log",
+               "level": level,
+               "body": log}
+        self.sendManagerMessage(msg)
+
     def sendStatus(self):
         """ Send status to the manager at regular intervals as a heartbeat. """
         msg = {"id": self.id,
@@ -309,8 +323,8 @@ class CbApp:
         try:
             reactor.stop()
         except:
-            logging.warning("%s %s stopReactor when reactor not running", ModuleName, self.id)
-        logging.info("%s Bye from %s", ModuleName, self.id)
+            self.cbLog("warning", "stopReactor when reactor not running")
+        self.cbLog("debug", "Bye")
         sys.exit
 
     def sendMessage(self, msg, iName):

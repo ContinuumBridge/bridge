@@ -75,6 +75,7 @@ class ManageBridge:
         self.elListen = {}
         self.elProc = {}
         self.batteryLevels = []
+        self.idToName = {}
         self.bluetooth = False
 
         status = self.readConfig()
@@ -602,6 +603,8 @@ class ManageBridge:
                     d["adaptor"]["zwave_socket"] =  CB_SOCKET_DIR + "skt-" + d["id"] + "-zwave"
                 # Add a apps list to each device adaptor
                 d["adaptor"]["apps"] = []
+                if d["id"] not in self.idToName:
+                    self.idToName.update({d["id"]: d["friendly_name"]})
             # Add socket descriptors to apps and devices
             for a in self.apps:
                 a["app"]["id"] = "AID" + str(a["app"]["id"])
@@ -616,6 +619,8 @@ class ManageBridge:
                 logging.debug('%s exe: %s', ModuleName, a["app"]["exe"])
                 a["app"]["mgrSoc"] = CB_SOCKET_DIR + "SKT-MGR-" + str(a["app"]["id"])
                 a["app"]["concSoc"] = CB_SOCKET_DIR + "SKT-CONC-" + str(a["app"]["id"])
+                if a["app"]["id"] not in self.idToName:
+                    self.idToName.update({a["app"]["id"]: a["app"]["name"]})
                 for appDev in a["device_permissions"]:
                     uri = appDev["device_install"]
                     for d in self.devices: 
@@ -1159,12 +1164,25 @@ class ManageBridge:
                     logging.warning("%s Exception: %s %s", ModuleName, type(inst), str(inst.args))
 
     def onLogMessage(self, msg):
+        if "level" in msg:
+            level = msg["level"]
+        else:
+            level = "unknown"
         if "body" in msg:
             logMsg = msg["body"]
         else:
-            "No log message provided" 
-        logging.warning('%s %s', ModuleName, logMsg)
-        self.sendStatusMsg(logMsg)
+            logMsg = "No log message provided" 
+        name = self.idToName[msg["id"]]
+        if level == "error":
+            logging.error("%s %s", name, logMsg)
+        elif level == "warning":
+            logging.warning("%s %s", name, logMsg)
+        elif level == "info":
+            logging.info("%s %s", name, logMsg)
+        elif level == "debug":
+            logging.debug("%s %s", name, logMsg)
+        else:
+            logging.debug("Unknown logging level: %s %s", name, logMsg)
 
     def notifyApps(self, connected):
         for a in self.appConfigured:
