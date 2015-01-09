@@ -784,43 +784,43 @@ class ManageBridge:
                 urllib.urlretrieve(CB_UPGRADE_URL, tarFile)
         except Exception as ex:
             logging.error('%s Cannot access GitHub file to upgrade', ModuleName)
+            logging.error("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
+            reactor.callFromThread(self.sendStatusMsg, "Cannot access GitHub file to upgrade")
+            return
+        try:
+            subprocess.check_call(["tar", "xfz",  tarFile, "--overwrite", "-C", CB_HOME])
+            logging.info('%s Extract tarFile: %s', ModuleName, tarFile)
+        except Exception as ex:
+            logging.error('%s Unable to extract tarFile %s', ModuleName, tarFile)
+            logging.error("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
+            reactor.callFromThread(self.sendStatusMsg, "Failed to upgrade. Reverting to previous version")
+            return
+        try:
+            status = subprocess.check_output("../../bridge_clone/manager/cbupgrade.py")
+        except Exception as ex:
+            logging.error('%s Unable to run upgrade script', ModuleName)
+            logging.error("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
+            reactor.callFromThread(self.sendStatusMsg, "Failed to upgrade. Reverting to previous version")
+            return
+        bridgeDir = CB_HOME + "/bridge"
+        bridgeSave = CB_HOME + "/bridge_save"
+        bridgeClone = "bridge_clone"
+        logging.info('%s Upgrade files: %s %s %s', ModuleName, bridgeDir, bridgeSave, bridgeClone)
+        try:
+            subprocess.call(["rm", "-rf", bridgeSave])
+        except Exception as ex:
+            logging.warning('%s Could not remove bridgeSave', ModuleName)
             logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
-            upgradeStat = "Cannot access GitHub file to upgrade"
-        else:
-            subprocess.call(["tar", "xfz", tarFile])
-            logging.warning('%s Extract tarFile: %s', ModuleName, tarFile)
-            if True:
-                logging.info('%s Extracted upgrade tar', ModuleName)
-                try:
-                    status = subprocess.check_output("../../bridge_clone/manager/cbupgrade.py")
-                except Exception as ex:
-                    upgradeStat = "Error in upgrade. Could not run upgrade script"
-                    logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
-                if upgradeStat != "" or status != 0:
-                    logging.warning('%s upgrade failed. Reverting to previous version ', ModuleName)
-                    reactor.callFromThread(self.sendStatusMsg, "Upgrade failed. Reverting to previous version")
-                else:
-                    bridgeDir = CB_HOME + "/bridge"
-                    bridgeSave = CB_HOME + "/bridge_save"
-                    bridgeClone = "bridge_clone"
-                    logging.info('%s Upgrade files: %s %s %s', ModuleName, bridgeDir, bridgeSave, bridgeClone)
-                    try:
-                        subprocess.call(["rm", "-rf", bridgeSave])
-                    except Exception as ex:
-                        logging.warning('%s Could not remove bridgeSave', ModuleName)
-                        logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
-                        upgradeStat = "OK, but could not delete bridgeSave. Try manual reboot"
-                    try:
-                        subprocess.call(["mv", bridgeDir, bridgeSave])
-                        logging.info('%s Moved bridgeDir to bridgeSave', ModuleName)
-                        subprocess.call(["mv", bridgeClone, bridgeDir])
-                        logging.info('%s Moved bridgeClone to bridgeDir', ModuleName)
-                        upgradeStat = "Upgrade success. Rebooting"
-                        reactor.callFromThread(self.cbSendSuperMsg, {"msg": "reboot"})
-                    except Exception as ex:
-                        logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
-                        upgradeStat = "Failed. Problems moving directories"
-            reactor.callFromThread(self.sendStatusMsg, upgradeStat)
+        try:
+            subprocess.call(["mv", bridgeDir, bridgeSave])
+            logging.info('%s Moved bridgeDir to bridgeSave', ModuleName)
+            subprocess.call(["mv", bridgeClone, bridgeDir])
+            logging.info('%s Moved bridgeClone to bridgeDir', ModuleName)
+            reactor.callFromThread(self.sendStatusMsg, "Upgrade successful. Rebooting")
+            reactor.callFromThread(self.cbSendSuperMsg, {"msg": "reboot"})
+        except Exception as ex:
+            logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
+            reactor.callFromThread(self.sendStatusMsg, "Upgrade failed. Problems moving versions")
     
     def waitToUpgrade(self):
         # Call in threaad as it can take some time & watchdog still going
