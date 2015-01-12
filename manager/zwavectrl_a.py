@@ -40,16 +40,18 @@ startExcludeUrl      = baseUrl + "/ZWaveAPI/Run/controller.RemoveNodeFromNetwork
 stopExcludeUrl       = baseUrl + "/ZWaveAPI/Run/controller.RemoveNodeFromNetwork(0)"
 postUrl              = baseUrl + "ZWaveAPI/Run/devices["
 getURL               = baseUrl + "Run/devices[DDD].instances[III].commandClasses[CCC].Get()"
+resetUrl             = baseUrl + "/ZWaveAPI/Run/SerialAPISoftReset()"
  
 class ZwaveCtrl():
     def __init__(self, argv):
         procname.setprocname('cbzwavectrl')
-        logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(message)s')
+        logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(levelname)s: %(message)s')
         self.status = "ok"
         self.state = "stopped"
         self.include = False
         self.exclude = False
         self.getting = False
+        self.resetBoard = False
         self.getStrs = []
         self.cbFactory = {}
         self.adaptors = [] 
@@ -216,6 +218,11 @@ class ZwaveCtrl():
                     else:
                         excludeTick += 1
                         time.sleep(INCLUDE_WAIT_TIME)
+            elif self.resetBoard:
+                URL = resetUrl
+                reactor.callFromThread(self.setState, "stopping")
+                self.resetBoard = False
+                logging.debug("%s Resetting RazBerry board", ModuleName)
             elif self.postToUrls:
                 posting = True
                 URL = self.postToUrls.pop() 
@@ -336,9 +343,9 @@ class ZwaveCtrl():
                 else:
                     time.sleep(MIN_DELAY)
 
-    def sendLogMessage(self):
+    def sendUserMessage(self):
         msg = {"id": self.id,
-                "status": "log",
+                "status": "user_message",
                 "body": self.endMessage
                }
         self.cbSendManagerMsg(msg)
@@ -351,7 +358,7 @@ class ZwaveCtrl():
             }
         logging.debug("%s sendDiscoveredResults: %s", ModuleName, d)
         self.cbSendManagerMsg(d)
-        reactor.callLater(1.0, self.sendLogMessage)
+        reactor.callLater(1.0, self.sendUserMessage)
         del self.found[:]
 
     def discover(self):
@@ -436,7 +443,7 @@ class ZwaveCtrl():
         sys.exit
 
     def onManagerMessage(self, cmd):
-        #logging.debug("%s Received from manager: %s", ModuleName, cmd)
+        logging.debug("%s Received from manager: %s", ModuleName, cmd)
         if cmd["cmd"] == "discover":
             self.discover()
             msg = {"id": self.id,
@@ -448,8 +455,9 @@ class ZwaveCtrl():
         elif cmd["cmd"] == "stop":
             msg = {"id": self.id,
                    "status": "stopping"}
-            self.setState("stopping")
-            reactor.callLater(1.5, self.doStop)
+            # Reset Razberry board before stopping
+            self.resetBoard = True
+            reactor.callLater(2.5, self.doStop)
         elif cmd["cmd"] == "config":
             self.processConfig(cmd["config"])
             msg = {"id": self.id,

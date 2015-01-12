@@ -647,6 +647,7 @@ class ManageBridge:
             #logging.info('%s Devices:', ModuleName)
             #logging.info('%s %s', ModuleName, str(self.devices))
             #logging.info('%s', ModuleName)
+            logging.debug("%s idToName: %s", ModuleName, str(self.idToName))
             self.configured = True
         return success
 
@@ -1163,6 +1164,14 @@ class ManageBridge:
                     logging.warning("%s pollElement. Could not send message to: %s", ModuleName, e)
                     logging.warning("%s Exception: %s %s", ModuleName, type(inst), str(inst.args))
 
+    def onUserMessage(self, msg):
+        if "body" in msg:
+            userMsg = msg["body"]
+        else:
+            userMsg = "No log message provided" 
+            logging.warning('%s %s', ModuleName, userMsg)
+        self.sendStatusMsg(userMsg)
+
     def onLogMessage(self, msg):
         if "level" in msg:
             level = msg["level"]
@@ -1289,6 +1298,8 @@ class ManageBridge:
                 self.cbSendMsg(response, msg["id"])
         elif msg["status"] == "log":
             self.onLogMessage(msg)
+        elif msg["status"] == "user_message":
+            self.onUserMessage(msg)
         elif msg["status"] == "discovered":
             if msg["id"] == "zwave":
                 self.onZwaveDiscovered(msg)
