@@ -802,7 +802,7 @@ class ManageBridge:
             reactor.callFromThread(self.sendStatusMsg, "Failed to upgrade. Reverting to previous version")
             return
         try:
-            status = subprocess.check_output("../../bridge_clone/manager/cbupgrade.py")
+            status = subprocess.check_output("../../bridge_clone/scripts/cbupgrade.py")
         except Exception as ex:
             logging.error('%s Unable to run upgrade script', ModuleName)
             logging.error("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
