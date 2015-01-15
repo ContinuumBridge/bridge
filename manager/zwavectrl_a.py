@@ -391,6 +391,7 @@ class ZwaveCtrl():
                 getStr = {"address": msg["id"],
                           "match": g, 
                           "commandClass": msg["commandClass"],
+                          "value": "",
                           "instance": msg["instance"]
                          }
                 logging.debug("%s New getStr (check): %s", ModuleName, str(getStr))
