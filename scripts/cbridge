@@ -20,11 +20,11 @@ PIDFILE=/var/run/$NAME.pid
 # Carry out specific functions when asked to by the system
 case "$1" in
   start)
-	echo -n "Starting cbridge: "
+        echo -n "Starting cbridge: "
         cd $BRIDGEPATH'/bridge/manager'
         if [ -f $THISBRIDGE ]; then
             # Must source so that exports affect the parent script
-            source $THISBRIDGE
+            . /opt/cbridge/thisbridge/thisbridge.sh
             export PYTHONPATH=$BRIDGEPATH'/bridge/lib'
             ./cbsupervisor.py >> $BRIDGEPATH'/thisbridge/shell.log' 2>&1 &
             cb_pid=$!

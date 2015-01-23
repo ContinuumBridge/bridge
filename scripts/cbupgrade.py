@@ -18,6 +18,7 @@ CB_LOGFILE = "../../thisbridge/bridge.log"
 logging.basicConfig(filename=CB_LOGFILE,level=logging.DEBUG,format='%(asctime)s %(levelname)s: %(message)s')
 try:
     subprocess.call(["cp", "../scripts/cb", "/usr/bin/cb"])
+    subprocess.call(["cp", "../scripts/cbridge", "/etc/init.d/cbridge"])
     logging.info("%s Upgrade script run successfully", ModuleName)
     exit(0)
 except Exception as ex:
