@@ -22,11 +22,10 @@ WATCHDOG_INTERVAL = 30            # Time between manager checks (secs)
 MIN_TIME_BETWEEN_REBOOTS = 3600   # Stops constant rebooting (secs)
 REBOOT_WAIT = 10                  # Time to allow bridge to stop before rebooting
 RESTART_INTERVAL = 10             # Time between telling manager to stop and starting it again
-MAX_INTERFACE_CHECKS = 10         # No times to check interface before rebooting
 EXIT_WAIT = 2                     # On SIGINT, time to wait before exit after manager signalled to stop
 SAFETY_INTERVAL = 300             # Delay before rebooting if manager failed to start
 CHECK_INTERFACE_DELAY = 300       # Time bewteen connection checks if not connected to Internet
-MONITOR_MODEM_INTERVAL = 3600     # How often to record modem information
+NTP_UPDATE_INTERVAL = 12*3600     # How often to run ntpd to sync time
 
 import sys
 import signal
@@ -47,7 +46,7 @@ from cbconfig import *
 class Supervisor:
     def __init__(self):
         procname.setprocname('cbsupervisor')
-        logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(message)s')
+        logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(levelname)s: %(message)s')
         logging.info("%s ************************************************************", ModuleName)
         logging.info("%s Restart", ModuleName)
         logging.info("%s ************************************************************", ModuleName)
@@ -89,6 +88,7 @@ class Supervisor:
         reactor.run()
 
     def startManager(self, restart):
+        self.manageNTP()
         # Try to remove all sockets, just in case
         for f in glob.glob(CB_SOCKET_DIR + "skt-*"):
             os.remove(f)
@@ -111,7 +111,7 @@ class Supervisor:
             reactor.callLater(MANAGER_START_TIME, self.setStartingOff)
             if not CB_DEV_BRIDGE:
                 if not self.checkingManager:
-                    reactor.callLater(2*WATCHDOG_INTERVAL, self.checkManager, time.time())
+                    reactor.callLater(3*WATCHDOG_INTERVAL, self.checkManager, time.time())
                     checkingManager = True
         except:
             logging.error("%s Bridge manager failed to start: %s", ModuleName, exe)
@@ -137,7 +137,7 @@ class Supervisor:
             reactor.callFromThread(self.doReboot)
         elif msg["msg"] == "status":
             if msg["status"] == "disconnected":
-                logging.info("%s onManagerMessage. status = %s, disconnected = %s", ModuleName, msg["status"], self.disconnected)
+                logging.info("%s onManagerMessage. status: %s, disconnected:  %s, self.connecting: %s", ModuleName, msg["status"], self.disconnected, self.connecting)
                 if not self.connecting or not self.disconnected:
                     self.connecting = True
                     self.disconnected = True
@@ -209,8 +209,8 @@ class Supervisor:
             logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
         try:
             s = check_output(["dhclient", "eth1"])
-            logging.debug("%s startModem, dhclient eth1: %s", ModuleName, s)
             self.connecting = False
+            logging.debug("%s startModem, dhclient eth1: %s, self.connecting: %s", ModuleName, s, self.connecting)
         except Exception as ex:
             logging.info("%s startModem dhclient failed on eth1, using sakis3g", ModuleName)
             logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
@@ -221,8 +221,8 @@ class Supervisor:
                     s = check_output(["/usr/bin/sakis3g", "--sudo", "reconnect"])
                     logging.debug("%s startModem, attempt %s. s: %s", ModuleName, str(attempt), s)
                     if "connected" in s.lower() or "reconnected" in s.lower():
-                        logging.info("%s startModem succeeded using sakis3g: %s", ModuleName, s)
                         self.connecting = False
+                        logging.info("%s startModem succeeded using sakis3g: %s, self.connecting: %s", ModuleName, s, self.connecting)
                         break
                 except Exception as ex:
                     logging.warning("%s startModem sakis3g failed", ModuleName)
@@ -242,7 +242,7 @@ class Supervisor:
             logging.info("%s checkModem. Not connected for a very long time. Rebooting.", ModuleName)
             reactor.callFromThread(self.doReboot)
         else:
-            reactor.callLater(CHECK_INTERFACE_DELAY, self.restartModem) 
+            reactor.callLater(CHECK_INTERFACE_DELAY, self.startModem) 
 
     def startModem(self):
         reactor.callInThread(self.startModemThread)
@@ -262,11 +262,12 @@ class Supervisor:
             d.addCallback(self.checkConnected)
         else:
             self.connecting = False
+            logging.info("%s onInterfaceChecked, self.connecting: %s", ModuleName, self.connecting)
 
     def checkConnected(self, connected):
         # At this point reset self.connecting regardless & let recheckInterface process take over
-        logging.info("%s checkConnected, connected: %s", ModuleName, connected)
         self.connecting = False
+        logging.info("%s checkConnected, connected: %s, self.connecting: %s", ModuleName, connected, self.connecting)
 
     def recheckInterface(self):
         # Callled when manger is disconnected from the server
@@ -308,6 +309,22 @@ class Supervisor:
         #self.mgrPort.stopListening()
         reactor.callLater(REBOOT_WAIT, self.reboot)
 
+    def manageNTP(self):
+        if not self.connecting:
+            logging.info("%s Calling ntpd to update time", ModuleName)
+            reactor.callInThread(self.manageNTPThread)
+            reactor.callLater(NTP_UPDATE_INTERVAL, self.manageNTP)
+        else:
+            reactor.callLater(15, self.manageNTP)
+
+    def manageNTPThread(self):
+        try:
+            s = check_output(["sudo", "/usr/sbin/ntpd", "-p", "/var/run/ntpd.pid", "-g", "-q"])
+            logging.info("%s NTP time updated %s", ModuleName, str(s))
+        except Exception as ex:
+            logging.warning("%s Cannot run NTP", ModuleName)
+            logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
+        
     def reboot(self):
         logging.info("%s Rebooting", ModuleName)
         try:
