@@ -117,10 +117,6 @@ class ZwaveCtrl():
             self.setState("inUse")
 
     def zway(self):
-        includeState = "notIncluding"
-        excludeState = "notExcluding"
-        found = []
-        h = httplib2.Http()
         """ Include works as follow:
             Send the include URL. includeState = "waitInclude".
             Wait for the wait time. includeState = "waitInclude".
@@ -132,8 +128,13 @@ class ZwaveCtrl():
             includeTick keeps tract of time in increments of INCLUDE_WAIT_TIME.
             Don't change the "from" time when getting data until all data has been retrieved.
         """
+        includeState = "notIncluding"
+        excludeState = "notExcluding"
+        found = []
+        h = httplib2.Http()
         posting = False
-        while self.state != "stopping":
+        error_count = 0
+        while self.state != "stopping" and error_count < 4:
             if self.include:
                 if includeState == "notIncluding":
                     foundDevice = False
@@ -236,9 +237,11 @@ class ZwaveCtrl():
                                          'POST',
                                           headers={'Content-Type': 'application/json'})
             except Exception as ex:
-                logging.error('%s error in accessing z-way. URL: %s', ModuleName, URL)
+                error_count += 1
+                logging.error('%s error in accessing z-way. URL: %s, error_count: %s', ModuleName, URL, str(error_count))
                 logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
             else:
+                error_count = 0
                 if "value" in resp:
                     if resp["value"] != "200":
                         logging.debug("%s non-200 response: %s", ModuleName, resp["value"])
@@ -338,10 +341,10 @@ class ZwaveCtrl():
                             if g["match"] in dat:
                                 #logging.debug("%s found: %s %s", ModuleName, g["address"], g["commandClass"])
                                 self.sendParameter(dat[g["match"]], time.time(), g["address"], g["commandClass"], g["instance"], g["value"])
-                if posting:
-                    posting = False
-                else:
-                    time.sleep(MIN_DELAY)
+            if posting:
+                posting = False
+            else:
+                time.sleep(MIN_DELAY)
 
     def sendUserMessage(self):
         msg = {"id": self.id,
