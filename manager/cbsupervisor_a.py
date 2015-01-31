@@ -214,6 +214,28 @@ class Supervisor:
         except Exception as ex:
             logging.info("%s startModem dhclient failed on eth1, using sakis3g", ModuleName)
             logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
+            usbAddr = ""
+            lsusb = check_output(["lsusb"]).split()
+            #logging.debug("%s StartModem, lsusb: %s", ModuleName, str(lsusb))
+            for l in lsusb:
+                if l[:4] == "12d1":
+                    usbAddr = l[5:]
+                    break
+            if usbAddr != "":
+                sakis3gConf = "/etc/sakis3g.conf"
+                i = open(sakis3gConf, 'r')
+                o = open("sakis3g.tmp", 'w') 
+                found = False
+                replaced = False
+                for line in i:
+                    logging.debug("%s startModem. line in:  %s", ModuleName, line)
+                    if "USBMODEM" in line:
+                        line = "USBMODEM=\"12d1:" + usbAddr + "\"\n"
+                        logging.debug("%s startModem. Modem: %s", ModuleName, line)
+                    o.write(line)
+                i.close()
+                o.close()
+                call(["mv", "sakis3g.tmp", sakis3gConf])
             for attempt in range (2):
                 try:
                     # sakis3g requires --sudo despite being run by root. Config from /etc/sakis3g.conf
