@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# cbanager.py
+# cbanager_a.py
 # Copyright (C) ContinuumBridge Limited, 2013-14 - All Rights Reserved
 # Unauthorized copying of this file, via any medium is strictly prohibited
 # Proprietary and confidential
@@ -50,7 +50,7 @@ class ManageBridge:
     def __init__(self):
         """ apps and adts data structures are stored in a local file.
         """
-        logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(message)s')
+        logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(levelname)s: %(message)s')
         logging.info("%s CB_NO_CLOUD = %s", ModuleName, CB_NO_CLOUD)
         procname.setprocname('captain')
         self.bridge_id = CB_BID
@@ -77,6 +77,8 @@ class ManageBridge:
         self.elListen = {}
         self.elProc = {}
         self.batteryLevels = []
+        self.idToName = {}
+        self.bluetooth = False
 
         status = self.readConfig()
         logging.info('%s Read config status: %s', ModuleName, status)
@@ -109,6 +111,18 @@ class ManageBridge:
         reactor.callLater(START_DELAY + 5, self.startElements)
         reactor.run()
 
+    def checkBluetooth(self):
+        lsusb = subprocess.check_output(["lsusb"])
+        if "Bluetooth" in lsusb:
+            self.bluetooth = True
+            self.resetBluetooth
+            logging.info("%s Bluetooth dongle detected", ModuleName)
+            reactor.callFromThread(self.sendStatusMsg, "Note: Bluetooth is enabled")
+        else:
+            self.bluetooth = False
+            logging.info("%s No Bluetooth dongle detected", ModuleName)
+            reactor.callFromThread(self.sendStatusMsg, "Note: No Bluetooth interface found")
+
     def resetBluetooth(self):
         # Called in a thread
         logging.debug("%s resetBluetooth", ModuleName)
@@ -137,7 +151,7 @@ class ManageBridge:
         return mgrSocs
 
     def startElements(self):
-        reactor.callInThread(self.resetBluetooth)
+        reactor.callInThread(self.checkBluetooth)
         if self.configured:
             self.removeSecondarySockets()
         els = [{"id": "conc",
@@ -330,24 +344,35 @@ class ManageBridge:
             logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
             reactor.callFromThread(self.sendStatusMsg, "Error. Unable to load output from discovery.py")
         else:   
+            bleNames = ""
             if discOutput["status"] == "discovered":
                 if self.configured:
                     for d in discOutput["body"]:
                         addrFound = False
                         if d["protocol"] == "ble":
-                            for oldDev in self.devices:
-                                if oldDev["device"]["protocol"] == "btle" or oldDev["device"]["protocol"] == "ble": 
-                                    if d["address"] == oldDev["address"]:
-                                        addrFound = True
+                            if self.devices == []:
+                                bleNames += d["name"] + ", "
+                            else:
+                                for oldDev in self.devices:
+                                    if oldDev["device"]["protocol"] == "btle" or oldDev["device"]["protocol"] == "ble": 
+                                        if d["address"] == oldDev["address"]:
+                                            addrFound = True
+                                        else:
+                                            bleNames += d["name"] + ", "
                         if addrFound == False:
                             self.bleDiscoveredData.append(d)  
                 else:
                     for d in discOutput["body"]:
                         self.bleDiscoveredData.append(d)  
+                        bleNames += d["name"] + ", "
             else:
                 logging.warning('%s Error in ble discovery', ModuleName)
             logging.info('%s Discovered devices:', ModuleName)
             logging.info('%s %s', ModuleName, self.bleDiscoveredData)
+            if bleNames != "":
+                bleNames= bleNames[:-2]
+                logging.info('%s  BLE devices found: %s', ModuleName, bleNames)
+                reactor.callFromThread(self.sendStatusMsg, "BLE devices found: " + bleNames)
             reactor.callFromThread(self.onBLEDiscovered)
             self.discovered = True
             return
@@ -489,7 +514,8 @@ class ManageBridge:
             if CB_ZWAVE_BRIDGE:
                 self.elFactory["zwave"].sendMsg({"cmd": "discover"})
                 self.zwaveDiscovering = False
-            reactor.callInThread(self.bleDiscover)
+            if self.bluetooth:
+                reactor.callInThread(self.bleDiscover)
             reactor.callInThread(self.usbDiscover)
             self.sendStatusMsg("Follow manufacturer's instructions for device to be connected now.")
 
@@ -580,6 +606,8 @@ class ManageBridge:
                     d["adaptor"]["zwave_socket"] =  CB_SOCKET_DIR + "skt-" + d["id"] + "-zwave"
                 # Add a apps list to each device adaptor
                 d["adaptor"]["apps"] = []
+                if d["id"] not in self.idToName:
+                    self.idToName.update({d["id"]: d["friendly_name"]})
             # Add socket descriptors to apps and devices
             for a in self.apps:
                 a["app"]["id"] = "AID" + str(a["app"]["id"])
@@ -594,6 +622,8 @@ class ManageBridge:
                 logging.debug('%s exe: %s', ModuleName, a["app"]["exe"])
                 a["app"]["mgrSoc"] = CB_SOCKET_DIR + "SKT-MGR-" + str(a["app"]["id"])
                 a["app"]["concSoc"] = CB_SOCKET_DIR + "SKT-CONC-" + str(a["app"]["id"])
+                if a["app"]["id"] not in self.idToName:
+                    self.idToName.update({a["app"]["id"]: a["app"]["name"]})
                 for appDev in a["device_permissions"]:
                     uri = appDev["device_install"]
                     for d in self.devices: 
@@ -620,6 +650,7 @@ class ManageBridge:
             #logging.info('%s Devices:', ModuleName)
             #logging.info('%s %s', ModuleName, str(self.devices))
             #logging.info('%s', ModuleName)
+            logging.debug("%s idToName: %s", ModuleName, str(self.idToName))
             self.configured = True
         return success
 
@@ -753,8 +784,7 @@ class ManageBridge:
     def upgradeBridge(self):
         reactor.callFromThread(self.sendStatusMsg, "Upgrade in progress. Please wait")
         upgradeStat = ""
-        okToReboot = False
-        tarFile = CB_HOME + "/bridge_clone.tgz"
+        tarFile = CB_HOME + "/bridge_clone.tar.gz"
         logging.debug('%s tarFile: %s', ModuleName, tarFile)
         try:
             if CB_DEV_UPGRADE:
@@ -763,36 +793,44 @@ class ManageBridge:
                 urllib.urlretrieve(CB_UPGRADE_URL, tarFile)
         except Exception as ex:
             logging.error('%s Cannot access GitHub file to upgrade', ModuleName)
+            logging.error("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
+            reactor.callFromThread(self.sendStatusMsg, "Cannot access GitHub file to upgrade")
+            return
+        try:
+            subprocess.check_call(["tar", "xfz",  tarFile, "--overwrite", "-C", CB_HOME])
+            logging.info('%s Extract tarFile: %s', ModuleName, tarFile)
+        except Exception as ex:
+            logging.error('%s Unable to extract tarFile %s', ModuleName, tarFile)
+            logging.error("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
+            reactor.callFromThread(self.sendStatusMsg, "Failed to upgrade. Reverting to previous version")
+            return
+        try:
+            status = subprocess.check_output("../../bridge_clone/scripts/cbupgrade.py")
+        except Exception as ex:
+            logging.error('%s Unable to run upgrade script', ModuleName)
+            logging.error("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
+            reactor.callFromThread(self.sendStatusMsg, "Failed to upgrade. Reverting to previous version")
+            return
+        bridgeDir = CB_HOME + "/bridge"
+        bridgeSave = CB_HOME + "/bridge_save"
+        bridgeClone = CB_HOME + "/bridge_clone"
+        logging.info('%s Upgrade files: %s %s %s', ModuleName, bridgeDir, bridgeSave, bridgeClone)
+        try:
+            subprocess.call(["rm", "-rf", bridgeSave])
+        except Exception as ex:
+            logging.warning('%s Could not remove bridgeSave', ModuleName)
             logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
-            upgradeStat = "Cannot access GitHub file to upgrade"
-        else:
-            subprocess.call(["tar", "xfz", tarFile])
-            logging.info('%s Extracted upgrade tar', ModuleName)
-
-            bridgeDir = CB_HOME + "/bridge"
-            bridgeSave = CB_HOME + "/bridge_save"
-            bridgeClone = "bridge_clone"
-            logging.info('%s Files: %s %s %s', ModuleName, bridgeDir, bridgeSave, bridgeClone)
-            try:
-                subprocess.call(["rm", "-rf", bridgeSave])
-            except Exception as ex:
-                logging.warning('%s Could not remove bridgeSave', ModuleName)
-                logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
-                upgradeStat = "OK, but could not delete bridgeSave. Try manual reboot"
-            try:
-                subprocess.call(["mv", bridgeDir, bridgeSave])
-                logging.info('%s Moved bridggeDir to bridgeSave', ModuleName)
-                subprocess.call(["mv", bridgeClone, bridgeDir])
-                logging.info('%s Moved bridgeClone to bridgeDir', ModuleName)
-                upgradeStat = "Upgrade success. Rebooting"
-                okToReboot = True
-            except Exception as ex:
-                logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
-                upgradeStat = "Failed. Problems moving directories"
-        reactor.callFromThread(self.sendStatusMsg, upgradeStat)
-        if okToReboot:
+        try:
+            subprocess.call(["mv", bridgeDir, bridgeSave])
+            logging.info('%s Moved bridgeDir to bridgeSave', ModuleName)
+            subprocess.call(["mv", bridgeClone, bridgeDir])
+            logging.info('%s Moved bridgeClone to bridgeDir', ModuleName)
+            reactor.callFromThread(self.sendStatusMsg, "Upgrade successful. Restarting")
             reactor.callFromThread(self.cbSendSuperMsg, {"msg": "reboot"})
-
+        except Exception as ex:
+            logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
+            reactor.callFromThread(self.sendStatusMsg, "Upgrade failed. Problems moving versions")
+    
     def waitToUpgrade(self):
         # Call in threaad as it can take some time & watchdog still going
         reactor.callInThread(self.upgradeBridge)
@@ -812,7 +850,7 @@ class ManageBridge:
                 status = "Could not upload log file: " + logFile
         reactor.callFromThread(self.sendStatusMsg, status)
 
-    def sendLog(self, logFile):
+    def sendLog(self, path, fileName):
         status = "Logfile upload failed"
         access_token = os.getenv('CB_DROPBOX_TOKEN', 'NO_TOKEN')
         logging.info('%s Dropbox access token %s', ModuleName, access_token)
@@ -830,9 +868,9 @@ class ManageBridge:
                 hostname = hostFile.read()
             if hostname.endswith('\n'):
                 hostname = hostname[:-1]
-            dropboxPlace = '/' + hostname +'.log'
-            logging.info('%s Uploading %s to %s', ModuleName, logFile, dropboxPlace)
-            reactor.callInThread(self.uploadLog, logFile, dropboxPlace, status)
+            dropboxPlace = '/' + hostname + '-' + fileName
+            logging.info('%s Uploading %s to %s', ModuleName, path, dropboxPlace)
+            reactor.callInThread(self.uploadLog, path, dropboxPlace, status)
 
     def doCall(self, cmd):
         try:
@@ -952,7 +990,7 @@ class ManageBridge:
                 reactor.callLater(APP_STOP_DELAY, self.killAppProcs)
                 reactor.callLater(APP_STOP_DELAY + MIN_DELAY, self.waitToUpgrade)
             elif command == "sendlog" or command == "send_log":
-                self.sendLog(CB_CONFIG_DIR + '/bridge.log')
+                self.sendLog(CB_CONFIG_DIR + '/bridge.log', 'bridge.log')
             elif command == "battery":
                 self.sendBatteryLevels()
             elif command.startswith("call"):
@@ -960,7 +998,9 @@ class ManageBridge:
                 reactor.callInThread(self.doCall, command[5:])
             elif command.startswith("upload"):
                 # Need to call in thread is case it hangs
-                reactor.callInThread(self.sendLog, command[7:])
+                path = command[7:]
+                fileName = path.split('/')[-1]
+                reactor.callInThread(self.sendLog, path, fileName)
             elif command == "update_config" or command == "update":
                 req = {"cmd": "msg",
                        "msg": {"source": self.bridge_id,
@@ -1010,8 +1050,12 @@ class ManageBridge:
             # Stop listing on sockets
             mgrSocs = self.listMgrSocs()
             for a in mgrSocs:
-               logging.debug('%s Stop listening on %s', ModuleName, a)
-               self.appListen[a].stopListening()
+                try:
+                    logging.debug('%s Stop listening on %s', ModuleName, a)
+                    self.appListen[a].stopListening()
+                except Exception as ex:
+                    logging.debug('%s Unable to stop listening on: %s', ModuleName, a)
+                    logging.debug("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
             # In case apps & adaptors have not shut down, kill their processes.
             for p in self.appProcs:
                 try:
@@ -1127,13 +1171,34 @@ class ManageBridge:
                     logging.warning("%s pollElement. Could not send message to: %s", ModuleName, e)
                     logging.warning("%s Exception: %s %s", ModuleName, type(inst), str(inst.args))
 
+    def onUserMessage(self, msg):
+        if "body" in msg:
+            userMsg = msg["body"]
+        else:
+            userMsg = "No log message provided" 
+            logging.warning('%s %s', ModuleName, userMsg)
+        self.sendStatusMsg(userMsg)
+
     def onLogMessage(self, msg):
+        if "level" in msg:
+            level = msg["level"]
+        else:
+            level = "unknown"
         if "body" in msg:
             logMsg = msg["body"]
         else:
-            "No log message provided" 
-        logging.warning('%s %s', ModuleName, logMsg)
-        self.sendStatusMsg(logMsg)
+            logMsg = "No log message provided" 
+        name = self.idToName[msg["id"]]
+        if level == "error":
+            logging.error("%s %s", name, logMsg)
+        elif level == "warning":
+            logging.warning("%s %s", name, logMsg)
+        elif level == "info":
+            logging.info("%s %s", name, logMsg)
+        elif level == "debug":
+            logging.debug("%s %s", name, logMsg)
+        else:
+            logging.debug("Unknown logging level: %s %s", name, logMsg)
 
     def notifyApps(self, connected):
         for a in self.appConfigured:
@@ -1240,6 +1305,8 @@ class ManageBridge:
                 self.cbSendMsg(response, msg["id"])
         elif msg["status"] == "log":
             self.onLogMessage(msg)
+        elif msg["status"] == "user_message":
+            self.onUserMessage(msg)
         elif msg["status"] == "discovered":
             if msg["id"] == "zwave":
                 self.onZwaveDiscovered(msg)

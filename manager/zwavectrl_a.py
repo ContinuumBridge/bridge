@@ -38,18 +38,20 @@ startIncludeUrl      = baseUrl + "/ZWaveAPI/Run/controller.AddNodeToNetwork(1)"
 stopIncludeUrl       = baseUrl + "/ZWaveAPI/Run/controller.AddNodeToNetwork(0)"
 startExcludeUrl      = baseUrl + "/ZWaveAPI/Run/controller.RemoveNodeFromNetwork(1)"
 stopExcludeUrl       = baseUrl + "/ZWaveAPI/Run/controller.RemoveNodeFromNetwork(0)"
-postUrl              = baseUrl + "ZwaveAPI/Run/devices["
+postUrl              = baseUrl + "ZWaveAPI/Run/devices["
 getURL               = baseUrl + "Run/devices[DDD].instances[III].commandClasses[CCC].Get()"
+resetUrl             = baseUrl + "/ZWaveAPI/Run/SerialAPISoftReset()"
  
 class ZwaveCtrl():
     def __init__(self, argv):
         procname.setprocname('cbzwavectrl')
-        logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(message)s')
+        logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(levelname)s: %(message)s')
         self.status = "ok"
         self.state = "stopped"
         self.include = False
         self.exclude = False
         self.getting = False
+        self.resetBoard = False
         self.getStrs = []
         self.cbFactory = {}
         self.adaptors = [] 
@@ -94,11 +96,12 @@ class ZwaveCtrl():
                "state": self.state}
         self.cbSendManagerMsg(msg)
 
-    def sendParameter(self, data, timeStamp, a, commandClass, instance):
+    def sendParameter(self, data, timeStamp, a, commandClass, instance, value):
         msg = {"id": "zwave",
                "content": "data",
                "commandClass": commandClass,
                "instance": instance,
+               "value": value,
                "data": data,
                "timeStamp": timeStamp}
         #logging.debug("%s sendParameter: %s %s", ModuleName, str(msg), a)
@@ -114,10 +117,6 @@ class ZwaveCtrl():
             self.setState("inUse")
 
     def zway(self):
-        includeState = "notIncluding"
-        excludeState = "notExcluding"
-        found = []
-        h = httplib2.Http()
         """ Include works as follow:
             Send the include URL. includeState = "waitInclude".
             Wait for the wait time. includeState = "waitInclude".
@@ -129,8 +128,13 @@ class ZwaveCtrl():
             includeTick keeps tract of time in increments of INCLUDE_WAIT_TIME.
             Don't change the "from" time when getting data until all data has been retrieved.
         """
+        includeState = "notIncluding"
+        excludeState = "notExcluding"
+        found = []
+        h = httplib2.Http()
         posting = False
-        while self.state != "stopping":
+        error_count = 0
+        while self.state != "stopping" and error_count < 4:
             if self.include:
                 if includeState == "notIncluding":
                     foundDevice = False
@@ -215,6 +219,11 @@ class ZwaveCtrl():
                     else:
                         excludeTick += 1
                         time.sleep(INCLUDE_WAIT_TIME)
+            elif self.resetBoard:
+                URL = resetUrl
+                reactor.callFromThread(self.setState, "stopping")
+                self.resetBoard = False
+                logging.debug("%s Resetting RazBerry board", ModuleName)
             elif self.postToUrls:
                 posting = True
                 URL = self.postToUrls.pop() 
@@ -223,16 +232,23 @@ class ZwaveCtrl():
             else:
                 URL = dataUrl + self.fromTime
             #logging.debug("%s URL: %s", ModuleName, URL)
-            resp, content = h.request(URL,
-                                     'POST',
-                                      headers={'Content-Type': 'application/json'})
-            if "value" in resp:
-                if resp["value"] != "200":
-                    logging.debug("%s non-200 response: %s", ModuleName, resp["value"])
+            try:
+                resp, content = h.request(URL,
+                                         'POST',
+                                          headers={'Content-Type': 'application/json'})
+            except Exception as ex:
+                error_count += 1
+                logging.error('%s error in accessing z-way. URL: %s, error_count: %s', ModuleName, URL, str(error_count))
+                logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
+            else:
+                error_count = 0
+                if "value" in resp:
+                    if resp["value"] != "200":
+                        logging.debug("%s non-200 response: %s", ModuleName, resp["value"])
             try:
                 dat = json.loads(content)
             except:
-                logging.debug("%s Could not load JSON in response: %s", ModuleName, str(content))
+                logging.warning("%s Could not load JSON in response, content: %s, URL: %s", ModuleName, str(content), URL)
             else:
                 if dat:
                     if "updateTime" in dat:
@@ -324,15 +340,15 @@ class ZwaveCtrl():
                         for g in self.getStrs:
                             if g["match"] in dat:
                                 #logging.debug("%s found: %s %s", ModuleName, g["address"], g["commandClass"])
-                                self.sendParameter(dat[g["match"]], time.time(), g["address"], g["commandClass"], g["instance"])
-                if posting:
-                    posting = False
-                else:
-                    time.sleep(MIN_DELAY)
+                                self.sendParameter(dat[g["match"]], time.time(), g["address"], g["commandClass"], g["instance"], g["value"])
+            if posting:
+                posting = False
+            else:
+                time.sleep(MIN_DELAY)
 
-    def sendLogMessage(self):
+    def sendUserMessage(self):
         msg = {"id": self.id,
-                "status": "log",
+                "status": "user_message",
                 "body": self.endMessage
                }
         self.cbSendManagerMsg(msg)
@@ -345,7 +361,7 @@ class ZwaveCtrl():
             }
         logging.debug("%s sendDiscoveredResults: %s", ModuleName, d)
         self.cbSendManagerMsg(d)
-        reactor.callLater(1.0, self.sendLogMessage)
+        reactor.callLater(1.0, self.sendUserMessage)
         del self.found[:]
 
     def discover(self):
@@ -367,17 +383,18 @@ class ZwaveCtrl():
                 postToUrl = postUrl + msg["address"] + "].instances[" + msg["instance"] + \
                             "].commandClasses[" + msg["commandClass"] + "]." + msg["action"] + "(" + \
                             msg["value"] + ")"
-                #logging.debug("%s postToUrl: %s", ModuleName, str(postToUrl))
+                logging.debug("%s postToUrl: %s", ModuleName, str(postToUrl))
                 self.postToUrls.insert(0, postToUrl)
             elif msg["request"] == "check":
                 postToUrl = postUrl + msg["address"] + "].SendNoOperation()"
-                #logging.debug("%s postToUrl: %s", ModuleName, str(postToUrl))
+                logging.debug("%s postToUrl: %s", ModuleName, str(postToUrl))
                 self.postToUrls.insert(0, postToUrl)
             elif msg["request"] == "getc":
                 g = "devices." + msg["address"] + ".data.isFailed"
                 getStr = {"address": msg["id"],
                           "match": g, 
                           "commandClass": msg["commandClass"],
+                          "value": "",
                           "instance": msg["instance"]
                          }
                 logging.debug("%s New getStr (check): %s", ModuleName, str(getStr))
@@ -387,11 +404,15 @@ class ZwaveCtrl():
                     ".commandClasses." + msg["commandClass"] + ".data"
                 if "value" in msg:
                     g += "." + msg["value"]
+                    value = msg["value"]
+                else: 
+                    value = ""
                 if "name" in msg:
                     g += "." + msg["name"]
                 getStr = {"address": msg["id"],
                           "match": g, 
                           "commandClass": msg["commandClass"],
+                          "value": value,
                           "instance": msg["instance"]
                          }
                 logging.debug("%s New getStr: %s", ModuleName, str(getStr))
@@ -426,7 +447,7 @@ class ZwaveCtrl():
         sys.exit
 
     def onManagerMessage(self, cmd):
-        #logging.debug("%s Received from manager: %s", ModuleName, cmd)
+        logging.debug("%s Received from manager: %s", ModuleName, cmd)
         if cmd["cmd"] == "discover":
             self.discover()
             msg = {"id": self.id,
@@ -438,8 +459,9 @@ class ZwaveCtrl():
         elif cmd["cmd"] == "stop":
             msg = {"id": self.id,
                    "status": "stopping"}
-            self.setState("stopping")
-            reactor.callLater(1.5, self.doStop)
+            # Reset Razberry board before stopping
+            self.resetBoard = True
+            reactor.callLater(2.5, self.doStop)
         elif cmd["cmd"] == "config":
             self.processConfig(cmd["config"])
             msg = {"id": self.id,
