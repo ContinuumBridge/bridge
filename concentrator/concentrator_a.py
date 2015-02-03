@@ -75,7 +75,9 @@ class Concentrator():
             logging.info("%s onConfigure. appInstances: %s", ModuleName, self.appInstances)
 
     def onControllerMessage(self, msg):
-        #logging.debug("%s Received from controller: %s", ModuleName, str(msg)[:100])
+        if "body" in msg:
+            if not "connected" in msg["body"]:
+                logging.debug("%s Received from controller: %s", ModuleName, json.dumps(msg, indent=4))
         try:
             if not "destination" in msg:
                 msg["destination"] = self.bridge_id
@@ -91,24 +93,27 @@ class Concentrator():
                     msg["type"] = msg.pop("message")
                 self.cbSendManagerMsg(msg)
             except Exception as inst:
-                logging.warning("%s onControllerMessage. Unexpected message: %s", ModuleName, str(msg)[:100])
+                logging.warning("%s onControllerMessage. Unexpected manager message: %s", ModuleName, str(msg)[:100])
                 logging.warning("%s Exception: %s %s", ModuleName, type(inst), str(inst.args))
         else:
             try:
                 dest = msg["destination"].split('/')
-                if dest[1] in self.appInstances:
-                    msg["destination"] = dest[1]
-                    if dest[1] in self.readyApps:
-                        logging.debug("%s onControllerMessage, sending to: %s %s", ModuleName, dest[1], str(msg)[:100])
-                        self.cbSendMsg(msg, dest[1])
-                    else:
-                        logging.info("%s Received message before app ready: %s %s", ModuleName, dest[1], str(msg)[:100])
+                if dest[0] == self.bridge_id:
+                    if dest[1] in self.appInstances:
+                        msg["destination"] = dest[1]
+                        if dest[1] in self.readyApps:
+                            logging.debug("%s onControllerMessage, sending to: %s %s", ModuleName, dest[1], str(msg)[:100])
+                            self.cbSendMsg(msg, dest[1])
+                        else:
+                            logging.info("%s Received message before app ready: %s %s", ModuleName, dest[1], str(msg)[:100])
+                else:
+                    logging.warning("%s onControllerMessage. Received message with desination: %s", ModuleName, msg["destination"])
             except Exception as inst:
-                logging.warning("%s onControllerMessage. Unexpected message: %s", ModuleName, str(msg)[:100])
+                logging.warning("%s onControllerMessage. Unexpected app message: %s", ModuleName, str(msg)[:100])
                 logging.warning("%s Exception: %s %s", ModuleName, type(inst), str(inst.args))
 
     def onManagerMessage(self, msg):
-        #logging.debug("%s Received from manager: %s", ModuleName, msg)
+        logging.debug("%s Received from manager: %s", ModuleName, json.dumps(msg, indent=4))
         msg["time_sent"] = isotime()
         try:
             self.concFactory.sendMsg(msg)

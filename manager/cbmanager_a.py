@@ -418,7 +418,7 @@ class ManageBridge:
         d["time_sent"] = isotime()
         d["body"] = {}
         d["body"]["resource"] = "/api/bridge/v1/discovered_device/"
-        d["body"]["verb"] = "patch"
+        d["body"]["verb"] = "post"
         d["body"]["body"] = []
         if self.usbDiscovered:
             d["body"]["body"] = self.usbDiscoveredData
@@ -885,7 +885,7 @@ class ManageBridge:
     def processConduitStatus(self, msg):
         self.timeLastConduitMsg = time.time()
         if not "body" in msg:
-            logging.warning('%s Unrecognised command received from controller: %s', ModuleName, msg)
+            logging.warning('%s Unrecognised command received from controller', ModuleName)
             return
         else:
             if msg["body"]["connected"] == True:
@@ -911,7 +911,7 @@ class ManageBridge:
         if "connected" in msg["body"]:
             self.processConduitStatus(msg)
             return
-        logging.info('%s msg received from controller: %s', ModuleName, msg)
+        logging.debug("%s Received from controller: %s", ModuleName, json.dumps(msg, indent=4))
         if "command" in msg["body"]:
             command = msg["body"]["command"]
             if command == "start":
