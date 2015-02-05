@@ -52,6 +52,7 @@ class ManageBridge:
         logging.info("%s CB_NO_CLOUD = %s", ModuleName, CB_NO_CLOUD)
         procname.setprocname('captain')
         self.bridge_id = CB_BID
+        logging.info("%s CB_BID = %s", ModuleName, CB_BID)
         self.bridgeStatus = "ok" # Used to set status for sending to supervisor
         self.timeLastConduitMsg = time.time()  # For watchdog
         self.disconnectedCount = 0  # Used to count "disconnected" messages from conduit

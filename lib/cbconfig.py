@@ -21,7 +21,6 @@ CB_MANAGER_EXIT = CB_CONFIG_DIR + "/manager_exit"
 CB_SIM_LEVEL = os.getenv('CB_SIM_LEVEL', '0')
 CB_NO_CLOUD = str2bool(os.getenv('CB_NO_CLOUD', 'False'))
 CB_CONTROLLER_ADDR = os.getenv('CB_CONTROLLER_ADDR', '54.194.28.63')
-CB_BID = os.getenv('CB_BID', 'none')
 CB_BRIDGE_EMAIL = os.getenv('CB_BRIDGE_EMAIL', 'noanemail')
 CB_BRIDGE_PASSWORD = os.getenv('CB_BRIDGE_PASSWORD', 'notapassword')
 CB_LOGGING_LEVEL = getattr(logging, os.getenv('CB_LOG_ENVIRONMENT', 'INFO').upper())
