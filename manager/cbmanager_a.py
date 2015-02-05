@@ -54,6 +54,7 @@ class ManageBridge:
         logging.info("%s CB_NO_CLOUD = %s", ModuleName, CB_NO_CLOUD)
         procname.setprocname('captain')
         self.bridge_id = CB_BID
+        logging.info("%s CB_BID = %s", ModuleName, CB_BID)
         self.bridgeStatus = "ok" # Used to set status for sending to supervisor
         self.timeLastConduitMsg = time.time()  # For watchdog
         self.disconnectedCount = 0  # Used to count "disconnected" messages from conduit
@@ -443,20 +444,21 @@ class ManageBridge:
         d["time_sent"] = isotime()
         d["body"] = {}
         d["body"]["resource"] = "/api/bridge/v1/discovered_device/"
-        d["body"]["verb"] = "post"
-        d["body"]["body"] = []
+        d["body"]["verb"] = "patch"
+        d["body"]["body"] = {}
+        d["body"]["body"]["objects"] = []
         if self.usbDiscovered:
-            d["body"]["body"] = self.usbDiscoveredData
+            d["body"]["body"]["objects"] = self.usbDiscoveredData
         else:
             if self.bleDiscovered and not self.zwaveDiscovered:
                 if self.bleDiscoveredData:
                     for b in self.bleDiscoveredData:
-                        d["body"]["body"].append(b)
+                        d["body"]["body"]["objects"].append(b)
                 else:
                     self.sendStatusMsg("No Bluetooth devices found.")
             if self.zwaveDiscovered and CB_SIM_LEVEL == '0':
                 for b in self.zwaveDiscoveredData:
-                    d["body"]["body"].append(b)
+                    d["body"]["body"]["objects"].append(b)
             self.zwaveDiscovered = False
             self.bleDiscovered = False
         logging.debug('%s Discovered: %s', ModuleName, str(d))
@@ -498,15 +500,16 @@ class ManageBridge:
                 d["time_sent"] = isotime()
                 d["body"] = {}
                 d["body"]["resource"] = "/api/bridge/v1/device_discovery/"
-                d["body"]["verb"] = "post"
-                d["body"]["body"] = []
+                d["body"]["verb"] = "patch"
+                d["body"]["body"] = {}
+                d["body"]["body"]["objects"] = []
                 b = {'manufacturer_name': 0, 
                      'protocol': 'peripheral', 
                      'address': '0', 
                      'name': newPeripheral,
                      'model_number': 0
                     }
-                d["body"]["body"].append(b)
+                d["body"]["body"]["objects"].append(b)
                 msg = {"cmd": "msg",
                        "msg": d}
                 self.cbSendConcMsg(msg)
@@ -1013,7 +1016,7 @@ class ManageBridge:
                               }
                       }
                 self.cbSendConcMsg(req)
-            elif command == "z-exclude":
+            elif command == "z-exclude" or command == "z_exclude":
                 self.zwaveExclude()
             else:
                 logging.warning('%s Unrecognised command message received from controller: %s', ModuleName, msg)
@@ -1022,11 +1025,13 @@ class ManageBridge:
             # Call in thread to prevent problems with blocking
             if msg["body"]["resource"] == "/api/bridge/v1/current_bridge/bridge":
                 reactor.callInThread(self.updateConfig, msg)
+            elif msg["body"]["resource"] == "/api/bridge/v1/discovered_device/":
+                logging.info('%s Received discovered_device message from controller', ModuleName)
             else:
                 logging.info('%s Unrecognised resource in message received from controller', ModuleName)
                 self.sendStatusMsg("Unrecognised resource in message received from controller")
         else:
-            logging.info('%s Unrecognised message received from server', ModuleName)
+            logging.info('%s No command or resource field in body of server message', ModuleName)
             self.sendStatusMsg("Unrecognised message received from controller")
  
     def stopApps(self):

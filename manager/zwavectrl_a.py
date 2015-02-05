@@ -330,7 +330,7 @@ class ZwaveCtrl():
                                             self.found.append({"protocol": "zwave",
                                                                "name": name,
                                                                #"mac_addr": "XXXXX" + str(d),
-                                                               "mac_addr": str(d),
+                                                               "address": str(d),
                                                                "manufacturer_name": vendorString,
                                                                "model_number": manufacturerProductId,
                                                                #"command_classes": command_classes

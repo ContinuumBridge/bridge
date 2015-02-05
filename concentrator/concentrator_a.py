@@ -113,7 +113,7 @@ class Concentrator():
                 logging.warning("%s Exception: %s %s", ModuleName, type(inst), str(inst.args))
 
     def onManagerMessage(self, msg):
-        logging.debug("%s Received from manager: %s", ModuleName, json.dumps(msg, indent=4))
+        #logging.debug("%s Received from manager: %s", ModuleName, json.dumps(msg, indent=4))
         msg["time_sent"] = isotime()
         try:
             self.concFactory.sendMsg(msg)
