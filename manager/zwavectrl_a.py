@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# tempo.py
+# zwavectrl_a.py
 # Copyright (C) ContinuumBridge Limited, 2014 - All Rights Reserved
 # Unauthorized copying of this file, via any medium is strictly prohibited
 # Proprietary and confidential
