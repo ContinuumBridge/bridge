@@ -216,7 +216,7 @@ class Supervisor:
             logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
             usbAddr = ""
             lsusb = check_output(["lsusb"]).split()
-            #logging.debug("%s StartModem, lsusb: %s", ModuleName, str(lsusb))
+            logging.debug("%s StartModem, lsusb: %s", ModuleName, str(lsusb))
             for l in lsusb:
                 if l[:4] == "12d1":
                     usbAddr = l[5:]
@@ -341,8 +341,14 @@ class Supervisor:
 
     def manageNTPThread(self):
         try:
-            s = check_output(["sudo", "/usr/sbin/ntpd", "-p", "/var/run/ntpd.pid", "-g", "-q"])
-            logging.info("%s NTP time updated %s", ModuleName, str(s))
+            syncd = False
+            while not syncd:
+                s = check_output(["sudo", "/usr/sbin/ntpd", "-p", "/var/run/ntpd.pid", "-g", "-q"])
+                logging.info("%s NTP time updated %s", ModuleName, str(s))
+                if "time" in str(s):
+                    syncd = True
+                else:
+                    time.sleep(10)
         except Exception as ex:
             logging.warning("%s Cannot run NTP", ModuleName)
             logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
