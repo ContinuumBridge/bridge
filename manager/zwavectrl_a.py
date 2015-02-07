@@ -383,11 +383,11 @@ class ZwaveCtrl():
                 postToUrl = postUrl + msg["address"] + "].instances[" + msg["instance"] + \
                             "].commandClasses[" + msg["commandClass"] + "]." + msg["action"] + "(" + \
                             msg["value"] + ")"
-                logging.debug("%s postToUrl: %s", ModuleName, str(postToUrl))
+                #logging.debug("%s postToUrl: %s", ModuleName, str(postToUrl))
                 self.postToUrls.insert(0, postToUrl)
             elif msg["request"] == "check":
                 postToUrl = postUrl + msg["address"] + "].SendNoOperation()"
-                logging.debug("%s postToUrl: %s", ModuleName, str(postToUrl))
+                #logging.debug("%s postToUrl: %s", ModuleName, str(postToUrl))
                 self.postToUrls.insert(0, postToUrl)
             elif msg["request"] == "getc":
                 g = "devices." + msg["address"] + ".data.isFailed"
