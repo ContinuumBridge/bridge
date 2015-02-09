@@ -379,16 +379,18 @@ class ZwaveCtrl():
                 resp = {"id": "zwave",
                         "content": "init"}
                 self.sendMessage(resp, msg["id"])
-            elif msg["request"] == "post":
-                postToUrl = postUrl + msg["address"] + "].instances[" + msg["instance"] + \
-                            "].commandClasses[" + msg["commandClass"] + "]." + msg["action"] + "(" + \
-                            msg["value"] + ")"
-                #logging.debug("%s postToUrl: %s", ModuleName, str(postToUrl))
-                self.postToUrls.insert(0, postToUrl)
+            elif not "address" in msg:
+                logging.warning("%s Message received with no address: %s", ModuleName, str(msg))
             elif msg["request"] == "check":
                 postToUrl = postUrl + msg["address"] + "].SendNoOperation()"
                 #logging.debug("%s postToUrl: %s", ModuleName, str(postToUrl))
                 self.postToUrls.insert(0, postToUrl)
+            elif msg["request"] == "force_interview":
+                postToUrl = postUrl + msg["address"] + "].InterviewForce()"
+                #logging.debug("%s postToUrl: %s", ModuleName, str(postToUrl))
+                self.postToUrls.insert(0, postToUrl)
+            elif not "instance" in msg or not "commandClass" in msg:
+                logging.warning("%s instance and commandClass expected in msg: %s", ModuleName, str(msg))
             elif msg["request"] == "getc":
                 g = "devices." + msg["address"] + ".data.isFailed"
                 getStr = {"address": msg["id"],
@@ -418,6 +420,14 @@ class ZwaveCtrl():
                 logging.debug("%s New getStr: %s", ModuleName, str(getStr))
                 self.getStrs.append(getStr)
                 #logging.debug("%s getStrs: %s", ModuleName, str(self.getStrs))
+            elif not "action" in msg or not "value" in msg:
+                logging.warning("%s action and value expected in post msg: %s", ModuleName, str(msg))
+            elif msg["request"] == "post":
+                postToUrl = postUrl + msg["address"] + "].instances[" + msg["instance"] + \
+                            "].commandClasses[" + msg["commandClass"] + "]." + msg["action"] + "(" + \
+                            msg["value"] + ")"
+                #logging.debug("%s postToUrl: %s", ModuleName, str(postToUrl))
+                self.postToUrls.insert(0, postToUrl)
         else:
             logging.debug("%s onAdaptorMessage without request: %s", ModuleName, str(msg))
 

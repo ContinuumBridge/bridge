@@ -1018,6 +1018,25 @@ class ManageBridge:
                 self.cbSendConcMsg(req)
             elif command == "z-exclude" or command == "z_exclude":
                 self.zwaveExclude()
+            elif command.startswith("action"):
+                try:
+                    action = command.split()
+                    found = False
+                    for i in self.idToName:
+                        if self.idToName[i] == action[1]:
+                            found = True
+                            self.cbSendMsg({"cmd": "action",
+                                            "action": action[2]}, 
+                                           i)
+                            logging.debug('%s action, sent %s to %s', ModuleName, action[2], self.idToName[i])
+                            self.sendStatusMsg("Sent " + action[2] + " to " + self.idToName[i])
+                            break
+                    if not found:
+                        self.sendStatusMsg("Action requested for unrecognised app or device")
+                except Exception as ex:
+                    logging.warning('%s Badly formed action command %s', ModuleName, str(action))
+                    logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
+                    self.sendStatusMsg("Usage: action <device name> <action>")
             else:
                 logging.warning('%s Unrecognised command message received from controller: %s', ModuleName, msg)
                 self.sendStatusMsg("Unrecognised command message received from controller")

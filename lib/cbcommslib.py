@@ -82,6 +82,10 @@ class CbAdaptor:
         """This should be overridden by the actual adaptor."""
         logging.warning("%s %s should subclass onAppInit method", ModuleName, self.id)
 
+    def onAction(self, action):
+        """This should be overridden by the actual adaptor."""
+        logging.warning("%s %s should subclass onAction method", ModuleName, self.id)
+
     def onAppRequest(self, message):
         """This should be overridden by the actual adaptor."""
         logging.warning("%s %s should subclass onAppRequest method", ModuleName, self.id)
@@ -158,6 +162,11 @@ class CbAdaptor:
         elif cmd["cmd"] == "config":
             #Call in thread in case user code hangs
             reactor.callInThread(self.cbConfigure, cmd["config"]) 
+            msg = {"id": self.id,
+                   "status": "ok"}
+        elif cmd["cmd"] == "action":
+            #Call in thread in case user code hangs
+            reactor.callInThread(self.onAction, cmd["action"]) 
             msg = {"id": self.id,
                    "status": "ok"}
         else:
