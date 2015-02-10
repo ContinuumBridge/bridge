@@ -130,6 +130,10 @@ class Supervisor:
             self.cbSendManagerMsg({"msg": "stopall"})
             self.starting = True
             reactor.callLater(RESTART_INTERVAL, self.checkManagerStopped, 0)
+        elif msg["msg"] == "restart_cbridge":
+            logging.info("%s onManagerMessage restart_cbridge", ModuleName)
+            self.starting = True
+            reactor.callLater(0, self.restartCbridge)
         elif msg["msg"] == "reboot":
             logging.info("%s Reboot message received from manager", ModuleName)
             self.starting = True
@@ -274,15 +278,16 @@ class Supervisor:
         # Called only at start to check we have an Internet connection
         # Defer to thread - it could take several seconds
         logging.debug("%s checkInterface called", ModuleName)
-        d1 = threads.deferToThread(wifisetup.checkInterface, True)
+        d1 = threads.deferToThread(wifisetup.checkInterface, not CB_CELLULAR_BRIDGE)
         d1.addCallback(self.onInterfaceChecked)
 
     def onInterfaceChecked(self, mode):
         logging.info("%s onInterfaceChecked. Connected by %s", ModuleName, mode)
-        if mode == "none" and not CB_CELLULAR_BRIDGE:
-            logging.info("%s onInterfaceChecked. Not connected. Asking for SSID", ModuleName)
-            d = threads.deferToThread(wifisetup.getConnected)
-            d.addCallback(self.checkConnected)
+        if mode == "none":
+            if not CB_CELLULAR_BRIDGE:
+                logging.info("%s onInterfaceChecked. Not connected. Asking for SSID", ModuleName)
+                d = threads.deferToThread(wifisetup.getConnected)
+                d.addCallback(self.checkConnected)
         else:
             self.connecting = False
             logging.info("%s onInterfaceChecked, self.connecting: %s", ModuleName, self.connecting)
@@ -369,6 +374,14 @@ class Supervisor:
                 logging.info("%s Unable to reboot, probably because bridge not run as root", ModuleName)
         else:
             logging.info("%s Would have rebooted if not in sim mode", ModuleName)
+
+    def restartCbridge(self):
+        try:
+            logging.info("%s Restarting cbridge", ModuleName)
+            call(["service", "cbridge", "restart"])
+        except Exception as ex:
+            logging.warning("%s Unable to restart cbridge", ModuleName)
+            logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
 
     def signalHandler(self, signal, frame):
         logging.debug("%s signalHandler received signal", ModuleName)

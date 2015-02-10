@@ -785,13 +785,30 @@ class ManageBridge:
             reactor.callFromThread(self.onClientMessage, req)
             self.concNoApps = False
 
-    def upgradeBridge(self):
+    def upgradeBridge(self, command):
         reactor.callFromThread(self.sendStatusMsg, "Upgrade in progress. Please wait")
+        try:
+            u = command.split()
+            if len(u) == 1:
+                upgradeURL = CB_INC_UPGRADE_URL
+            elif u[1] == "full":
+                upgradeURL = CB_FULL_UPGRADE_URL
+            elif u[1] == "dev":
+                upgradeURL = CB_DEV_UPGRADE_URL
+            else:
+                self.sendStatusMsg("Unknown upgrade type. Ignoring")
+                return
+        except Exception as ex:
+            logging.warning('%s Pooblem with upgrade command %s', ModuleName, str(command))
+            logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
+            self.sendStatusMsg("Bad upgrade command. Allowed options: none|full|dev")
+            return
+        reactor.callFromThread(self.sendStatusMsg, "Downloading from: " + upgradeURL)
         upgradeStat = ""
         tarFile = CB_HOME + "/bridge_clone.tar.gz"
         logging.debug('%s tarFile: %s', ModuleName, tarFile)
         try:
-            urllib.urlretrieve(self.upgradeURL, tarFile)
+            urllib.urlretrieve(upgradeURL, tarFile)
         except Exception as ex:
             logging.error('%s Cannot access GitHub file to upgrade', ModuleName)
             logging.error("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
@@ -827,14 +844,14 @@ class ManageBridge:
             subprocess.call(["mv", bridgeClone, bridgeDir])
             logging.info('%s Moved bridgeClone to bridgeDir', ModuleName)
             reactor.callFromThread(self.sendStatusMsg, "Upgrade successful. Restarting")
-            reactor.callFromThread(self.cbSendSuperMsg, {"msg": "reboot"})
+            reactor.callFromThread(self.cbSendSuperMsg, {"msg": "restart_cbridge"})
         except Exception as ex:
             logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
             reactor.callFromThread(self.sendStatusMsg, "Upgrade failed. Problems moving versions")
     
-    def waitToUpgrade(self):
+    def waitToUpgrade(self, command):
         # Call in threaad as it can take some time & watchdog still going
-        reactor.callInThread(self.upgradeBridge)
+        reactor.callInThread(self.upgradeBridge, command)
 
     def uploadLog(self, logFile, dropboxPlace, status):
         try:
@@ -986,25 +1003,10 @@ class ManageBridge:
                 else:
                     self.sendStatusMsg("Already stopped or stopping. Stop command ignored.")
             elif command.startswith("upgrade"):
-                try:
-                    u = command.split()
-                    if len(u) == 1:
-                        self.upgradeURL = CB_INC_UPGRADE_URL
-                    elif u[1] == "full":
-                        self.upgradeURL = CB_FULL_UPGRADE_URL
-                    elif u[1] == "dev":
-                        self.upgradeURL = CB_DEV_UPGRADE_URL
-                    else:
-                        self.sendStatusMsg("Unknown upgrade location. Ignoring")
-                        return
-                except Exception as ex:
-                    logging.warning('%s Pooblem with upgrade command %s', ModuleName, str(command))
-                    logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
-                    self.sendStatusMsg("Bad upgrade command. Allowed options: none|full|dev")
                 if self.state != "stopped":
                     self.stopApps()
                 reactor.callLater(APP_STOP_DELAY, self.killAppProcs)
-                reactor.callLater(APP_STOP_DELAY + MIN_DELAY, self.waitToUpgrade)
+                reactor.callLater(APP_STOP_DELAY + MIN_DELAY, self.waitToUpgrade, command)
             elif command == "sendlog" or command == "send_log":
                 self.sendLog(CB_CONFIG_DIR + '/bridge.log', 'bridge.log')
             elif command == "battery":
