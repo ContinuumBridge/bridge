@@ -39,8 +39,9 @@ import procname
 if CB_SIM_LEVEL == '1':
     from simdiscover import SimDiscover
 
-CB_UPGRADE_URL = 'https://github.com/ContinuumBridge/cbridge/releases/download/v1.0.0/bridge_clone.tar.gz'
-CB_DEV_UPGRADE_URL = 'https://github.com/ContinuumBridge/cbridge/releases/download/v0.0.1/bridge_clone.tar.gz'
+CB_INC_UPGRADE_URL = 'https://github.com/ContinuumBridge/cbridge/releases/download/Incremental/bridge_clone_inc.tar.gz'
+CB_FULL_UPGRADE_URL = 'https://github.com/ContinuumBridge/cbridge/releases/download/Full/bridge_clone.tar.gz'
+CB_DEV_UPGRADE_URL = 'https://github.com/ContinuumBridge/cbridge/releases/download/Dev/bridge_clone.tar.gz'
 CONCENTRATOR_PATH = CB_BRIDGE_ROOT + "/concentrator/concentrator.py"
 ZWAVE_PATH = CB_BRIDGE_ROOT + "/manager/z-wave-ctrl.py"
 USB_DEVICES_FILE = CB_BRIDGE_ROOT + "/manager/usb_devices.json"
@@ -172,7 +173,7 @@ class ManageBridge:
             except:
                 logging.debug('%s Socket was not present: %s', ModuleName, s)
             try:
-                self.elFactory[el["id"]] = CbServerFactory(self.processClient)
+                self.elFactory[el["id"]] = CbServerFactory(self.onClientMessage)
                 self.elListen[el["id"]] = reactor.listenUNIX(s, self.elFactory[el["id"]], backlog=4)
                 logging.debug('%s Opened manager socket: %s', ModuleName, s)
             except Exception as ex:
@@ -238,7 +239,7 @@ class ManageBridge:
         # Open sockets for communicating with all apps and adaptors
         for s in mgrSocs:
             try:
-                self.cbFactory[s] = CbServerFactory(self.processClient)
+                self.cbFactory[s] = CbServerFactory(self.onClientMessage)
                 self.appListen[s] = reactor.listenUNIX(mgrSocs[s], self.cbFactory[s], backlog=4)
                 logging.info('%s Opened manager socket %s %s', ModuleName, s, mgrSocs[s])
             except:
@@ -781,7 +782,7 @@ class ManageBridge:
         if self.concNoApps:
             req = {"status": "req-config",
                    "type": "conc"}
-            reactor.callFromThread(self.processClient, req)
+            reactor.callFromThread(self.onClientMessage, req)
             self.concNoApps = False
 
     def upgradeBridge(self):
@@ -790,10 +791,7 @@ class ManageBridge:
         tarFile = CB_HOME + "/bridge_clone.tar.gz"
         logging.debug('%s tarFile: %s', ModuleName, tarFile)
         try:
-            if CB_DEV_UPGRADE:
-                urllib.urlretrieve(CB_DEV_UPGRADE_URL, tarFile)
-            else:
-                urllib.urlretrieve(CB_UPGRADE_URL, tarFile)
+            urllib.urlretrieve(self.upgradeURL, tarFile)
         except Exception as ex:
             logging.error('%s Cannot access GitHub file to upgrade', ModuleName)
             logging.error("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
@@ -940,7 +938,7 @@ class ManageBridge:
                 self.controllerConnected = False
                 self.disconnectedCount += 1
  
-    def processControlMsg(self, msg):
+    def onControlMessage(self, msg):
         if not "body" in msg: 
             logging.error('%s msg received from controller with no "body" key', ModuleName)
             self.sendStatusMsg("Error. message received from controller with no body key")
@@ -987,7 +985,22 @@ class ManageBridge:
                     reactor.callLater(APP_STOP_DELAY, self.killAppProcs)
                 else:
                     self.sendStatusMsg("Already stopped or stopping. Stop command ignored.")
-            elif command == "upgrade":
+            elif command.startswith("upgrade"):
+                try:
+                    u = command.split()
+                    if len(u) == 1:
+                        self.upgradeURL = CB_INC_UPGRADE_URL
+                    elif u[1] == "full":
+                        self.upgradeURL = CB_FULL_UPGRADE_URL
+                    elif u[1] == "dev":
+                        self.upgradeURL = CB_DEV_UPGRADE_URL
+                    else:
+                        self.sendStatusMsg("Unknown upgrade location. Ignoring")
+                        return
+                except Exception as ex:
+                    logging.warning('%s Pooblem with upgrade command %s', ModuleName, str(command))
+                    logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
+                    self.sendStatusMsg("Bad upgrade command. Allowed options: none|full|dev")
                 if self.state != "stopped":
                     self.stopApps()
                 reactor.callLater(APP_STOP_DELAY, self.killAppProcs)
@@ -1232,7 +1245,7 @@ class ManageBridge:
                   }
             self.cbSendMsg(msg, a)
 
-    def processClient(self, msg):
+    def onClientMessage(self, msg):
         #logging.debug('%s Received msg; %s', ModuleName, msg)
         # Set watchdog flag
         if not "status" in msg:
@@ -1240,7 +1253,7 @@ class ManageBridge:
             return
         if msg["status"] == "control_msg":
             del msg["status"]
-            self.processControlMsg(msg)
+            self.onControlMessage(msg)
             return
         elif not "id" in msg:
             logging.warning('%s No id key in message from client; %s', ModuleName, msg)

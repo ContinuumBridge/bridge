@@ -74,15 +74,14 @@ class Supervisor:
         signal.signal(signal.SIGINT, self.signalHandler)  # For catching SIGINT
         signal.signal(signal.SIGTERM, self.signalHandler)  # For catching SIGTERM
         if not CB_DEV_BRIDGE:
-            logging.debug("%s  CB_CELLULAR_BRIDGE: %s", ModuleName, CB_CELLULAR_BRIDGE)
             if CB_CELLULAR_BRIDGE:
-                logging.debug("%s  CB_CELLULAR_BRIDGE: %s", ModuleName, CB_CELLULAR_BRIDGE)
+                logging.info("%s  CB_CELLULAR_BRIDGE: %s", ModuleName, CB_CELLULAR_BRIDGE)
                 reactor.callLater(TIME_TO_MODEM_UP, self.startModem)
-            else:
-                try:
-                    reactor.callLater(TIME_TO_IFUP, self.checkInterface)
-                except:
-                    logging.error("%s Unable to call checkInterface", ModuleName)
+            # Call checkInterface even if in cellular mode in case connected by eth0/wlan0 as well
+            try:
+                reactor.callLater(TIME_TO_IFUP, self.checkInterface)
+            except:
+                logging.error("%s Unable to call checkInterface", ModuleName)
 
         reactor.callLater(0.1, self.startManager, False)
         reactor.run()
@@ -236,19 +235,21 @@ class Supervisor:
                 i.close()
                 o.close()
                 call(["mv", "sakis3g.tmp", sakis3gConf])
-            for attempt in range (2):
+            # Try to connect 6 times, each time increasing the waiting time
+            for attempt in range (5):
                 try:
                     # sakis3g requires --sudo despite being run by root. Config from /etc/sakis3g.conf
                     #s = check_output(["/usr/bin/sakis3g", "--sudo", "reconnect", "--debug"])
-                    s = check_output(["/usr/bin/sakis3g", "--sudo", "reconnect"])
+                    s = check_output(["/usr/bin/sakis3g", "--sudo", "reconnect", "--debug"])
                     logging.debug("%s startModem, attempt %s. s: %s", ModuleName, str(attempt), s)
                     if "connected" in s.lower() or "reconnected" in s.lower():
                         self.connecting = False
                         logging.info("%s startModem succeeded using sakis3g: %s, self.connecting: %s", ModuleName, s, self.connecting)
                         break
                 except Exception as ex:
-                    logging.warning("%s startModem sakis3g failed", ModuleName)
+                    logging.warning("%s startModem sakis3g failed, attempt %s", ModuleName, str(attempt))
                     logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
+                    time.sleep(attempt*60)
         try:
             # This is zwave.me
             ip_to_block = "46.20.244.72"
@@ -278,7 +279,7 @@ class Supervisor:
 
     def onInterfaceChecked(self, mode):
         logging.info("%s onInterfaceChecked. Connected by %s", ModuleName, mode)
-        if mode == "none":
+        if mode == "none" and not CB_CELLULAR_BRIDGE:
             logging.info("%s onInterfaceChecked. Not connected. Asking for SSID", ModuleName)
             d = threads.deferToThread(wifisetup.getConnected)
             d.addCallback(self.checkConnected)
@@ -337,7 +338,7 @@ class Supervisor:
             reactor.callInThread(self.manageNTPThread)
             reactor.callLater(NTP_UPDATE_INTERVAL, self.manageNTP)
         else:
-            reactor.callLater(15, self.manageNTP)
+            reactor.callLater(10, self.manageNTP)
 
     def manageNTPThread(self):
         try:
