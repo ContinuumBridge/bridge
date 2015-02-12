@@ -57,7 +57,7 @@ def checkInterface(startup=False, enableSwitch=True):
             connectMode = "both"
         else:
             connectMode = "wlan0"
-    if connectMode == "none" and "startup", and enableSwitch:
+    if connectMode == "none" and "startup" and enableSwitch:
         switchwlan0("client")
         if checkwlan0():
             connectMode = "wlan0"

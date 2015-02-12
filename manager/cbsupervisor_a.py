@@ -87,6 +87,7 @@ class Supervisor:
         reactor.run()
 
     def startManager(self, restart):
+        self.starting = True
         self.manageNTP()
         # Try to remove all sockets, just in case
         for f in glob.glob(CB_SOCKET_DIR + "skt-*"):
@@ -203,7 +204,10 @@ class Supervisor:
 
     def startModemThread(self):
         # Called in a thread
-        logging.debug("%s startModem", ModuleName)
+        if wifisetup.clientConnected():
+            logging.debug("%s startModem. Already connected. Not starting modem", ModuleName)
+            return
+        logging.debug("%s startModem. Not connected. Starting modem", ModuleName)
         try:
             s = check_output(["sudo", "/usr/bin/sg_raw", "/dev/sr0", "11", "06", "20", "00", "00", "00", "00", "00", "01", "00"])
             logging.debug("%s startModem, sg_raw output: %s", ModuleName, s)
