@@ -24,7 +24,7 @@ REBOOT_WAIT = 10                  # Time to allow bridge to stop before rebootin
 RESTART_INTERVAL = 10             # Time between telling manager to stop and starting it again
 EXIT_WAIT = 2                     # On SIGINT, time to wait before exit after manager signalled to stop
 SAFETY_INTERVAL = 300             # Delay before rebooting if manager failed to start
-CHECK_INTERFACE_DELAY = 300       # Time bewteen connection checks if not connected to Internet
+CHECK_INTERFACE_DELAY = 900       # Time bewteen connection checks if not connected to Internet
 NTP_UPDATE_INTERVAL = 12*3600     # How often to run ntpd to sync time
 
 import sys
@@ -278,7 +278,7 @@ class Supervisor:
         # Called only at start to check we have an Internet connection
         # Defer to thread - it could take several seconds
         logging.debug("%s checkInterface called", ModuleName)
-        d1 = threads.deferToThread(wifisetup.checkInterface, not CB_CELLULAR_BRIDGE)
+        d1 = threads.deferToThread(wifisetup.checkInterface, startup=True, enableSwitch=(not CB_CELLULAR_BRIDGE))
         d1.addCallback(self.onInterfaceChecked)
 
     def onInterfaceChecked(self, mode):
@@ -300,7 +300,7 @@ class Supervisor:
     def recheckInterface(self):
         # Callled when manger is disconnected from the server
         logging.debug("%s recheckInterface", ModuleName)
-        d1 = threads.deferToThread(wifisetup.checkInterface, False)
+        d1 = threads.deferToThread(wifisetup.checkInterface, startup=False, enableSwitch=(not CB_CELLULAR_BRIDGE))
         d1.addCallback(self.onInterfaceRechecked)
 
     def onInterfaceRechecked(self, mode):

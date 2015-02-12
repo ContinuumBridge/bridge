@@ -37,7 +37,7 @@ def checkwlan0():
             connected = True
     return connected
 
-def checkInterface(startup=False):
+def checkInterface(startup=False, enableSwitch=True):
     """ Determines if we have an ip address on eth0, wlan0, both or neither. """
     logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(message)s')
     logging.debug("%s checkInterface", ModuleName)
@@ -57,7 +57,7 @@ def checkInterface(startup=False):
             connectMode = "both"
         else:
             connectMode = "wlan0"
-    if connectMode == "none" and "startup":
+    if connectMode == "none" and "startup", and enableSwitch:
         switchwlan0("client")
         if checkwlan0():
             connectMode = "wlan0"
