@@ -286,9 +286,9 @@ class Supervisor:
         d1.addCallback(self.onInterfaceChecked)
 
     def onInterfaceChecked(self, mode):
-        logging.info("%s onInterfaceChecked. Connected by %s", ModuleName, mode)
         if mode == "none":
             if not CB_CELLULAR_BRIDGE:
+                logging.info("%s onInterfaceChecked. Connected by %s", ModuleName, mode)
                 logging.info("%s onInterfaceChecked. Not connected. Asking for SSID", ModuleName)
                 d = threads.deferToThread(wifisetup.getConnected)
                 d.addCallback(self.checkConnected)
