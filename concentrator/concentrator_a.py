@@ -181,7 +181,7 @@ class Concentrator():
             else:
                 if msg["destination"].startswith("CID"):
                     msg["source"] = self.bridge_id + "/" + msg["source"]
-                    logging.debug("%s Sending msg to cb: %s", ModuleName, str(msg)[:100])
+                    #logging.debug("%s Sending msg to cb: %s", ModuleName, str(msg)[:100])
                     self.concFactory.sendMsg(msg)
                 else:
                     logging.warning("%s Illegal desination in app message: %s", ModuleName, str(msg)[:100])
