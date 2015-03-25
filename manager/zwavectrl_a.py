@@ -249,6 +249,7 @@ class ZwaveCtrl():
                 dat = json.loads(content)
             except:
                 logging.warning("%s Could not load JSON in response, content: %s, URL: %s", ModuleName, str(content), URL)
+                self.fromTime = time.time() - 1
             else:
                 if dat:
                     if "updateTime" in dat:
@@ -297,22 +298,26 @@ class ZwaveCtrl():
                                                 for dev in self.zwave_devices:
                                                     logging.debug("%s found device: %s", ModuleName, str(command_classes))
                                                     logging.debug("%s comparing found device to : %s", ModuleName, str(dev))
-                                                    if len(dev["command_classes"]) != len(command_classes):
-                                                        logging.debug("%s lengths do not match", ModuleName)
-                                                        found = False
-                                                    else:
-                                                        logging.debug("%s lengths match", ModuleName)
-                                                        found = True
-                                                        for c in dev["command_classes"]:
-                                                            logging.debug("%s command_class : %s", ModuleName, str(c))
-                                                            if c not in command_classes:
-                                                                found = False
+                                                    if str(command_classes) != None:
+                                                        if len(dev["command_classes"]) != len(command_classes):
+                                                            logging.debug("%s lengths do not match", ModuleName)
+                                                            found = False
+                                                        else:
+                                                            logging.debug("%s lengths match", ModuleName)
+                                                            found = True
+                                                            for c in dev["command_classes"]:
+                                                                logging.debug("%s command_class : %s", ModuleName, str(c))
+                                                                if c not in command_classes:
+                                                                    found = False
+                                                                    break
+                                                            if found:
+                                                                name = dev["name"]
+                                                                logging.debug("%s matched device. name : %s", ModuleName, name)
+                                                                self.endMessage = "Found Z-Wave device: " + name
                                                                 break
-                                                        if found:
-                                                            name = dev["name"]
-                                                            logging.debug("%s matched device. name : %s", ModuleName, name)
-                                                            self.endMessage = "Found Z-Wave device: " + name
-                                                            break
+                                                    else:
+                                                        logging.debug("%s Incomplete Z-Wave interview", ModuleName)
+                                                        self.endMessage = "Problem interviewing Z-Wave device. Please Z-exclude & try again"
                                                 if not found:
                                                     logging.debug("%s not found", ModuleName)
                                                     name = ""
