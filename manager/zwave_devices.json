@@ -6,9 +6,5 @@
     {
      "name": "Binary Power Switch",
      "command_classes": [37, 39, 112, 134, 114]
-    },
-    {
-     "name": "Aeotec Heavy Duty Switch",
-     "command_classes": [94, 37, 50, 49, 39, 44, 43, 112, 133, 89, 86, 114, 134, 122, 115, 152, 239, 90, 130]
     }
 ]
