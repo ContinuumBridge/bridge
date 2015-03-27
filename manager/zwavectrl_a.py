@@ -249,7 +249,7 @@ class ZwaveCtrl():
                 dat = json.loads(content)
             except:
                 logging.warning("%s Could not load JSON in response, content: %s, URL: %s", ModuleName, str(content), URL)
-                self.fromTime = time.time() - 1
+                self.fromTime = str(int(time.time() - 1))
             else:
                 if dat:
                     if "updateTime" in dat:

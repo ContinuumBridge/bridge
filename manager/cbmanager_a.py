@@ -506,7 +506,7 @@ class ManageBridge:
                 d["body"]["body"]["objects"] = []
                 b = {'manufacturer_name': 0, 
                      'protocol': 'peripheral', 
-                     'address': '0', 
+                     'address': '', 
                      'name': newPeripheral,
                      'model_number': 0
                     }
@@ -524,9 +524,12 @@ class ManageBridge:
             self.sendStatusMsg("Follow manufacturer's instructions for device to be connected now.")
 
     def onZwaveExcluded(self, address):
+        logging.debug('%s onZwaveExclude, address: %s', ModuleName, address)
         msg = "No Z-wave device was excluded. No button pressed on device?"
-        if address == "":
-            msg= "No Z-wave device was excluded. Did it need one or three button clicks?"
+        if address == "" or address == "None":
+            msg= "No Z-wave device was excluded.\n Remember some devices need one click and others three. \n Also, devices need to be near the bridge to exclude."
+        elif address == "0":
+            msg = "Reset a device from a different Z-Wave controller"
         else:
             found = False
             for d in self.devices:
@@ -535,7 +538,7 @@ class ManageBridge:
                     found = True
                     break
             if not found:
-                msg= "Excluded Z-Wave device at address " + address + " Device not known to bridge."
+                msg= "Excluded Z-Wave device at address " + address + ".\n Device interview may not have been completed.\n You may need to rerun discover devices?"
         self.sendStatusMsg(msg)
 
     def zwaveExclude(self):
