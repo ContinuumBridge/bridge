@@ -106,7 +106,7 @@ class ManageBridge:
                                                     CB_BRIDGE_EMAIL, CB_BRIDGE_PASSWORD])
             except Exception as ex:
                 logging.error('%s node failed to start. exe = %s', ModuleName, exe)
-                logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
+                logging.error("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
         else:
             logging.info('%s Running without Cloud Server', ModuleName)
         # Give time for node interface to start
@@ -114,16 +114,18 @@ class ManageBridge:
         reactor.run()
 
     def checkBluetooth(self):
-        lsusb = subprocess.check_output(["lsusb"])
-        if "Bluetooth" in lsusb:
-            self.bluetooth = True
-            self.resetBluetooth
-            logging.info("%s Bluetooth dongle detected", ModuleName)
-            reactor.callFromThread(self.sendStatusMsg, "Note: Bluetooth is enabled")
-        else:
-            self.bluetooth = False
-            logging.info("%s No Bluetooth dongle detected", ModuleName)
-            reactor.callFromThread(self.sendStatusMsg, "Note: No Bluetooth interface found")
+        try:
+            lsusb = subprocess.check_output(["lsusb"])
+            if "Bluetooth" in lsusb:
+                logging.info("%s Bluetooth dongle detected", ModuleName)
+                self.bluetooth = True
+                self.resetBluetooth()
+            else:
+                logging.info("%s No Bluetooth dongle detected", ModuleName)
+                self.bluetooth = False
+        except Exception as ex:
+            logging.warning('%s Problem checking Bluetooth', ModuleName)
+            logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
 
     def resetBluetooth(self):
         # Called in a thread
@@ -1055,6 +1057,8 @@ class ManageBridge:
                     logging.warning('%s Badly formed action command %s', ModuleName, str(action))
                     logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
                     self.sendStatusMsg("Usage: action <device name> <action>")
+            elif command == "z-exclude" or command == "z_exclude":
+                self.sendStatusMsg("Hello. This is bridge " + self.bridge_id)
             else:
                 logging.warning('%s Unrecognised command message received from controller: %s', ModuleName, msg)
                 self.sendStatusMsg("Unrecognised command message received from controller")

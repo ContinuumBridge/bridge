@@ -1,31 +1,13 @@
 #!/usr/bin/env python
 # cbsupervisor.py
-# Copyright (C) ContinuumBridge Limited, 2014 - All Rights Reserved
+# Copyright (C) ContinuumBridge Limited, 2014-2015 - All Rights Reserved
 # Unauthorized copying of this file, via any medium is strictly prohibited
 # Proprietary and confidential
 # Written by Peter Claydon
 #
 """
-Revised behaviour:
-If manager not connected, start the clock.
-After CHECK_INTERFACE_DELAY and then every CHECK_INTERFACE_DELAY, restart interface.
-If no connection after MIN_TIME_BETWEEN_REBOOTS, reboot.
-If manager not talking, kill and restart.
 """
 ModuleName = "Supervisor"
-
-MANAGER_START_TIME = 3            # Time to allow for manager to start before starting to monitor it (secs)
-TIME_TO_IFUP = 90                 # Time to wait before checking if we have an Internet connection (secs)
-TIME_TO_MODEM_UP = 10             # Time to wait before starting 3G modem
-WATCHDOG_INTERVAL = 30            # Time between manager checks (secs)
-#MIN_TIME_BETWEEN_REBOOTS = 240   # Stops constant rebooting (secs)
-MIN_TIME_BETWEEN_REBOOTS = 3600   # Stops constant rebooting (secs)
-REBOOT_WAIT = 10                  # Time to allow bridge to stop before rebooting
-RESTART_INTERVAL = 10             # Time between telling manager to stop and starting it again
-EXIT_WAIT = 2                     # On SIGINT, time to wait before exit after manager signalled to stop
-SAFETY_INTERVAL = 300             # Delay before rebooting if manager failed to start
-CHECK_INTERFACE_DELAY = 900       # Time bewteen connection checks if not connected to Internet
-NTP_UPDATE_INTERVAL = 12*3600     # How often to run ntpd to sync time
 
 import sys
 import signal
@@ -33,7 +15,6 @@ import time
 import os
 import glob
 import procname
-import wifisetup
 from subprocess import call
 from subprocess import Popen
 from subprocess import check_output
@@ -42,6 +23,17 @@ from twisted.internet import reactor, defer
 from cbcommslib import CbServerProtocol
 from cbcommslib import CbServerFactory
 from cbconfig import *
+sys.path.insert(0, CB_BRIDGE_ROOT + "/conman")
+import conman
+
+MANAGER_START_TIME = 3            # Time to allow for manager to start before starting to monitor it (secs)
+TIME_TO_IFUP = 90                 # Time to wait before checking if we have an Internet connection (secs)
+WATCHDOG_INTERVAL = 30            # Time between manager checks (secs)
+REBOOT_WAIT = 10                  # Time to allow bridge to stop before rebooting
+RESTART_INTERVAL = 10             # Time between telling manager to stop and starting it again
+EXIT_WAIT = 2                     # On SIGINT, time to wait before exit after manager signalled to stop
+SAFETY_INTERVAL = 300             # Delay before rebooting if manager failed to start
+NTP_UPDATE_INTERVAL = 12*3600     # How often to run ntpd to sync time
 
 class Supervisor:
     def __init__(self):
@@ -62,29 +54,17 @@ class Supervisor:
             v = "Unknown"
         logging.info("%s Bridge version =  %s", ModuleName, v)
         logging.info("%s ************************************************************", ModuleName)
-        self.starting = True                    # Don't check manager watchdog when manager not running
-        self.connecting = True                  # Ignore conduit not connected messages if trying to connect
-        self.disconnected = False               # We are disconnected from the bridge controller
-        self.timeStamp = time.time()            # Keeps track of when manager last communicated
-        self.interfaceDownTime = time.time()    # Last time interface was known to be connected
-        self.beginningOfTime = time.time()      # Used when making decisions about rebooting
-        self.noServerCount = 0                  # Used when making decisions about rebooting
-        self.interfaceChecks = 0                # Keeps track of how many times network connection has been checked
-        self.checkingManager = False            # So that we knoow when checkManager method is active
+        self.connected = False
         signal.signal(signal.SIGINT, self.signalHandler)  # For catching SIGINT
         signal.signal(signal.SIGTERM, self.signalHandler)  # For catching SIGTERM
-        if not CB_DEV_BRIDGE:
-            if CB_CELLULAR_BRIDGE:
-                logging.info("%s  CB_CELLULAR_BRIDGE: %s", ModuleName, CB_CELLULAR_BRIDGE)
-                reactor.callLater(TIME_TO_MODEM_UP, self.startModem)
-            # Call checkInterface even if in cellular mode in case connected by eth0/wlan0 as well
-            try:
-                reactor.callLater(TIME_TO_IFUP, self.checkInterface)
-            except:
-                logging.error("%s Unable to call checkInterface", ModuleName)
-
-        reactor.callLater(0.1, self.startManager, False)
+        reactor.callLater(0.1, self.startConman)
+        reactor.callInThread(self.iptables)
+        reactor.callLater(1, self.startManager, False)
         reactor.run()
+
+    def startConman(self):
+        self.conman = conman.Conman()
+        self.conman.start(logFile=CB_LOGFILE, logLevel=CB_LOGGING_LEVEL)
 
     def startManager(self, restart):
         self.starting = True
@@ -113,8 +93,9 @@ class Supervisor:
                 if not self.checkingManager:
                     reactor.callLater(3*WATCHDOG_INTERVAL, self.checkManager, time.time())
                     checkingManager = True
-        except:
+        except Exception as ex:
             logging.error("%s Bridge manager failed to start: %s", ModuleName, exe)
+            logging.error("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
             # Give developer a chance to do something before rebooting:
             reactor.callLater(SAFETY_INTERVAL, self.reboot)
         
@@ -142,16 +123,6 @@ class Supervisor:
         elif msg["msg"] == "status":
             if msg["status"] == "disconnected":
                 logging.info("%s onManagerMessage. status: %s, disconnected:  %s, self.connecting: %s", ModuleName, msg["status"], self.disconnected, self.connecting)
-                if not self.connecting or not self.disconnected:
-                    self.connecting = True
-                    self.disconnected = True
-                    self.interfaceDownTime = time.time()
-                    if CB_CELLULAR_BRIDGE:
-                        reactor.callInThread(self.checkModem)
-                    else:
-                        self.recheckInterface()
-            else:
-                self.disconnected = False
 
     def checkManagerStopped(self, count):
         if os.path.exists(CB_MANAGER_EXIT):
@@ -184,8 +155,9 @@ class Supervisor:
                 try:
                     self.cbSendManagerMsg(msg)
                     reactor.callLater(WATCHDOG_INTERVAL, self.recheckManager, time.time())
-                except:
+                except Exception as ex:
                     logging.warning("%s Cannot send message to manager. Rebooting", ModuleName)
+                    logging.error("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
                     self.reboot()
 
     def recheckManager(self, startTime):
@@ -202,62 +174,7 @@ class Supervisor:
             logging.warning("%s Manager is well and truly dead. Rebooting", ModuleName)
             self.reboot()
 
-    def startModemThread(self):
-        # Called in a thread
-        if wifisetup.clientConnected():
-            logging.debug("%s startModem. Already connected. Not starting modem", ModuleName)
-            return
-        logging.debug("%s startModem. Not connected. Starting modem", ModuleName)
-        try:
-            s = check_output(["sudo", "/usr/bin/sg_raw", "/dev/sr0", "11", "06", "20", "00", "00", "00", "00", "00", "01", "00"])
-            logging.debug("%s startModem, sg_raw output: %s", ModuleName, s)
-        except Exception as ex:
-            logging.warning("%s startModem sg_raw call failed", ModuleName)
-            logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
-        try:
-            s = check_output(["dhclient", "eth1"])
-            self.connecting = False
-            logging.debug("%s startModem, dhclient eth1: %s, self.connecting: %s", ModuleName, s, self.connecting)
-        except Exception as ex:
-            logging.info("%s startModem dhclient failed on eth1, using sakis3g", ModuleName)
-            logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
-            usbAddr = ""
-            lsusb = check_output(["lsusb"]).split()
-            logging.debug("%s StartModem, lsusb: %s", ModuleName, str(lsusb))
-            for l in lsusb:
-                if l[:4] == "12d1":
-                    usbAddr = l[5:]
-                    break
-            if usbAddr != "":
-                sakis3gConf = "/etc/sakis3g.conf"
-                i = open(sakis3gConf, 'r')
-                o = open("sakis3g.tmp", 'w') 
-                found = False
-                replaced = False
-                for line in i:
-                    logging.debug("%s startModem. line in:  %s", ModuleName, line)
-                    if "USBMODEM" in line:
-                        line = "USBMODEM=\"12d1:" + usbAddr + "\"\n"
-                        logging.debug("%s startModem. Modem: %s", ModuleName, line)
-                    o.write(line)
-                i.close()
-                o.close()
-                call(["mv", "sakis3g.tmp", sakis3gConf])
-            # Try to connect 6 times, each time increasing the waiting time
-            for attempt in range (5):
-                try:
-                    # sakis3g requires --sudo despite being run by root. Config from /etc/sakis3g.conf
-                    #s = check_output(["/usr/bin/sakis3g", "--sudo", "reconnect", "--debug"])
-                    s = check_output(["/usr/bin/sakis3g", "--sudo", "reconnect", "--debug"])
-                    logging.debug("%s startModem, attempt %s. s: %s", ModuleName, str(attempt), s)
-                    if "connected" in s.lower() or "reconnected" in s.lower():
-                        self.connecting = False
-                        logging.info("%s startModem succeeded using sakis3g: %s, self.connecting: %s", ModuleName, s, self.connecting)
-                        break
-                except Exception as ex:
-                    logging.warning("%s startModem sakis3g failed, attempt %s", ModuleName, str(attempt))
-                    logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
-                    time.sleep(attempt*60)
+    def iptables(self):
         try:
             # This is zwave.me
             ip_to_block = "46.20.244.72"
@@ -266,62 +183,6 @@ class Supervisor:
         except Exception as ex:
             logging.warning("%s iptables setup failed", ModuleName)
             logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
-
-    def checkModem(self):
-        logging.info("%s checkModem", ModuleName)
-        if time.time() - self.interfaceDownTime > MIN_TIME_BETWEEN_REBOOTS:
-            logging.info("%s checkModem. Not connected for a very long time. Rebooting.", ModuleName)
-            reactor.callFromThread(self.doReboot)
-        else:
-            reactor.callLater(CHECK_INTERFACE_DELAY, self.startModem) 
-
-    def startModem(self):
-        reactor.callInThread(self.startModemThread)
-
-    def checkInterface(self):
-        # Called only at start to check we have an Internet connection
-        # Defer to thread - it could take several seconds
-        logging.debug("%s checkInterface called", ModuleName)
-        d1 = threads.deferToThread(wifisetup.checkInterface, startup=True, enableSwitch=(not CB_CELLULAR_BRIDGE))
-        d1.addCallback(self.onInterfaceChecked)
-
-    def onInterfaceChecked(self, mode):
-        if mode == "none":
-            if not CB_CELLULAR_BRIDGE:
-                logging.info("%s onInterfaceChecked. Connected by %s", ModuleName, mode)
-                logging.info("%s onInterfaceChecked. Not connected. Asking for SSID", ModuleName)
-                d = threads.deferToThread(wifisetup.getConnected)
-                d.addCallback(self.checkConnected)
-        else:
-            self.connecting = False
-            logging.info("%s onInterfaceChecked, self.connecting: %s", ModuleName, self.connecting)
-
-    def checkConnected(self, connected):
-        # At this point reset self.connecting regardless & let recheckInterface process take over
-        self.connecting = False
-        logging.info("%s checkConnected, connected: %s, self.connecting: %s", ModuleName, connected, self.connecting)
-
-    def recheckInterface(self):
-        # Callled when manger is disconnected from the server
-        logging.debug("%s recheckInterface", ModuleName)
-        d1 = threads.deferToThread(wifisetup.checkInterface, startup=False, enableSwitch=(not CB_CELLULAR_BRIDGE))
-        d1.addCallback(self.onInterfaceRechecked)
-
-    def onInterfaceRechecked(self, mode):
-        logging.info("%s onInterfaceRechecked. Connected by %s", ModuleName, mode)
-        logging.debug("%s onInterfaceRechecked. time: %s, interfaceDownTime: %s", ModuleName, time.time(), self.interfaceDownTime)
-        if mode == "none" or self.disconnected:
-            if time.time() - self.interfaceDownTime > MIN_TIME_BETWEEN_REBOOTS:
-                logging.info("%s onInterfaceRechecked. Not connected for a very long time. Rebooting.", ModuleName)
-                reactor.callFromThread(self.doReboot)
-            else:
-                d1 = threads.deferToThread(wifisetup.switchwlan0, "client")
-                d1.addCallback(self.onInterfaceReset)
-
-    def onInterfaceReset(self, connected):
-        logging.info("%s onInterfaceReset, connected: %s", ModuleName, connected)
-        if self.disconnected:
-            reactor.callLater(CHECK_INTERFACE_DELAY, self.recheckInterface)
 
     def doReboot(self):
         """ Give bridge manager a chance to tidy up nicely before rebooting. """
@@ -342,7 +203,7 @@ class Supervisor:
         reactor.callLater(REBOOT_WAIT, self.reboot)
 
     def manageNTP(self):
-        if not self.connecting:
+        if self.connected:
             logging.info("%s Calling ntpd to update time", ModuleName)
             reactor.callInThread(self.manageNTPThread)
             reactor.callLater(NTP_UPDATE_INTERVAL, self.manageNTP)
@@ -374,8 +235,9 @@ class Supervisor:
             try:
                 logging.info("%s Rebooting now. Goodbye ...", ModuleName)
                 call(["reboot"])
-            except:
+            except Exception as ex:
                 logging.info("%s Unable to reboot, probably because bridge not run as root", ModuleName)
+                logging.info("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
         else:
             logging.info("%s Would have rebooted if not in sim mode", ModuleName)
 
