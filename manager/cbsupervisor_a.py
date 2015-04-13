@@ -55,6 +55,8 @@ class Supervisor:
         logging.info("%s Bridge version =  %s", ModuleName, v)
         logging.info("%s ************************************************************", ModuleName)
         self.connected = False
+        self.checkingManager = False
+        self.disconnectCount = 0
         signal.signal(signal.SIGINT, self.signalHandler)  # For catching SIGINT
         signal.signal(signal.SIGTERM, self.signalHandler)  # For catching SIGTERM
         reactor.callLater(0.1, self.startConman)
@@ -122,7 +124,15 @@ class Supervisor:
             reactor.callFromThread(self.doReboot)
         elif msg["msg"] == "status":
             if msg["status"] == "disconnected":
-                logging.info("%s onManagerMessage. status: %s, disconnected:  %s, self.connecting: %s", ModuleName, msg["status"], self.disconnected, self.connecting)
+                logging.info("%s onManagerMessage. disconnected", ModuleName)
+                self.onDisconnected()
+
+    def onDisconnected(self):
+        if self.disconnectCount > 0:
+            self.conman.setConnected(False)
+            self.disconnectCount = 0
+        else:
+            self.disconnectCount += 1
 
     def checkManagerStopped(self, count):
         if os.path.exists(CB_MANAGER_EXIT):
