@@ -103,7 +103,11 @@ class Supervisor:
         
     def cbSendManagerMsg(self, msg):
         #logging.debug("%s Sending msg to manager: %s", ModuleName, msg)
-        self.cbManagerFactory.sendMsg(msg)
+        try:
+            self.cbManagerFactory.sendMsg(msg)
+        except Exception as ex:
+            logging.warning("%s Failed to send message to manager: %s", ModuleName, str(msg))
+            logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
 
     def onManagerMessage(self, msg):
         #logging.debug("%s onManagerMessage received message: %s", ModuleName, msg)
