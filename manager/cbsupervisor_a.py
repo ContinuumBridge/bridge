@@ -118,6 +118,7 @@ class Supervisor:
                 self.onDisconnected()
 
     def onDisconnected(self):
+        logging.debug("%s onDisconnected, disconnectCount: %s, self.starting: %s", str(self.disconnectCount), self.starting)
         if self.disconnectCount > 0 and not self.starting:
             d = threads.deferToThread(self.conman.checkPing)
             d.addCallback(self.checkDisconnected)
@@ -130,10 +131,10 @@ class Supervisor:
             self.cbSendManagerMsg({"msg": "stopall"})
             self.starting = True
             reactor.callLater(RESTART_INTERVAL, self.checkManagerStopped, 0)
+            self.disconnectCount = 0
         else:
             logging.info("%s onDisconnected. Manager disconnected, conman disconnected. Asking conman to reconnect", ModuleName)
             self.conman.setConnected(False)
-        self.disconnectCount = 0
 
     def checkManagerStopped(self, count):
         if os.path.exists(CB_MANAGER_EXIT):
