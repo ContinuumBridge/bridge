@@ -40,20 +40,6 @@ class Supervisor:
         procname.setprocname('cbsupervisor')
         logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(levelname)s: %(message)s')
         logging.info("%s ************************************************************", ModuleName)
-        logging.info("%s Restart", ModuleName)
-        logging.info("%s ************************************************************", ModuleName)
-        logging.info("%s BEWARE. LOG TIMES MAY BE WRONG BEFORE TIME UPDATED VIA NTP", ModuleName)
-        logging.info("%s CB_LOGGING_LEVEL =  %s", ModuleName, CB_LOGGING_LEVEL)
-        try:
-            versionFile =  CB_BRIDGE_ROOT + "/manager/" + "cb_version"
-            with open(versionFile, 'r') as f:
-                v = f.read()
-            if v.endswith('\n'):
-                v = v[:-1]
-        except:
-            v = "Unknown"
-        logging.info("%s Bridge version =  %s", ModuleName, v)
-        logging.info("%s ************************************************************", ModuleName)
         self.connected = False
         self.checkingManager = False
         self.disconnectCount = 0

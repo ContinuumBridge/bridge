@@ -12,7 +12,6 @@ import time
 import os
 import json
 import httplib2
-import logging
 import procname
 from pprint import pprint
 from cbconfig import *
@@ -45,7 +44,6 @@ resetUrl             = baseUrl + "/ZWaveAPI/Run/SerialAPISoftReset()"
 class ZwaveCtrl():
     def __init__(self, argv):
         procname.setprocname('cbzwavectrl')
-        logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(levelname)s: %(message)s')
         self.status = "ok"
         self.state = "stopped"
         self.include = False
@@ -59,20 +57,11 @@ class ZwaveCtrl():
         self.listen = []
         self.postToUrls = []
         if len(argv) < 3:
-            logging.error("%s Improper number of arguments", ModuleName)
+            print("error, Improper number of arguments")
             exit(1)
         managerSocket = argv[1]
         self.id = argv[2]
-        # Load zwave devices data
-        self.zwave_devices = []    # In case file doesn't load
-        try:
-            with open(ZWAVE_DEVICES_FILE, 'r') as configFile:
-                self.zwave_devices = json.load(configFile)
-                logging.info('%s Read zwave devices file', ModuleName)
-        except:
-            logging.error('%s No zwave devices file exists or file is corrupt', ModuleName)
         self.fromTime = str(int(time.time()) - 1)
-        logging.info("%s Hello", ModuleName)
 
         # Connection to manager
         initMsg = {"id": self.id,
@@ -88,9 +77,26 @@ class ZwaveCtrl():
     def cbSendManagerMsg(self, msg):
         self.managerFactory.sendMsg(msg)
 
+    def cbLog(self, level, log):
+        msg = {"id": self.id,
+               "status": "log",
+               "level": level,
+               "body": log}
+        self.cbSendManagerMsg(msg)
+
+    def readDevices(self):
+        self.cbLog("info", "Hello")
+        self.zwave_devices = []    # In case file doesn't load
+        try:
+            with open(ZWAVE_DEVICES_FILE, 'r') as configFile:
+                self.zwave_devices = json.load(configFile)
+                self.cbLog("info", 'Read zwave devices file')
+        except:
+            self.cbLog("error", 'No zwave devices file exists or file is corrupt')
+
     def setState(self, action):
         self.state = action
-        logging.debug("%s %s state = %s", ModuleName, self.id, self.state)
+        self.cbLog("debug", "state: " + self.state)
         msg = {"id": self.id,
                "status": "state",
                "state": self.state}
@@ -104,7 +110,6 @@ class ZwaveCtrl():
                "value": value,
                "data": data,
                "timeStamp": timeStamp}
-        #logging.debug("%s sendParameter: %s %s", ModuleName, str(msg), a)
         reactor.callFromThread(self.sendMessage, msg, a)
 
     def checkAllProcessed(self, appID):
@@ -149,9 +154,9 @@ class ZwaveCtrl():
                     URL = startIncludeUrl
                     body = []
                     includeTick = 0
-                    logging.debug("%s started including", ModuleName)
+                    self.cbLog("debug", "started including")
                 elif includeState == "waitInclude":
-                    #logging.debug("%s waitInclude, includeTick: %s foundData: %s", ModuleName, str(includeTick), foundData)
+                    #self.cbLog("debug", "waitInclude, includeTick: " + str(includeTick) + ", foundData: " + str(foundData))
                     URL = dataUrl + incStartTime
                     if foundData:
                         includeState = "tidyUp"
@@ -169,7 +174,7 @@ class ZwaveCtrl():
                         includeTick += 1
                         time.sleep(INCLUDE_WAIT_TIME)
                 elif includeState == "checkData":
-                    logging.debug("%s checkData, includeTick: %s foundData %s", ModuleName, str(includeTick), foundData)
+                    self.cbLog("debug", "checkData, includeTick: " + str(includeTick) + ", foundData" + str(foundData))
                     URL = dataUrl + incStartTime
                     if foundData:
                         includeState = "tidyUp"
@@ -182,11 +187,11 @@ class ZwaveCtrl():
                         time.sleep(INCLUDE_WAIT_TIME)
                 elif includeState == "losEndos":
                     time.sleep(MIN_DELAY)
-                    logging.debug("%s losEndos, foundData: %s", ModuleName, foundData)
+                    self.cbLog("debug", "losEndos, foundData: " + str(foundData))
                     losEndos = False
                     includeState = "tidyUp"
                 elif includeState == "tidyUp":
-                    logging.debug("%s tidyUp, includeTick: %s foundData %s", ModuleName, str(includeTick), foundData)
+                    self.cbLog("debug", "tidyUp, includeTick: " + str(includeTick) + ", foundData: " + str(foundData))
                     self.include = False
                     URL = stopIncludeUrl
                     includeState = "notIncluding"
@@ -203,9 +208,9 @@ class ZwaveCtrl():
                     excludedDevice = ""
                     URL = startExcludeUrl
                     excludeTick = 0
-                    logging.debug("%s started excluding", ModuleName)
+                    self.cbLog("debug", "started excluding")
                 elif excludeState == "waitExclude":
-                    logging.debug("%s waitExclude, excludeTick: %s", ModuleName, str(excludeTick))
+                    self.cbLog("debug", "waitExclude, excludeTick: " + str(excludeTick))
                     URL = dataUrl + incStartTime
                     if foundDevice or excludeTick > 4:
                         excludeState = "notExcluding"
@@ -223,7 +228,7 @@ class ZwaveCtrl():
                 URL = resetUrl
                 reactor.callFromThread(self.setState, "stopping")
                 self.resetBoard = False
-                logging.debug("%s Resetting RazBerry board", ModuleName)
+                self.cbLog("debug", "Resetting RazBerry board")
             elif self.postToUrls:
                 posting = True
                 URL = self.postToUrls.pop() 
@@ -231,29 +236,29 @@ class ZwaveCtrl():
                 self.getting = False
             else:
                 URL = dataUrl + self.fromTime
-            #logging.debug("%s URL: %s", ModuleName, URL)
+            #self.cbLog("debug", "URL: " + URL)
             try:
                 resp, content = h.request(URL,
                                          'POST',
                                           headers={'Content-Type': 'application/json'})
             except Exception as ex:
                 error_count += 1
-                logging.error('%s error in accessing z-way. URL: %s, error_count: %s', ModuleName, URL, str(error_count))
-                logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
+                self.cbLog("error", "error in accessing z-way. URL: " + URL + ", error_count: " + str(error_count))
+                self.cbLog("error", "Exception: " + str(type(inst)) + " " +  str(inst.args))
             else:
                 error_count = 0
                 if "value" in resp:
                     if resp["value"] != "200":
-                        logging.debug("%s non-200 response: %s", ModuleName, resp["value"])
+                        self.cbLog("debug", "non-200 response: " + str(resp["value"]))
             try:
                 dat = json.loads(content)
             except:
                 try:
-                    logging.warning("%s Could not load JSON in response, content: %s, URL: %s", ModuleName, str(content), URL)
+                    self.cbLog("warning", "Could not load JSON in response, content: " + str(content) + ", URL: " + URL)
                     self.fromTime = str(int(time.time() - 1))
                 except Exception as ex:
-                    logging.error("%s error in accessing z-way", ModuleName)
-                    logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
+                    self.cbLog("error", "error in accessing z-way")
+                    self.cbLog("error", "Exception: " + str(type(inst)) + " " +  str(inst.args))
                     self.fromTime = str(int(time.time() - 1))
             else:
                 if dat:
@@ -263,68 +268,67 @@ class ZwaveCtrl():
                         if "controller.data.lastExcludedDevice" in dat:
                             excludedDevice = str(dat["controller.data.lastExcludedDevice"]["value"])
                             if excludedDevice != "None" and excludedDevice != 0:
-                                logging.debug("%s found excludedDevice; %s", ModuleName, excludedDevice)
+                                self.cbLog("debug", "found excludedDevice; " + str( excludedDevice))
                                 foundDevice = True
-                            logging.debug("%s lastExcludedDevice; %s", ModuleName, excludedDevice)
+                            self.cbLog("debug", "lastExcludedDevice: " + str(excludedDevice))
                     if self.include:
-                        #logging.debug("%s including. dat: %s", ModuleName, dat)
                         if "controller.data.lastIncludedDevice" in dat:
                             includedDevice = str(dat["controller.data.lastIncludedDevice"]["value"])
                             if includedDevice != "None":
                                 foundDevice = True
-                            logging.debug("%s %s includedDevice %s", ModuleName, self.id, includedDevice)
+                            self.cbLog("debug", "includedDevice " + includedDevice)
                         if "devices" in dat:
-                            logging.debug("%s devices in dat", ModuleName)
+                            self.cbLog("debug", "devices in dat")
                             for d in dat["devices"].keys():
-                                logging.debug("%s device: %s", ModuleName, d)
+                                self.cbLog("debug", "device: " + d)
                                 if d == includedDevice:
                                     for k in dat["devices"][d].keys():
                                         for j in dat["devices"][d][k].keys():
                                             if j == "nodeInfoFrame":
                                                 command_classes = dat["devices"][d][k][j]["value"]
                                                 nodeInfoFrameFound = True
-                                                logging.debug("%s command_classes: %s", ModuleName, command_classes)
+                                                self.cbLog("debug", "command_classes: " + str(command_classes))
                                             elif j == "vendorString":
                                                 vendorString = dat["devices"][d][k][j]["value"]
-                                                logging.debug("%s vendorString: %s", ModuleName, vendorString) 
+                                                self.cbLog("debug", "vendorString: " + vendorString) 
                                             elif j == "deviceTypeString":
                                                 deviceTypeString = dat["devices"][d][k][j]["value"]
-                                                logging.debug("%s zwave name: %s", ModuleName, deviceTypeString)
+                                                self.cbLog("debug", "zwave name: " + deviceTypeString)
                                             elif j == "manufacturerProductId":
                                                 manufacturerProductId = dat["devices"][d][k][j]["value"]
-                                                logging.debug("%s manufacturerProductId: %s", ModuleName, manufacturerProductId)
+                                                self.cbLog("debug", "manufacturerProductId: " + str(manufacturerProductId))
                                             elif j == "manufacturerProductType":
                                                 manufacturerProductType = dat["devices"][d][k][j]["value"]
-                                                logging.debug("%s manufacturerProductType : %s", ModuleName, manufacturerProductType)
+                                                self.cbLog("debug", "manufacturerProductType : " + str(manufacturerProductType))
                                     if nodeInfoFrameFound and not foundData:
                                         if vendorString == "":
                                             if waitForVendorString == 3:
-                                                logging.debug("%s found device with no vendorString", ModuleName)
+                                                self.cbLog("debug", "found device with no vendorString")
                                                 for dev in self.zwave_devices:
-                                                    logging.debug("%s found device: %s", ModuleName, str(command_classes))
-                                                    logging.debug("%s comparing found device to : %s", ModuleName, str(dev))
+                                                    self.cbLog("debug", "found device: " + str(command_classes))
+                                                    self.cbLog("debug", "comparing found device to: " + str(dev))
                                                     if str(command_classes) != None:
                                                         if len(dev["command_classes"]) != len(command_classes):
-                                                            logging.debug("%s lengths do not match", ModuleName)
+                                                            self.cbLog("debug", "lengths do not match")
                                                             found = False
                                                         else:
-                                                            logging.debug("%s lengths match", ModuleName)
+                                                            self.cbLog("debug", "lengths match")
                                                             found = True
                                                             for c in dev["command_classes"]:
-                                                                logging.debug("%s command_class : %s", ModuleName, str(c))
+                                                                self.cbLog("debug", "command_class: " + str(c))
                                                                 if c not in command_classes:
                                                                     found = False
                                                                     break
                                                             if found:
                                                                 name = dev["name"]
-                                                                logging.debug("%s matched device. name : %s", ModuleName, name)
+                                                                self.cbLog("debug", "matched device. name: " +  name)
                                                                 self.endMessage = "Found Z-Wave device: " + name
                                                                 break
                                                     else:
-                                                        logging.debug("%s Incomplete Z-Wave interview", ModuleName)
+                                                        self.cbLog("debug", "Incomplete Z-Wave interview")
                                                         self.endMessage = "Problem interviewing Z-Wave device. Please Z-exclude & try again"
                                                 if not found:
-                                                    logging.debug("%s not found", ModuleName)
+                                                    self.cbLog("debug", "not found")
                                                     name = ""
                                                     self.endMessage = "No known Z-Wave device found"
                                                 foundData = True
@@ -332,11 +336,11 @@ class ZwaveCtrl():
                                                 waitForVendorString += 1
                                         else:
                                             name = vendorString + " " + str(manufacturerProductId) + " " + str(manufacturerProductType)
-                                            logging.debug("%s found device with vendorString: %s", ModuleName, name)
+                                            self.cbLog("debug", "found device with vendorString: " + name)
                                             self.endMessage = "Found Z-Wave device: " + name
                                             foundData = True
                                         if foundData:
-                                            logging.debug("%s found name: %s", ModuleName, name)
+                                            self.cbLog("debug", "found name: " + name)
                                             self.found.append({"protocol": "zwave",
                                                                "name": name,
                                                                #"mac_addr": "XXXXX" + str(d),
@@ -346,10 +350,9 @@ class ZwaveCtrl():
                                                                #"command_classes": command_classes
                                                               })
                     else: # not including
-                        #logging.debug("%s dat: %s", ModuleName, str(dat))
                         for g in self.getStrs:
                             if g["match"] in dat:
-                                #logging.debug("%s found: %s %s", ModuleName, g["address"], g["commandClass"])
+                                #self.cbLog("debug", "found: " + g["address"] + ", " +  g["commandClass"])
                                 self.sendParameter(dat[g["match"]], time.time(), g["address"], g["commandClass"], g["instance"], g["value"])
             if posting:
                 posting = False
@@ -369,38 +372,35 @@ class ZwaveCtrl():
              "id": "zwave",
              "body": self.found
             }
-        logging.debug("%s sendDiscoveredResults: %s", ModuleName, d)
+        self.cbLog("debug", "sendDiscoveredResults: " + str(json.dumps(d, indent=4)))
         self.cbSendManagerMsg(d)
         reactor.callLater(1.0, self.sendUserMessage)
         del self.found[:]
 
     def discover(self):
-        logging.debug("%s starting discovery", ModuleName)
+        self.cbLog("debug", "starting discovery")
         self.include = True
 
     def startExclude(self):
-        logging.debug("%s starting exclude", ModuleName)
+        self.cbLog("debug", "starting exclude")
         self.exclude = True
 
     def onAdaptorMessage(self, msg):
-        #logging.debug("%s onAdaptorMessage: %s", ModuleName, msg)
         if "request" in msg:
             if msg["request"] == "init":
                 resp = {"id": "zwave",
                         "content": "init"}
                 self.sendMessage(resp, msg["id"])
             elif not "address" in msg:
-                logging.warning("%s Message received with no address: %s", ModuleName, str(msg))
+                self.cbLog("warning", "Message received with no address: " + str(json.dumps(msg, indent=4)))
             elif msg["request"] == "check":
                 postToUrl = postUrl + msg["address"] + "].SendNoOperation()"
-                #logging.debug("%s postToUrl: %s", ModuleName, str(postToUrl))
                 self.postToUrls.insert(0, postToUrl)
             elif msg["request"] == "force_interview":
                 postToUrl = postUrl + msg["address"] + "].InterviewForce()"
-                #logging.debug("%s postToUrl: %s", ModuleName, str(postToUrl))
                 self.postToUrls.insert(0, postToUrl)
             elif not "instance" in msg or not "commandClass" in msg:
-                logging.warning("%s instance and commandClass expected in msg: %s", ModuleName, str(msg))
+                self.cbLog("warning", "instance and commandClass expected in msg: " + str(json.dumps(msg, indent=4)))
             elif msg["request"] == "getc":
                 g = "devices." + msg["address"] + ".data.isFailed"
                 getStr = {"address": msg["id"],
@@ -409,7 +409,7 @@ class ZwaveCtrl():
                           "value": "",
                           "instance": msg["instance"]
                          }
-                logging.debug("%s New getStr (check): %s", ModuleName, str(getStr))
+                self.cbLog("debug", "New getStr (check): " + str(json.dumps(d, indent=4)))
                 self.getStrs.append(getStr)
             elif msg["request"] == "get":
                 g = "devices." + msg["address"] + ".instances." + msg["instance"] + \
@@ -427,22 +427,21 @@ class ZwaveCtrl():
                           "value": value,
                           "instance": msg["instance"]
                          }
-                logging.debug("%s New getStr: %s", ModuleName, str(getStr))
+                self.cbLog("debug", "New getStr: " + str(json.dumps(getStr, indent=4)))
                 self.getStrs.append(getStr)
-                #logging.debug("%s getStrs: %s", ModuleName, str(self.getStrs))
             elif not "action" in msg or not "value" in msg:
-                logging.warning("%s action and value expected in post msg: %s", ModuleName, str(msg))
+                self.cbLog("warning", "action and value expected in post msg: " + str(json.dumps(msg, indent=4)))
             elif msg["request"] == "post":
                 postToUrl = postUrl + msg["address"] + "].instances[" + msg["instance"] + \
                             "].commandClasses[" + msg["commandClass"] + "]." + msg["action"] + "(" + \
                             msg["value"] + ")"
-                #logging.debug("%s postToUrl: %s", ModuleName, str(postToUrl))
+                #self.cbLog("debug", "postToUrl: " + str(postToUrl))
                 self.postToUrls.insert(0, postToUrl)
         else:
-            logging.debug("%s onAdaptorMessage without request: %s", ModuleName, str(msg))
+            self.cbLog("debug", "onAdaptorMessage without request: " + str(json.dumps(msg, indent=4)))
 
     def processConfig(self, config):
-        logging.debug("%s processConf: %s", ModuleName, config)
+        self.cbLog("debug", "processConf: " + str(json.dumps(config, indent=4)))
         if config != "no_zwave":
             for a in config:
                 if a["id"] not in self.adaptors:
@@ -462,12 +461,11 @@ class ZwaveCtrl():
         try:
             reactor.stop()
         except:
-            logging.warning("%s %s stopReactor when reactor not running", ModuleName, self.id)
-        logging.info("%s Bye from %s", ModuleName, self.id)
+            self.cbLog("warning", "stopReactor when reactor not running")
         sys.exit
 
     def onManagerMessage(self, cmd):
-        logging.debug("%s Received from manager: %s", ModuleName, cmd)
+        self.cbLog("debug", "Received from manager: " + str(json.dumps(cmd, indent=4)))
         if cmd["cmd"] == "discover":
             self.discover()
             msg = {"id": self.id,
@@ -486,6 +484,8 @@ class ZwaveCtrl():
             self.processConfig(cmd["config"])
             msg = {"id": self.id,
                    "status": "ready"}
+            # read devices here because we know we are connected to manager for logging
+            self.readDevices()
         else:
             msg = {"id": self.id,
                    "status": "ok"}

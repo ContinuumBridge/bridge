@@ -11,7 +11,6 @@ import sys
 import time
 import os
 import json
-import logging
 import procname
 from twisted.internet.protocol import Protocol, Factory
 from twisted.protocols.basic import LineReceiver
@@ -28,18 +27,15 @@ from cbconfig import *
 class Concentrator():
     def __init__(self, argv):
         procname.setprocname('concentrator')
-        logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(message)s')
         self.status = "ok"
         self.readyApps = []
         self.conc_mode = os.getenv('CB_CONCENTRATOR', 'client')
-        logging.info("%s CB_CONCENTRATOR = %s", ModuleName, self.conc_mode)
 
         if len(argv) < 3:
-            logging.error("%s Improper number of arguments", ModuleName)
+            self.cbLog("error", "Improper number of arguments")
             exit(1)
         managerSocket = argv[1]
         self.id = argv[2]
-        logging.info("%s Hello", ModuleName)
 
         # Connection to manager
         initMsg = {"id": self.id,
@@ -59,7 +55,7 @@ class Concentrator():
 
     def onConfigure(self, config):
         """Config is based on what apps are available."""
-        #logging.info("%s onConfigure: %s", ModuleName, config)
+        #self.cbLog("info", "onConfigure: " + str(config))
         self.bridge_id = config["bridge_id"]
         if "apps" in config:
             self.cbFactory = {}
@@ -72,18 +68,18 @@ class Concentrator():
                     self.appInstances.append(iName)
                     self.cbFactory[iName] = CbServerFactory(self.onAppData)
                     reactor.listenUNIX(appConcSoc, self.cbFactory[iName])
-            logging.info("%s onConfigure. appInstances: %s", ModuleName, self.appInstances)
+            self.cbLog("info", "onConfigure. appInstances: " + str(self.appInstances))
 
     def onControllerMessage(self, msg):
         if "body" in msg:
             if not "connected" in msg["body"]:
-                logging.debug("%s Received from controller: %s", ModuleName, json.dumps(msg, indent=4))
+                self.cbLog("debug", "Received from controller: " + str(json.dumps(msg, indent=4)))
         try:
             if not "destination" in msg:
                 msg["destination"] = self.bridge_id
         except Exception as inst:
-            logging.warning("%s onControllerMessage. Unexpected message: %s", ModuleName, str(msg)[:100])
-            logging.warning("%s Exception: %s %s", ModuleName, type(inst), str(inst.args))
+            self.cbLog("warning", "onControllerMessage. Unexpected message: " + str(json.dumps(msg, indent=4)))
+            self.cbLog("warning", "Exception: " + str(type(inst)) + " " +  str(inst.args))
             return
         if msg["destination"] == self.bridge_id:
             try:
@@ -93,8 +89,8 @@ class Concentrator():
                     msg["type"] = msg.pop("message")
                 self.cbSendManagerMsg(msg)
             except Exception as inst:
-                logging.warning("%s onControllerMessage. Unexpected manager message: %s", ModuleName, str(msg)[:100])
-                logging.warning("%s Exception: %s %s", ModuleName, type(inst), str(inst.args))
+                self.cbLog("warning", "onControllerMessage. Unexpected manager message: " + str(json.dumps(msg, indent=4)))
+                self.cbLog("warning", "Exception: " + str(type(inst)) + " " +  str(inst.args))
         else:
             try:
                 dest = msg["destination"].split('/')
@@ -102,28 +98,26 @@ class Concentrator():
                     if dest[1] in self.appInstances:
                         msg["destination"] = dest[1]
                         if dest[1] in self.readyApps:
-                            logging.debug("%s onControllerMessage, sending to: %s %s", ModuleName, dest[1], str(msg)[:100])
+                            self.cbLog("debug", "onControllerMessage, sending to: " +  dest[1])
                             self.cbSendMsg(msg, dest[1])
                         else:
-                            logging.info("%s Received message before app ready: %s %s", ModuleName, dest[1], str(msg)[:100])
+                            self.cbLog("info", "Received message before app ready: " + dest[1])
                 else:
-                    logging.warning("%s onControllerMessage. Received message with desination: %s", ModuleName, msg["destination"])
+                    self.cbLog("warning", "onControllerMessage. Received message with desination: " + msg["destination"])
             except Exception as inst:
-                logging.warning("%s onControllerMessage. Unexpected app message: %s", ModuleName, str(msg)[:100])
-                logging.warning("%s Exception: %s %s", ModuleName, type(inst), str(inst.args))
+                self.cbLog("warning", "onControllerMessage. Unexpected app message: " + str(json.dumps(msg, indent=4)))
+                self.cbLog("warning", "Exception: " + str(type(inst)) + " " +  str(inst.args))
 
     def onManagerMessage(self, msg):
-        #logging.debug("%s Received from manager: %s", ModuleName, json.dumps(msg, indent=4))
+        #self.cbLog("debug", "Received from manager: " + str(json.dumps(msg, indent=4)))
         msg["time_sent"] = isotime()
         try:
             self.concFactory.sendMsg(msg)
         except Exception as inst:
-            logging.warning("%s Failed to send message to bridge controller: %s", ModuleName, msg)
-            logging.warning("%s Exception type: %s", ModuleName, type(inst))
-            logging.warning("%s Exception args: %s", ModuleName, str(inst.args))
+            self.cbLog("warning", "Failed to send message to bridge controller: " + str(msg))
+            self.cbLog("warning", "Exception: " + str(type(inst)) + " " +  str(inst.args))
 
     def onManager(self, cmd):
-        #logging.debug("%s Received from manager: %s", ModuleName, cmd)
         if cmd["cmd"] == "msg":
             self.onManagerMessage(cmd["msg"])
             msg = {"id": self.id,
@@ -149,14 +143,19 @@ class Concentrator():
 
     def goodbye(self, status):
         reactor.stop()
-        logging.info("%s Bye. Status: %s", ModuleName, status)
-        sys.exit
 
     def cbSendMsg(self, msg, iName):
         self.cbFactory[iName].sendMsg(msg)
 
     def cbSendManagerMsg(self, msg):
         self.managerFactory.sendMsg(msg)
+
+    def cbLog(self, level, log):
+        msg = {"id": self.id,
+               "status": "log",
+               "level": level,
+               "body": log}
+        self.cbSendManagerMsg(msg)
 
     def appInit(self, appID):
         resp = {"id": "conc",
@@ -175,19 +174,18 @@ class Concentrator():
                     if "appID" in msg:
                         self.appInit(msg["appID"])
                     else:
-                        logging.warning("%s Message from app with no ID: %s", ModuleName, str(msg)[:100])
+                        self.cbLog("warning", "Message from app with no ID: " + str(msg)[:100])
             elif not "destination" in msg:
-                logging.warning("%s Message from app with no destination: %s", ModuleName, str(msg)[:100])
+                self.cbLog("warning", "Message from app with no destination: " + str(msg)[:100])
             else:
                 if msg["destination"].startswith("CID"):
                     msg["source"] = self.bridge_id + "/" + msg["source"]
-                    #logging.debug("%s Sending msg to cb: %s", ModuleName, str(msg)[:100])
                     self.concFactory.sendMsg(msg)
                 else:
-                    logging.warning("%s Illegal desination in app message: %s", ModuleName, str(msg)[:100])
+                    self.cbLog("warning","Illegal desination in app message: " + str(msg)[:100])
         except Exception as inst:
-            logging.warning("%s onAppData. Malformed message: %s", ModuleName, str(msg)[:100])
-            logging.warning("%s Exception: %s %s", ModuleName, type(inst), str(inst.args))
+            self.cbLog("warning", "onAppData. Malformed message: " + str(msg)[:100])
+            self.cbLog("warning", "Exception: " + str(type(inst)) + str(inst.args))
     
 if __name__ == '__main__':
     Concentrator(sys.argv)
