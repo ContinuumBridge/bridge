@@ -43,6 +43,7 @@ class Supervisor:
         self.connected = False
         self.checkingManager = False
         self.disconnectCount = 0
+        self.timeStamp = 0
         signal.signal(signal.SIGINT, self.signalHandler)  # For catching SIGINT
         signal.signal(signal.SIGTERM, self.signalHandler)  # For catching SIGTERM
         reactor.callLater(0.1, self.startConman)
