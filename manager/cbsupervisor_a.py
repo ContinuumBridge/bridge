@@ -118,7 +118,7 @@ class Supervisor:
                 self.onDisconnected()
 
     def onDisconnected(self):
-        logging.debug("%s onDisconnected, disconnectCount: %s, self.starting: %s", str(self.disconnectCount), self.starting)
+        logging.debug("%s onDisconnected, disconnectCount: %s, self.starting: %s", ModuleName, str(self.disconnectCount), self.starting)
         if self.disconnectCount > 0 and not self.starting:
             d = threads.deferToThread(self.conman.checkPing)
             d.addCallback(self.checkDisconnected)
