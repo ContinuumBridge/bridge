@@ -26,7 +26,7 @@ case "$1" in
             # Must source so that exports affect the parent script
             . /opt/cbridge/thisbridge/thisbridge.sh
             export PYTHONPATH=$BRIDGEPATH'/bridge/lib'
-            ./cbsupervisor.py >> $BRIDGEPATH'/thisbridge/shell.log' 2>&1 &
+            ./cbsupervisor.py >> '/var/log/cbshell.log' 2>&1 &
             cb_pid=$!
             echo $cb_pid > $PIDFILE
             echo 'done'

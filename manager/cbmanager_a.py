@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # cbanager_a.py
-# Copyright (C) ContinuumBridge Limited, 2013-14 - All Rights Reserved
+# Copyright (C) ContinuumBridge Limited, 2013-15 - All Rights Reserved
 # Unauthorized copying of this file, via any medium is strictly prohibited
 # Proprietary and confidential
 # Written by Peter Claydon
@@ -47,9 +47,11 @@ CONCENTRATOR_PATH = CB_BRIDGE_ROOT + "/concentrator/concentrator.py"
 ZWAVE_PATH = CB_BRIDGE_ROOT + "/manager/z-wave-ctrl.py"
 USB_DEVICES_FILE = CB_BRIDGE_ROOT + "/manager/usb_devices.json"
 
+LOGFILE_MAXBYTES    = 1000000
+LOGFILE_BACKUPCOUNT = 5
 logger = logging.getLogger('Logger')
 logger.setLevel(CB_LOGGING_LEVEL)
-handler = logging.handlers.RotatingFileHandler(CB_LOGFILE, maxBytes=50000, backupCount=5)
+handler = logging.handlers.RotatingFileHandler(CB_LOGFILE, maxBytes=LOGFILE_MAXBYTES, backupCount=LOGFILE_BACKUPCOUNT)
 formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
 handler.setFormatter(formatter)
 logger.addHandler(handler)

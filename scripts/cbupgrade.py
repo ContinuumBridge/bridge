@@ -14,7 +14,7 @@ ModuleName = "Upgrader"
 import logging
 import subprocess
 import os
-CB_LOGFILE = "../../thisbridge/bridge.log"
+CB_LOGFILE = "/var/log/cbridge.log"
 
 logging.basicConfig(filename=CB_LOGFILE,level=logging.DEBUG,format='%(asctime)s %(levelname)s: %(message)s')
 try:
