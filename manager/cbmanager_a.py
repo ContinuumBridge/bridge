@@ -24,6 +24,7 @@ import subprocess
 import json
 import urllib
 import pexpect
+import bluetooth
 from twisted.internet import threads
 from twisted.internet import reactor, defer
 from twisted.internet import task
@@ -152,6 +153,7 @@ class ManageBridge:
     def resetBluetooth(self):
         # Called in a thread
         logger.debug("%s resetBluetooth", ModuleName)
+        success = False
         try:
             s = subprocess.check_output(["hciconfig", "hci0", "down"])
             if s != '':
@@ -164,9 +166,12 @@ class ManageBridge:
                 logger.warning("%s Problem configuring hci0 (up), %s", ModuleName, s)
             else:
                 logger.debug("%s hci0 up OK", ModuleName)
+                success = True
+            return success
         except Exception as ex:
             logger.warning("%s Unable to configure hci0", ModuleName)
             logger.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
+            return False
 
     def listMgrSocs(self):
         mgrSocs = {}
@@ -357,7 +362,6 @@ class ManageBridge:
             lescan.kill(9)
  
     def bleDiscover(self):
-        self.resetBluetooth()
         self.bleDiscoveredData = [] 
         exe = CB_BRIDGE_ROOT + "/manager/discovery.py"
         protocol = "ble"
@@ -444,6 +448,38 @@ class ManageBridge:
                                                          })
                             reactor.callFromThread(self.gatherDiscovered)
     
+    def btDiscover(self):
+        # Disovers non-BLE Bluetooth devices
+        logger.debug('%s btDiscover', ModuleName)
+        nearby_devices = bluetooth.discover_devices(duration=2, lookup_names=True)
+        d = {}
+        d["source"] = self.bridge_id
+        d["destination"] = "cb"
+        d["time_sent"] = isotime()
+        d["body"] = {}
+        d["body"]["resource"] = "/api/bridge/v1/discovered_device/"
+        d["body"]["verb"] = "patch"
+        d["body"]["body"] = {}
+        d["body"]["body"]["objects"] = []
+        logger.debug('%s btDiscover, nearby devices:', ModuleName)
+        for addr, name in nearby_devices:
+            logger.debug('%s btDiscover, addr: %s, name: %s', ModuleName, addr, name)
+            b = {"protocol": "bt",
+                 "address": addr,
+                 "name": name
+                }
+            d["body"]["body"]["objects"].append(b)
+        if d["body"]["body"]["objects"] != []:
+            msg = {"cmd": "msg",
+                   "msg": d}
+            reactor.callFromThread(self.cbSendConcMsg, msg)
+
+    def startBTDiscover(self, success):
+        logger.debug('%s startBTDiscover, success: %s', ModuleName, success)
+        if success == True:
+            reactor.callInThread(self.bleDiscover)
+            reactor.callInThread(self.btDiscover)
+
     def onZwaveDiscovering(self, msg):
         logger.debug('%s onZwaveDiscovering', ModuleName)
         self.zwaveDiscovering = True
@@ -543,7 +579,8 @@ class ManageBridge:
                 self.elFactory["zwave"].sendMsg({"cmd": "discover"})
                 self.zwaveDiscovering = False
             if self.bluetooth:
-                reactor.callInThread(self.bleDiscover)
+                d = threads.deferToThread(self.resetBluetooth)
+                d.addCallback(self.startBTDiscover)
             reactor.callInThread(self.usbDiscover)
             self.sendStatusMsg("Follow manufacturer's instructions for device to be connected now.")
 
