@@ -218,7 +218,7 @@ class ManageBridge:
                    "msg": "status",
                    "status": "ok"} 
         try:
-            self.cbSupervisorFactory = CbClientFactory(self.processSuper, initMsg)
+            self.cbSupervisorFactory = CbClientFactory(self.onSuperMessage, initMsg)
             reactor.connectUNIX(s, self.cbSupervisorFactory, timeout=10)
             logger.info('%s Opened supervisor socket %s', ModuleName, s)
         except Exception as ex:
@@ -597,8 +597,8 @@ class ManageBridge:
         configFile = CB_CONFIG_DIR + "/bridge.config"
         configRead = False
         try:
-            with open(configFile, 'r') as configFile:
-                config = json.load(configFile)
+            with open(configFile, 'r') as f:
+                config = json.load(f)
                 configRead = True
                 logger.info('%s Read config', ModuleName)
         except Exception as ex:
@@ -607,7 +607,6 @@ class ManageBridge:
             success= False
         if configRead:
             try:
-                #self.bridge_id = "BID" + str(config["body"]["body"]["id"])
                 self.apps = config["body"]["body"]["apps"]
                 self.devices = config["body"]["body"]["devices"]
                 success = True
@@ -917,6 +916,19 @@ class ManageBridge:
             logger.info('%s Uploading %s to %s', ModuleName, path, dropboxPlace)
             reactor.callInThread(self.uploadLog, path, dropboxPlace, status)
 
+    def onDeviceInstall(self, msg):
+        logger.debug('%s onDeviceInstall', ModuleName)
+        try:
+            logger.debug('%s onDeviceInstall, verb: %s', ModuleName, msg["body"]["verb"])
+            if msg["body"]["verb"] == "update":
+                if msg["body"]["body"]["status"] == "should_uninstall":
+                    logger.debug('%s onDeviceInstall. Uninstalling: %s ', ModuleName, msg["body"]["body"]["friendly_name"])
+                    if msg["body"]["body"]["device"]["protocol"] == "zwave":
+                        self.zwaveExclude()
+        except Exception as ex:
+            logger.warning('%s onDeviceInstall error', ModuleName)
+            logger.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
+
     def doCall(self, cmd):
         try:
             output = subprocess.check_output(cmd, shell=True)
@@ -938,7 +950,7 @@ class ManageBridge:
             levels = "No battery level information available at this time"
         self.sendStatusMsg(levels)
 
-    def processSuper(self, msg):
+    def onSuperMessage(self, msg):
         """  watchdog. Replies with status=ok or a restart/reboot command. """
         if msg["msg"] == "stopall":
             resp = {"msg": "status",
@@ -995,6 +1007,10 @@ class ManageBridge:
             self.processConduitStatus(msg)
             return
         logger.debug("%s Received from controller: %s", ModuleName, json.dumps(msg, indent=4))
+        # Temporary fix because controller sometimes sends resource_uri
+        if "resource_uri" in msg["body"]:
+            msg["body"]["resource"] = msg["body"].pop("resource_uri")
+            logger.debug('%s resource_uri in message body, replacing: %s', ModuleName, json.dumps(msg, indent=4))
         if "command" in msg["body"]:
             command = msg["body"]["command"]
             if command == "start":
@@ -1085,9 +1101,11 @@ class ManageBridge:
                 logger.warning('%s Unrecognised command message received from controller: %s', ModuleName, msg)
                 self.sendStatusMsg("Unrecognised command message received from controller")
         elif "resource" in msg["body"]:
-            # Call in thread to prevent problems with blocking
             if msg["body"]["resource"] == "/api/bridge/v1/current_bridge/bridge":
+                # Call in thread to prevent problems with blocking
                 reactor.callInThread(self.updateConfig, msg)
+            elif msg["body"]["resource"] == "/api/bridge/v1/device_install":
+                reactor.callInThread(self.onDeviceInstall, msg)
             elif msg["body"]["resource"] == "/api/bridge/v1/discovered_device/":
                 logger.info('%s Received discovered_device message from controller', ModuleName)
             else:

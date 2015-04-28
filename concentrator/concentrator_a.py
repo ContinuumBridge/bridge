@@ -81,7 +81,7 @@ class Concentrator():
             self.cbLog("warning", "onControllerMessage. Unexpected message: " + str(json.dumps(msg, indent=4)))
             self.cbLog("warning", "Exception: " + str(type(inst)) + " " +  str(inst.args))
             return
-        if msg["destination"] == self.bridge_id:
+        if msg["destination"] == self.bridge_id or msg["destination"] == "broadcast":
             try:
                 msg["status"] = "control_msg"
                 msg["id"] = self.id
