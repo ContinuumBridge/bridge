@@ -558,12 +558,13 @@ class ManageBridge:
             found = False
             for d in self.devices:
                 if d["address"] == address:
-                    msg= "Excluded " + d["friendly_name"] + ". Please remove it from the devices list."
+                    self.sendControllerMsg("delete", "/api/bridge/v1/device_install/" + str(d["id"][3:]) +"/")
+                    msg = "Excluded " + d["friendly_name"] + ". Please remove it from the devices list."
                     found = True
                     break
             if not found:
                 msg= "Excluded Z-Wave device at address " + address + ".\n Device interview may not have been completed.\n You may need to rerun discover devices?"
-        self.sendStatusMsg(msg)
+        reactor.callLater(0.5, self.sendStatusMsg, msg)
 
     def zwaveExclude(self):
         logger.debug('%s zwaveExclude', ModuleName)
@@ -1221,6 +1222,20 @@ class ManageBridge:
 
     def cbSendSuperMsg(self, msg):
         self.cbSupervisorFactory.sendMsg(msg)
+
+    def sendControllerMsg(self, verb, resource):
+        req = {"cmd": "msg",
+               "msg": {"source": self.bridge_id,
+                       "destination": "cb",
+                       "time_sent": isotime(),
+                       "body": {
+                                "resource": resource,
+                                "verb": verb
+                               }
+                      }
+              }
+        logger.debug('%s sendControllerMsg, sending: %s', ModuleName, str(json.dumps(req, indent=4)))
+        self.cbSendConcMsg(req)
 
     def elementWatchdog(self):
         """ Checks that all apps and adaptors have communicated within the designated interval. """
