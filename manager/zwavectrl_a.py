@@ -244,7 +244,7 @@ class ZwaveCtrl():
             except Exception as ex:
                 error_count += 1
                 self.cbLog("error", "error in accessing z-way. URL: " + URL + ", error_count: " + str(error_count))
-                self.cbLog("error", "Exception: " + str(type(inst)) + " " +  str(inst.args))
+                self.cbLog("error", "Exception: " + str(type(ex)) + " " +  str(ex.args))
             else:
                 error_count = 0
                 if "value" in resp:
@@ -258,7 +258,7 @@ class ZwaveCtrl():
                     self.fromTime = str(int(time.time() - 1))
                 except Exception as ex:
                     self.cbLog("error", "error in accessing z-way")
-                    self.cbLog("error", "Exception: " + str(type(inst)) + " " +  str(inst.args))
+                    self.cbLog("error", "Exception: " + str(type(ex)) + " " +  str(ex.args))
                     self.fromTime = str(int(time.time() - 1))
             else:
                 if dat:

@@ -91,7 +91,7 @@ class ManageBridge:
         self.concNoApps = False
         self.firstWatchdog = True
         self.elements = {}
-        self.appProcs = []
+        self.appProcs = {}
         self.concConfig = []
         self.appConfigured = []
         self.cbFactory = {} 
@@ -252,22 +252,23 @@ class ManageBridge:
         self.states("starting")
         # Manager sockets may already exist. If so, delete them
         mgrSocs = self.listMgrSocs()
-        for s in mgrSocs:
-            try:
-                os.remove(mgrSocs[s])
-            except:
-                pass
+        #for s in mgrSocs:
+        #    try:
+        #        os.remove(mgrSocs[s])
+        #    except:
+        #        pass
         # Clear dictionary so that we can recreate sockets
-        self.cbFactory.clear()
+        #self.cbFactory.clear()
 
         # Open sockets for communicating with all apps and adaptors
         for s in mgrSocs:
-            try:
-                self.cbFactory[s] = CbServerFactory(self.onClientMessage)
-                self.appListen[s] = reactor.listenUNIX(mgrSocs[s], self.cbFactory[s], backlog=4)
-                logger.info('%s Opened manager socket %s %s', ModuleName, s, mgrSocs[s])
-            except:
-                logger.error('%s Manager socket already exists %s %s', ModuleName, s, mgrSocs[s])
+            if s not in self.cbFactory:
+                try:
+                    self.cbFactory[s] = CbServerFactory(self.onClientMessage)
+                    self.appListen[s] = reactor.listenUNIX(mgrSocs[s], self.cbFactory[s], backlog=4)
+                    logger.info('%s Opened manager socket %s %s', ModuleName, s, mgrSocs[s])
+                except:
+                    logger.info('%s Manager socket already exists %s %s', ModuleName, s, mgrSocs[s])
 
         # Start adaptors with 2 secs between them to give time for each to start
         delay = START_DELAY 
@@ -276,32 +277,35 @@ class ManageBridge:
         for d in self.devices:
             id = d["id"]
             self.elements[id] = True
-            exe = d["adaptor"]["exe"]
-            mgrSoc = d["adaptor"]["mgrSoc"]
-            friendlyName = d["friendly_name"]
-            reactor.callLater(delay, self.startAdaptor, exe, mgrSoc, id, friendlyName)
-            delay += START_DELAY
+            if not id in self.appProcs:
+                exe = d["adaptor"]["exe"]
+                mgrSoc = d["adaptor"]["mgrSoc"]
+                friendlyName = d["friendly_name"]
+                reactor.callLater(delay, self.startAdaptor, exe, mgrSoc, id, friendlyName)
+                delay += START_DELAY
         # Now start all the apps
         delay += START_DELAY*2
         for a in self.apps:
             id = a["app"]["id"]
             self.elements[id] = True
-            exe = a["app"]["exe"]
-            mgrSoc = a["app"]["mgrSoc"]
-            reactor.callLater(delay, self.startApp, exe, mgrSoc, id)
-            delay += START_DELAY
-        # Start watchdog to monitor apps and adaptors
-        reactor.callLater(delay+ELEMENT_WATCHDOG_INTERVAL, self.elementWatchdog)
-        # Monitor Bluetooth LE
-        #reactor.callInThread(self.monitorLescan)
-        # Give time for everything to start before we consider ourselves running
-        reactor.callLater(delay+START_DELAY, self.setRunning)
-        logger.info('%s All adaptors and apps set to start', ModuleName)
+            if not id in self.appProcs:
+                exe = a["app"]["exe"]
+                mgrSoc = a["app"]["mgrSoc"]
+                reactor.callLater(delay, self.startApp, exe, mgrSoc, id)
+                delay += START_DELAY
+        # Start watchdog to monitor apps and adaptors (only first time through)
+        if self.firstWatchdog:
+            reactor.callLater(delay+ELEMENT_WATCHDOG_INTERVAL, self.elementWatchdog)
+            # Monitor Bluetooth LE
+            #reactor.callInThread(self.monitorLescan)
+            # Give time for everything to start before we consider ourselves running
+            reactor.callLater(delay+START_DELAY, self.setRunning)
+            logger.info('%s All adaptors and apps set to start', ModuleName)
 
     def startAdaptor(self, exe, mgrSoc, id, friendlyName):
         try:
             p = subprocess.Popen([id, mgrSoc, id], executable=exe)
-            self.appProcs.append(p)
+            self.appProcs[id] = p
             logger.info('%s Started adaptor %s ID: %s', ModuleName, friendlyName, id)
         except Exception as ex:
             logger.error('%s Adaptor %s failed to start', ModuleName, friendlyName)
@@ -311,7 +315,7 @@ class ManageBridge:
     def startApp(self, exe, mgrSoc, id):
         try:
             p = subprocess.Popen([exe, mgrSoc, id])
-            self.appProcs.append(p)
+            self.appProcs[id] = p
             logger.info('%s App %s started', ModuleName, id)
         except Exception as ex:
             logger.error('%s App %s failed to start. exe: %s, socket: %s', ModuleName, id, exe, mgrSoc)
@@ -674,13 +678,6 @@ class ManageBridge:
                             appDev["adtSoc"] = socket
                             break
         if success:
-            #logger.info('%s Config information processed', ModuleName)
-            #logger.info('%s Apps:', ModuleName)
-            #logger.info('%s %s', ModuleName, str(self.apps))
-            #logger.info('%s', ModuleName)
-            #logger.info('%s Devices:', ModuleName)
-            #logger.info('%s %s', ModuleName, str(self.devices))
-            #logger.info('%s', ModuleName)
             logger.debug("%s idToName: %s", ModuleName, str(self.idToName))
             self.configured = True
         return success
@@ -995,6 +992,22 @@ class ManageBridge:
                 self.controllerConnected = False
                 self.disconnectedCount += 1
  
+    def onResourceMsg(self, msg):
+        try:
+            if msg["body"]["resource"] == "/api/bridge/v1/current_bridge/bridge":
+                # Call in thread to prevent problems with blocking
+                reactor.callInThread(self.updateConfig, msg)
+            elif msg["body"]["resource"] == "/api/bridge/v1/device_install":
+                reactor.callInThread(self.onDeviceInstall, msg)
+            elif msg["body"]["resource"] == "/api/bridge/v1/discovered_device/":
+                logger.info('%s Received discovered_device message from controller', ModuleName)
+            else:
+                logger.info('%s Unrecognised resource in message received from controller', ModuleName)
+                self.sendStatusMsg("Unrecognised resource in message received from controller")
+        except Exception as ex:
+            logger.warning('%s onResourceMsg. Problem processing message', ModuleName)
+            logger.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
+
     def onControlMessage(self, msg):
         if not "body" in msg: 
             logger.error('%s msg received from controller with no "body" key', ModuleName)
@@ -1102,16 +1115,7 @@ class ManageBridge:
                 logger.warning('%s Unrecognised command message received from controller: %s', ModuleName, msg)
                 self.sendStatusMsg("Unrecognised command message received from controller")
         elif "resource" in msg["body"]:
-            if msg["body"]["resource"] == "/api/bridge/v1/current_bridge/bridge":
-                # Call in thread to prevent problems with blocking
-                reactor.callInThread(self.updateConfig, msg)
-            elif msg["body"]["resource"] == "/api/bridge/v1/device_install":
-                reactor.callInThread(self.onDeviceInstall, msg)
-            elif msg["body"]["resource"] == "/api/bridge/v1/discovered_device/":
-                logger.info('%s Received discovered_device message from controller', ModuleName)
-            else:
-                logger.info('%s Unrecognised resource in message received from controller', ModuleName)
-                self.sendStatusMsg("Unrecognised resource in message received from controller")
+            self.onResourceMsg(msg)
         else:
             logger.info('%s No command or resource field in body of server message', ModuleName)
             self.sendStatusMsg("Unrecognised message received from controller")
@@ -1146,7 +1150,7 @@ class ManageBridge:
             # In case apps & adaptors have not shut down, kill their processes.
             for p in self.appProcs:
                 try:
-                    p.kill()
+                    self.appProcs[p].kill()
                 except:
                     logger.debug('%s No process to kill', ModuleName)
             self.removeSecondarySockets()
@@ -1312,9 +1316,92 @@ class ManageBridge:
                   }
             self.cbSendMsg(msg, a)
 
+    def configureApp(self, app):
+        logger.debug('%s configureApp: %s', ModuleName, str(app))
+        try:
+            id = self.apps[app]["app"]["id"]
+            for c in self.concConfig:
+                if c["id"] == id:
+                    conc = c["appConcSoc"]
+                    message = {"cmd": "config",
+                               "sim": CB_SIM_LEVEL,
+                               "config": {"adaptors": self.apps[app]["device_permissions"],
+                                          "bridge_id": self.bridge_id,
+                                          "connected": self.controllerConnected,
+                                          "concentrator": conc}}
+                    self.cbSendMsg(message, id)
+                    self.appConfigured.append(id)
+                    break
+        except Exception as ex:
+            logger.warning("%s ConfigureApp. Exception: %s %s", ModuleName, type(ex), str(ex.args))
+
+    def configureAdaptor(self, adt):
+        logger.debug('%s configureAdaptor: %s', ModuleName, str(adt))
+        try:
+            d = self.devices[adt]
+            id = d["id"]
+            message = {
+                       "cmd": "config",
+                       "config": 
+                           {"apps": d["adaptor"]["apps"], 
+                            "name": d["adaptor"]["name"],
+                            "friendly_name": d["friendly_name"],
+                            "btAddr": d["address"],
+                            "address": d["address"],
+                            "btAdpt": "hci0", 
+                            "sim": CB_SIM_LEVEL
+                           }
+                       }
+            if d["device"]["protocol"] == "zwave":
+                message["config"]["zwave_socket"] = d["adaptor"]["zwave_socket"]
+            #logger.debug('%s Response: %s %s', ModuleName, msg['id'], message)
+            self.cbSendMsg(message, id)
+        except Exception as ex:
+            logger.warning("%s ConfigureAdaptor. Exception: %s %s", ModuleName, type(ex), str(ex.args))
+
+    def configureConc(self):
+        logger.debug('%s configureConc', ModuleName)
+        try:
+            if self.configured:
+                for a in self.apps:
+                    self.concConfig.append({"id": a["app"]["id"], "appConcSoc": a["app"]["concSoc"]})
+                message = {"cmd": "config",
+                                  "config": {"bridge_id": self.bridge_id,
+                                             "apps": self.concConfig}
+                          }
+            else:
+                self.concNoApps = True
+                message = {"cmd": "config",
+                           "config": {"bridge_id": self.bridge_id}
+                          }
+            logger.debug('%s Sending config to conc:  %s', ModuleName, message)
+            self.cbSendConcMsg(message)
+        except Exception as ex:
+            logger.warning("%s ConfigureConc. Exception: %s %s", ModuleName, type(ex), str(ex.args))
+
+    def configureZwave(self):
+        logger.debug('%s configureZwave', ModuleName)
+        try:
+            zwaveConfig = []
+            message = {"cmd": "config",
+                       "config": "no_zwave"
+                      }
+            if self.configured:
+                for d in self.devices:
+                    if d["device"]["protocol"] == "zwave":
+                        zwaveConfig.append({"id": d["id"], 
+                                            "socket": d["adaptor"]["zwave_socket"],
+                                            "address": d["address"]
+                                          })
+                        message["config"] = zwaveConfig 
+            else:
+                self.noZwave = True
+            self.elFactory["zwave"].sendMsg(message)
+        except Exception as ex:
+            logger.warning("%s ConfigureZwave. Exception: %s %s", ModuleName, type(ex), str(ex.args))
+
     def onClientMessage(self, msg):
         #logger.debug('%s Received msg; %s', ModuleName, msg)
-        # Set watchdog flag
         if not "status" in msg:
             logger.warning('%s No status key in message from client; %s', ModuleName, msg)
             return
@@ -1334,75 +1421,20 @@ class ManageBridge:
             if msg["type"] == "app":
                 for a in self.apps:
                     if a["app"]["id"] == msg["id"]:
-                        for c in self.concConfig:
-                            if c["id"] == msg["id"]:
-                                conc = c["appConcSoc"]
-                                response = {"cmd": "config",
-                                            "sim": CB_SIM_LEVEL,
-                                            "config": {"adaptors": a["device_permissions"],
-                                                       "bridge_id": self.bridge_id,
-                                                       "connected": self.controllerConnected,
-                                                       "concentrator": conc}}
-                                #logger.debug('%s Response: %s %s', ModuleName, msg['id'], response)
-                                self.cbSendMsg(response, msg["id"])
-                                self.appConfigured.append(msg["id"])
-                                break
+                        self.configureApp(self.apps.index(a))
                         break
             elif msg["type"] == "adt": 
                 for d in self.devices:
                     if d["id"] == msg["id"]:
-                        response = {
-                        "cmd": "config",
-                        "config": 
-                            {"apps": d["adaptor"]["apps"], 
-                             "name": d["adaptor"]["name"],
-                             "friendly_name": d["friendly_name"],
-                             "btAddr": d["address"],
-                             "address": d["address"],
-                             "btAdpt": "hci0", 
-                             "sim": CB_SIM_LEVEL
-                            }
-                        }
-                        if d["device"]["protocol"] == "zwave":
-                            response["config"]["zwave_socket"] = d["adaptor"]["zwave_socket"]
-                        #logger.debug('%s Response: %s %s', ModuleName, msg['id'], response)
-                        self.cbSendMsg(response, msg["id"])
+                        self.configureAdaptor(self.devices.index(d))
                         break
             elif msg["type"] == "conc":
-                if self.configured:
-                    for a in self.apps:
-                        self.concConfig.append({"id": a["app"]["id"], "appConcSoc": a["app"]["concSoc"]})
-                    response = {"cmd": "config",
-                                       "config": {"bridge_id": self.bridge_id,
-                                                  "apps": self.concConfig}
-                               }
-                else:
-                    self.concNoApps = True
-                    response = {"cmd": "config",
-                                "config": {"bridge_id": self.bridge_id}
-                               }
-                logger.debug('%s Sending config to conc:  %s', ModuleName, response)
-                self.cbSendConcMsg(response)
+                self.configureConc()
                 # Only start apps & adaptors after concentrator has responded
                 if self.configured:
                     reactor.callLater(MIN_DELAY, self.startAll)
             elif msg["type"] == "zwave":
-                zwaveConfig = []
-                response = {"cmd": "config",
-                            "config": "no_zwave"
-                           }
-                if self.configured:
-                    for d in self.devices:
-                        if d["device"]["protocol"] == "zwave":
-                            zwaveConfig.append({"id": d["id"], 
-                                                "socket": d["adaptor"]["zwave_socket"],
-                                                "address": d["address"]
-                                              })
-                            response["config"] = zwaveConfig 
-                else:
-                    self.noZwave = True
-                #logger.debug('%s Sending config to conc:  %s', ModuleName, response)
-                self.elFactory["zwave"].sendMsg(response)
+                self.configureZwave()
             else:
                 logger.warning('%s Config req from unknown instance type: %s', ModuleName, msg['id'])
                 response = {"cmd": "error"}
