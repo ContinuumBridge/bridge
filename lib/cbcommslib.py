@@ -273,7 +273,7 @@ class CbApp:
 
     def cbConfigure(self, config):
         """Config is based on what adaptors are available."""
-        #logging.debug("%s %s Config: %s", ModuleName, self.id, config)
+        #logging.debug("%s %s Config: %s", ModuleName, self.id, json.dumps(config, indent=4))
         # Connect to socket for each adaptor
         self.bridge_id = config["bridge_id"]
         for adaptor in config["adaptors"]:
