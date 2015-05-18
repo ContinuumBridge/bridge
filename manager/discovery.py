@@ -63,7 +63,10 @@ if __name__ == '__main__':
             raw = p.after.split()
             logging.debug('%s raw data: %s', ModuleName, raw)
             addr = raw[0]
-            name = raw[1]
+            name = ""
+            for i in range(1, len(raw)):
+                name += raw[i] + " "
+            name = name[:-1]
             if name != "(unknown)":
                 logging.debug('%s name: %s', ModuleName, name)
                 found = False
