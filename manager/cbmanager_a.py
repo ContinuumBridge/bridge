@@ -483,15 +483,14 @@ class ManageBridge:
                 if self.bleDiscoveredData:
                     for b in self.bleDiscoveredData:
                         d["body"]["body"]["objects"].append(b)
+                    self.bleDiscoverPosted = True
                 else:
                     self.sendStatusMsg("No Bluetooth devices found.")
-            if self.zwaveDiscovered and CB_SIM_LEVEL == '0':
+            if self.zwaveDiscovered and not self.bleDiscoverPosted:
                 for b in self.zwaveDiscoveredData:
                     d["body"]["body"]["objects"].append(b)
-            self.zwaveDiscovered = False
-            self.bleDiscovered = False
         logger.debug('%s Discovered: %s', ModuleName, str(d))
-        if d["body"] != []:
+        if d["body"]["body"]["objects"] != []:
             msg = {"cmd": "msg",
                    "msg": d}
             self.cbSendConcMsg(msg)
@@ -546,7 +545,10 @@ class ManageBridge:
             if CB_ZWAVE_BRIDGE:
                 self.elFactory["zwave"].sendMsg({"cmd": "discover"})
                 self.zwaveDiscovering = False
+                self.zwaveDiscovered = False
             if self.bluetooth:
+                self.bleDiscovered = False
+                self.bleDiscoverPosted = False
                 reactor.callInThread(self.bleDiscover)
             reactor.callInThread(self.usbDiscover)
             self.sendStatusMsg("Follow manufacturer's instructions for device to be connected now.")
@@ -563,7 +565,7 @@ class ManageBridge:
             for d in self.devices:
                 if d["address"] == address:
                     self.sendControllerMsg("delete", "/api/bridge/v1/device_install/" + str(d["id"][3:]) +"/")
-                    msg = "Excluded " + d["friendly_name"] + ". Please remove it from the devices list."
+                    msg = "Excluded " + d["friendly_name"]
                     found = True
                     break
             if not found:
@@ -809,6 +811,19 @@ class ManageBridge:
             reactor.callFromThread(self.onClientMessage, req)
             self.concNoApps = False
 
+    def getConfig(self):
+        req = {"cmd": "msg",
+               "msg": {"source": self.bridge_id,
+                       "destination": "cb",
+                       "time_sent": isotime(),
+                       "body": {
+                                "resource": "/api/bridge/v1/current_bridge/bridge",
+                                "verb": "get"
+                               }
+                      }
+              }
+        self.cbSendConcMsg(req)
+
     def upgradeBridge(self, command):
         reactor.callFromThread(self.sendStatusMsg, "Upgrade in progress. Please wait")
         try:
@@ -923,8 +938,46 @@ class ManageBridge:
                     logger.debug('%s onDeviceInstall. Uninstalling: %s ', ModuleName, msg["body"]["body"]["friendly_name"])
                     if msg["body"]["body"]["device"]["protocol"] == "zwave":
                         self.zwaveExclude()
+                    else:
+                        self.sendControllerMsg("delete", msg["body"]["body"]["resource_uri"] + "/")
+            elif msg["body"]["verb"] == "delete":
+                pass
+            elif msg["body"]["verb"] == "create":
+                if msg["body"]["body"]["status"] == "should_install":
+                    self.sendControllerMsg("patch", msg["body"]["body"]["resource_uri"] + "/", "operational")
+                    # Until real-time updates implemented, just get full config when delete received
+                    #self.getConfig()
+            else:
+                logger.debug('%s onDeviceInstall, unrecognised verb: %s', ModuleName, msg["body"]["verb"])
         except Exception as ex:
             logger.warning('%s onDeviceInstall error', ModuleName)
+            logger.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
+
+    def onAppInstall(self, msg):
+        logger.debug('%s onAppInstall', ModuleName)
+        try:
+            logger.debug('%s onAppnstall, verb: %s', ModuleName, msg["body"]["verb"])
+            if msg["body"]["verb"] == "update":
+                if msg["body"]["body"]["status"] == "should_install":
+                    self.sendControllerMsg("patch", msg["body"]["body"]["resource_uri"] + "/", "installing")
+                    self.sendControllerMsg("patch", msg["body"]["body"]["resource_uri"] + "/", "operational")
+                    # Until real-time updates implemented, just get full config when delete received
+                    #self.getConfig()
+                if msg["body"]["body"]["status"] == "should_uninstall":
+                    self.sendControllerMsg("patch", msg["body"]["body"]["resource_uri"] + "/", "uninstalling")
+                    self.sendControllerMsg("delete", msg["body"]["body"]["resource_uri"] + "/")
+                    # Until real-time updates implemented, just get full config when delete received
+                    #self.getConfig()
+            elif msg["body"]["verb"] == "create":
+                # Until real-time updates implemented, just get full config when create received
+                if msg["body"]["body"]["status"] == "should_install":
+                    self.sendControllerMsg("patch", msg["body"]["body"]["resource_uri"] + "/", "operational")
+                    # Until real-time updates implemented, just get full config when delete received
+                    #self.getConfig()
+            else:
+                logger.debug('%s onAppInstall, unrecognised verb: %s', ModuleName, msg["body"]["verb"])
+        except Exception as ex:
+            logger.warning('%s onAppInstall error', ModuleName)
             logger.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
 
     def doCall(self, cmd):
@@ -999,10 +1052,12 @@ class ManageBridge:
                 reactor.callInThread(self.updateConfig, msg)
             elif msg["body"]["resource"] == "/api/bridge/v1/device_install":
                 reactor.callInThread(self.onDeviceInstall, msg)
-            elif msg["body"]["resource"] == "/api/bridge/v1/discovered_device/":
+            elif msg["body"]["resource"] == "/api/bridge/v1/discovered_device":
                 logger.info('%s Received discovered_device message from controller', ModuleName)
+            elif msg["body"]["resource"] == "/api/bridge/v1/app_install":
+                reactor.callInThread(self.onAppInstall, msg)
             else:
-                logger.info('%s Unrecognised resource in message received from controller', ModuleName)
+                logger.info('%s Unrecognised resource in message received from controller: %s', ModuleName, msg["body"]["resource"])
                 self.sendStatusMsg("Unrecognised resource in message received from controller")
         except Exception as ex:
             logger.warning('%s onResourceMsg. Problem processing message', ModuleName)
@@ -1024,7 +1079,7 @@ class ManageBridge:
         # Temporary fix because controller sometimes sends resource_uri
         if "resource_uri" in msg["body"]:
             msg["body"]["resource"] = msg["body"].pop("resource_uri")
-            logger.debug('%s resource_uri in message body, replacing: %s', ModuleName, json.dumps(msg, indent=4))
+            #logger.debug('%s resource_uri in message body, replacing: %s', ModuleName, json.dumps(msg, indent=4))
         if "command" in msg["body"]:
             command = msg["body"]["command"]
             if command == "start":
@@ -1077,17 +1132,7 @@ class ManageBridge:
                 fileName = path.split('/')[-1]
                 reactor.callInThread(self.sendLog, path, fileName)
             elif command == "update_config" or command == "update":
-                req = {"cmd": "msg",
-                       "msg": {"source": self.bridge_id,
-                               "destination": "cb",
-                               "time_sent": isotime(),
-                               "body": {
-                                        "resource": "/api/bridge/v1/current_bridge/bridge",
-                                        "verb": "get"
-                                       }
-                              }
-                      }
-                self.cbSendConcMsg(req)
+                self.getConfig()
             elif command == "z-exclude" or command == "z_exclude":
                 self.zwaveExclude()
             elif command.startswith("action"):
@@ -1227,19 +1272,25 @@ class ManageBridge:
     def cbSendSuperMsg(self, msg):
         self.cbSupervisorFactory.sendMsg(msg)
 
-    def sendControllerMsg(self, verb, resource):
-        req = {"cmd": "msg",
-               "msg": {"source": self.bridge_id,
-                       "destination": "cb",
-                       "time_sent": isotime(),
-                       "body": {
-                                "resource": resource,
-                                "verb": verb
-                               }
-                      }
-              }
-        logger.debug('%s sendControllerMsg, sending: %s', ModuleName, str(json.dumps(req, indent=4)))
-        self.cbSendConcMsg(req)
+    def sendControllerMsg(self, verb, resource, status=None):
+        try:
+            req = {"cmd": "msg",
+                   "msg": {"source": self.bridge_id,
+                           "destination": "cb",
+                           "time_sent": isotime(),
+                           "body": {
+                                    "resource": resource,
+                                    "verb": verb
+                                   }
+                          }
+                  }
+            if status != None:
+                req["msg"]["body"]["body"] = {}
+                req["msg"]["body"]["body"]["status"] = status
+            logger.debug('%s sendControllerMsg, sending: %s', ModuleName, str(json.dumps(req, indent=4)))
+            self.cbSendConcMsg(req)
+        except Exception as ex:
+            logger.warning('%s sendControllerMsg exception: %s %s', ModuleName, type(ex), str(ex.args))
 
     def elementWatchdog(self):
         """ Checks that all apps and adaptors have communicated within the designated interval. """
