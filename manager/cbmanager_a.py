@@ -564,11 +564,18 @@ class ManageBridge:
             found = False
             for d in self.devices:
                 if d["address"] == address:
-                    self.sendControllerMsg("delete", "/api/bridge/v1/device_install/" + str(d["id"][3:]) +"/")
-                    msg = "Excluded " + d["friendly_name"]
                     found = True
+                    excludedID = str(d["id"][3:])
+                    if excludedID == self.zwaveShouldExcludeID:
+                        self.sendControllerMsg("delete", "/api/bridge/v1/device_install/" + excludedID +"/")
+                        msg = "Excluded " + d["friendly_name"]
+                    else:
+                        self.sendControllerMsg("patch", "/api/bridge/v1/device_install/" + self.zwaveShouldExcludeID +"/", "operational")
+                        reactor.callLater(0.2, self.sendControllerMsg, "delete", "/api/bridge/v1/device_install/" + excludedID +"/")
+                        msg = "Excluded " + d["friendly_name"]
                     break
             if not found:
+                self.sendControllerMsg("patch", "/api/bridge/v1/device_install/" + self.zwaveShouldExcludeID +"/", "operational")
                 msg= "Excluded Z-Wave device at address " + address + ".\n Device interview may not have been completed.\n You may need to rerun discover devices?"
         reactor.callLater(0.5, self.sendStatusMsg, msg)
 
@@ -931,12 +938,14 @@ class ManageBridge:
 
     def onDeviceInstall(self, msg):
         logger.debug('%s onDeviceInstall', ModuleName)
+        self.zwaveShouldExcludeID = None
         try:
             logger.debug('%s onDeviceInstall, verb: %s', ModuleName, msg["body"]["verb"])
             if msg["body"]["verb"] == "update":
                 if msg["body"]["body"]["status"] == "should_uninstall":
                     logger.debug('%s onDeviceInstall. Uninstalling: %s ', ModuleName, msg["body"]["body"]["friendly_name"])
                     if msg["body"]["body"]["device"]["protocol"] == "zwave":
+                        self.zwaveShouldExcludeID = str(msg["body"]["body"]["id"])
                         self.zwaveExclude()
                     else:
                         self.sendControllerMsg("delete", msg["body"]["body"]["resource_uri"] + "/")
@@ -963,17 +972,21 @@ class ManageBridge:
                     self.sendControllerMsg("patch", msg["body"]["body"]["resource_uri"] + "/", "operational")
                     # Until real-time updates implemented, just get full config when delete received
                     #self.getConfig()
-                if msg["body"]["body"]["status"] == "should_uninstall":
+                elif msg["body"]["body"]["status"] == "should_uninstall":
                     self.sendControllerMsg("patch", msg["body"]["body"]["resource_uri"] + "/", "uninstalling")
                     self.sendControllerMsg("delete", msg["body"]["body"]["resource_uri"] + "/")
                     # Until real-time updates implemented, just get full config when delete received
                     #self.getConfig()
+                else:
+                    logger.debug('%s onAppInstall, update. Unrecognised status: %s', ModuleName, msg["body"]["body"]["status"])
             elif msg["body"]["verb"] == "create":
                 # Until real-time updates implemented, just get full config when create received
                 if msg["body"]["body"]["status"] == "should_install":
                     self.sendControllerMsg("patch", msg["body"]["body"]["resource_uri"] + "/", "operational")
                     # Until real-time updates implemented, just get full config when delete received
                     #self.getConfig()
+                else:
+                    logger.debug('%s onAppInstall, create. Unrecognised status: %s', ModuleName, msg["body"]["body"]["status"])
             else:
                 logger.debug('%s onAppInstall, unrecognised verb: %s', ModuleName, msg["body"]["verb"])
         except Exception as ex:
