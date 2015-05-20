@@ -569,13 +569,16 @@ class ManageBridge:
                     if excludedID == self.zwaveShouldExcludeID:
                         self.sendControllerMsg("delete", "/api/bridge/v1/device_install/" + excludedID +"/")
                         msg = "Excluded " + d["friendly_name"]
+                    elif self.zwaveShouldExcludeID == None:
+                        msg = "Excluded " + d["friendly_name"]
                     else:
-                        self.sendControllerMsg("patch", "/api/bridge/v1/device_install/" + self.zwaveShouldExcludeID +"/", "operational")
+                        self.sendControllerMsg("patch", "/api/bridge/v1/device_install/" + self.zwaveShouldExcludeID +"/", "uninstall_error")
                         reactor.callLater(0.2, self.sendControllerMsg, "delete", "/api/bridge/v1/device_install/" + excludedID +"/")
                         msg = "Excluded " + d["friendly_name"]
                     break
             if not found:
-                self.sendControllerMsg("patch", "/api/bridge/v1/device_install/" + self.zwaveShouldExcludeID +"/", "operational")
+                if self.zwaveShouldExcludeID != None:
+                    self.sendControllerMsg("patch", "/api/bridge/v1/device_install/" + strself.zwaveShouldExcludeID +"/", "operational")
                 msg= "Excluded Z-Wave device at address " + address + ".\n Device interview may not have been completed.\n You may need to rerun discover devices?"
         reactor.callLater(0.5, self.sendStatusMsg, msg)
 
@@ -1147,6 +1150,7 @@ class ManageBridge:
             elif command == "update_config" or command == "update":
                 self.getConfig()
             elif command == "z-exclude" or command == "z_exclude":
+                self.zwaveShouldExcludeID = None
                 self.zwaveExclude()
             elif command.startswith("action"):
                 try:
