@@ -158,10 +158,8 @@ class Concentrator():
         self.cbSendManagerMsg(msg)
 
     def appInit(self, appID):
-        resp = {"id": "conc",
-                "resp": "config"}
-        self.cbSendMsg(resp, appID)
-        self.readyApps.append(appID)
+        if appID not in self.readyApps:
+            self.readyApps.append(appID)
 
     def onAppData(self, msg):
         """
@@ -174,18 +172,17 @@ class Concentrator():
                     if "appID" in msg:
                         self.appInit(msg["appID"])
                     else:
-                        self.cbLog("warning", "Message from app with no ID: " + str(msg)[:100])
+                        self.cbLog("warning", "Message from app with no ID: " + str(json.dumps(msg, indent=4)))
             elif not "destination" in msg:
-                self.cbLog("warning", "Message from app with no destination: " + str(msg)[:100])
+                self.cbLog("warning", "Message from app with no destination: " + str(json.dumps(msg, indent=4)))
             else:
                 if msg["destination"].startswith("CID"):
                     msg["source"] = self.bridge_id + "/" + msg["source"]
                     self.concFactory.sendMsg(msg)
                 else:
-                    self.cbLog("warning","Illegal desination in app message: " + str(msg)[:100])
-        except Exception as inst:
-            self.cbLog("warning", "onAppData. Malformed message: " + str(msg)[:100])
-            self.cbLog("warning", "Exception: " + str(type(inst)) + str(inst.args))
+                    self.cbLog("warning","Illegal desination in app message. Should be CIDn: " + str(json.dumps(msg, indent=4)))
+        except Exception as ex:
+            self.cbLog("warning", "Malformed message from app. Exception: Type: " + str(type(ex)) + "exception: " +  str(ex.args))
     
 if __name__ == '__main__':
     Concentrator(sys.argv)
