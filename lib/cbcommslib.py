@@ -342,6 +342,60 @@ class CbApp:
     def sendManagerMessage(self, msg):
         self.managerFactory.sendMsg(msg)
 
+class CbClient():
+    def __init__(self, aid , cid):
+        self.aid = aid
+        self.cid = cid
+        self.onClientMessage = None
+        self.count = 0
+        self.bodies = []
+
+    def send(self, body):
+        body["n"] = self.count
+        self.count += 1
+        self.bodies.append(body)
+        message = {
+                   "source": self.aid,
+                   "destination": self.cid,
+                   "body": self.bodies
+                  }
+        self.sendMessage(message, "conc")
+
+    def receive(self, message):
+        try:
+            self.cbLog("debug", "Message from client: " + str(message))
+            rx_n = 0
+            sendAck = False
+            if "body" in message:
+                for b in message["body"]:
+                    if "n" in b:
+                        if rx_n < b["n"]:
+                            rx_n = b["n"]
+                        del b["n"]
+                        sendAck = True
+                    if "a" in b:
+                        if b["a"] == 0:
+                            self.bodies = []
+                        else:
+                            for sent in self.bodies:
+                                if sent["n"] <= b["a"]:
+                                    self.bodies.remove(sent)
+                                    self.cbLog("debug", "Removed body " + str(b["a"]) + " from queue")
+                                    self.cbLog("debug", "bodies " + str(self.bodies))
+                    elif self.onClientMessage:
+                        self.onClientMessage(b)
+                if sendAck:
+                    ack = {
+                           "source": self.aid,
+                           "destination": self.cid,
+                           "body": [{"a": rx_n}]
+                           }
+                    self.sendMessage(ack, "conc")
+            else:
+                self.cbLog("warning", "Received message from client with no body")
+        except Exception as ex:
+            self.cbLog("warning", "Client receive exception. Type: " + str(type(ex)) + "exception: " +  str(ex.args))
+
 class CbClientProtocol(LineReceiver):
     def __init__(self, processMsg, initMsg):
         self.processMsg = processMsg
