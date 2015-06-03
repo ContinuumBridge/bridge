@@ -44,6 +44,7 @@ class Supervisor:
         self.checkingManager = False
         self.disconnectCount = 0
         self.timeStamp = 0
+        self.mangerPings = 0
         signal.signal(signal.SIGINT, self.signalHandler)  # For catching SIGINT
         signal.signal(signal.SIGTERM, self.signalHandler)  # For catching SIGTERM
         reactor.callLater(0.1, self.startConman)
@@ -156,11 +157,21 @@ class Supervisor:
         if not self.starting:
             # -1 is allowance for times not being sync'd (eg: separate devices)
             if self.timeStamp > startTime - 1:
-                reactor.callLater(WATCHDOG_INTERVAL, self.checkManager, time.time())
-                msg = {"msg": "status",
-                       "status": "ok"
-                      }
-                self.cbSendManagerMsg(msg)
+                try:
+                    msg = {"msg": "status",
+                           "status": "ok"
+                          }
+                    self.cbSendManagerMsg(msg)
+                except Exception as ex:
+                    # Caters for ntp changing time & hence doing check before manager has started
+                    if self.managerPings < 2:
+                        self.mangerPings +=1
+                        logger.warning("%s Unable to to send status message to manager, exception: %s %s", ModuleName, type(ex), str(ex.args))
+                    else:
+                        logger.error("%s Cannot communicate with manager. Rebooting, exception: %s %s", ModuleName, type(ex), str(ex.args))
+                        self.reboot()
+                finally:
+                    reactor.callLater(WATCHDOG_INTERVAL, self.checkManager, time.time())
             else:
                 logging.warning("%s Manager appears to be dead. Trying to restart nicely", ModuleName)
                 msg = {"msg": "stopall"

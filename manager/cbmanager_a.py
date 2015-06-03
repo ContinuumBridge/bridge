@@ -177,7 +177,23 @@ class ManageBridge:
         return mgrSocs
 
     def startElements(self):
-        reactor.callInThread(self.checkBluetooth)
+        # Initiate comms with supervisor, which started the manager in the first place
+        s = CB_SOCKET_DIR + "skt-super-mgr"
+        initMsg = {"id": "manager",
+                   "msg": "status",
+                   "status": "ok"} 
+        try:
+            self.cbSupervisorFactory = CbClientFactory(self.processSuper, initMsg)
+            reactor.connectUNIX(s, self.cbSupervisorFactory, timeout=10)
+            logger.info('%s Opened supervisor socket %s', ModuleName, s)
+        except Exception as ex:
+            logger.error('%s Cannot open supervisor socket %s', ModuleName, s)
+            logger.error("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
+
+        try:
+            reactor.callInThread(self.checkBluetooth)
+        except Exception as ex:
+            logger.warning("%s Unable to to call checkBluetooth, exception: %s %s", ModuleName, type(ex), str(ex.args))
         if self.configured:
             self.removeSecondarySockets()
         els = [{"id": "conc",
@@ -212,19 +228,6 @@ class ManageBridge:
                 logger.error('%s Failed to start %s', ModuleName, el["id"])
                 logger.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
     
-        # Initiate comms with supervisor, which started the manager in the first place
-        s = CB_SOCKET_DIR + "skt-super-mgr"
-        initMsg = {"id": "manager",
-                   "msg": "status",
-                   "status": "ok"} 
-        try:
-            self.cbSupervisorFactory = CbClientFactory(self.processSuper, initMsg)
-            reactor.connectUNIX(s, self.cbSupervisorFactory, timeout=10)
-            logger.info('%s Opened supervisor socket %s', ModuleName, s)
-        except Exception as ex:
-            logger.error('%s Cannot open supervisor socket %s', ModuleName, s)
-            logger.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
-
     def setRunning(self):
         self.states("running")
 
