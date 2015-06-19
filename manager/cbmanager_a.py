@@ -1038,7 +1038,7 @@ class ManageBridge:
                 reactor.callLater(APP_STOP_DELAY, self.killAppProcs)
                 reactor.callLater(APP_STOP_DELAY + MIN_DELAY, self.waitToUpgrade, command)
             elif command == "sendlog" or command == "send_log":
-                self.sendLog(CB_CONFIG_DIR + '/bridge.log', 'bridge.log')
+                self.sendLog('/var/log/cbridge.log', 'cbridge.log')
             elif command == "battery":
                 self.sendBatteryLevels()
             elif command.startswith("call"):
