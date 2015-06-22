@@ -12,9 +12,10 @@ ELEMENT_WATCHDOG_INTERVAL = 120         # Interval at which to check apps/adapto
 ELEMENT_POLL_INTERVAL = 3               # Delay between polling each element
 APP_STOP_DELAY = 3                      # Time to allow apps/adaprts to stop before killing them
 MIN_DELAY = 1                           # Min time to wait when a delay is needed
-CONNECTION_WATCHDOG_INTERVAL = 60*60*6  # Reboot if no messages received for this time
+CONNECTION_WATCHDOG_INTERVAL = 60*60*3  # Reboot if no messages received for this time
 WATCHDOG_CID = "CID65"                  # Client ID to send watchdog messages to
 WATCHDOG_SEND_INTERVAL = 60*30          # How often to send messages to watchdog client
+WATCHDOG_START_DELAY = 240              # How long to wait before sending first watchdog message
 
 ModuleName = "Manager"
 id = "manager"
@@ -184,7 +185,7 @@ class ManageBridge:
     def startElements(self):
         # First start connection watchdog, in case anything goes wrong
         reactor.callLater(CONNECTION_WATCHDOG_INTERVAL, self.connectionWatchdog)
-        reactor.callLater(WATCHDOG_SEND_INTERVAL, self.sendWatchdogMsg)
+        reactor.callLater(WATCHDOG_START_DELAY, self.sendWatchdogMsg)
         # Initiate comms with supervisor, which started the manager in the first place
         s = CB_SOCKET_DIR + "skt-super-mgr"
         initMsg = {"id": "manager",
