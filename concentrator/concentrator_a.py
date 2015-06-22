@@ -88,14 +88,18 @@ class Concentrator():
                 if "message" in msg:
                     msg["type"] = msg.pop("message")
                 self.cbSendManagerMsg(msg)
-            except Exception as inst:
-                self.cbLog("warning", "onControllerMessage. Unexpected manager message: " + str(json.dumps(msg, indent=4)))
-                self.cbLog("warning", "Exception: " + str(type(inst)) + " " +  str(inst.args))
+            except Exception as ex:
+                self.cbLog("warning", "onControllerMessage. Unexpected manager message. Exception: " + str(type(ex)) + " " +  str(ex.args))
         else:
             try:
                 dest = msg["destination"].split('/')
                 if dest[0] == self.bridge_id:
+                    if dest[1] == "AID0":
+                         msg["status"] = "control_msg"
+                         msg["id"] = self.id
+                         self.cbSendManagerMsg(msg)
                     if dest[1] in self.appInstances:
+
                         msg["destination"] = dest[1]
                         if dest[1] in self.readyApps:
                             self.cbLog("debug", "onControllerMessage, sending to: " +  dest[1])

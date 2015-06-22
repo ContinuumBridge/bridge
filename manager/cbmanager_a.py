@@ -5,13 +5,17 @@
 # Proprietary and confidential
 # Written by Peter Claydon
 #
-START_DELAY = 2.0                  # Delay between starting each adaptor or app
-CONDUIT_WATCHDOG_MAXTIME = 120     # Max time with no message before notifying supervisor
-CONDUIT_MAX_DISCONNECT_COUNT = 120 # Max number of messages before notifying supervisor
-ELEMENT_WATCHDOG_INTERVAL = 120    # Interval at which to check apps/adaptors have communicated
-ELEMENT_POLL_INTERVAL = 3          # Delay between polling each element
-APP_STOP_DELAY = 3                 # Time to allow apps/adaprts to stop before killing them
-MIN_DELAY = 1                      # Min time to wait when a delay is needed
+START_DELAY = 2.0                       # Delay between starting each adaptor or app
+CONDUIT_WATCHDOG_MAXTIME = 120          # Max time with no message before notifying supervisor
+CONDUIT_MAX_DISCONNECT_COUNT = 120      # Max number of messages before notifying supervisor
+ELEMENT_WATCHDOG_INTERVAL = 120         # Interval at which to check apps/adaptors have communicated
+ELEMENT_POLL_INTERVAL = 3               # Delay between polling each element
+APP_STOP_DELAY = 3                      # Time to allow apps/adaprts to stop before killing them
+MIN_DELAY = 1                           # Min time to wait when a delay is needed
+CONNECTION_WATCHDOG_INTERVAL = 60*60*6  # Reboot if no messages received for this time
+WATCHDOG_CID = "CID65"                  # Client ID to send watchdog messages to
+WATCHDOG_SEND_INTERVAL = 60*30          # How often to send messages to watchdog client
+
 ModuleName = "Manager"
 id = "manager"
 
@@ -103,6 +107,7 @@ class ManageBridge:
         self.batteryLevels = []
         self.idToName = {}
         self.bluetooth = False
+        self.rxCount = 0  # Used for watchdog
 
         status = self.readConfig()
         logger.info('%s Read config status: %s', ModuleName, status)
@@ -177,13 +182,16 @@ class ManageBridge:
         return mgrSocs
 
     def startElements(self):
+        # First start connection watchdog, in case anything goes wrong
+        reactor.callLater(CONNECTION_WATCHDOG_INTERVAL, self.connectionWatchdog)
+        reactor.callLater(WATCHDOG_SEND_INTERVAL, self.sendWatchdogMsg)
         # Initiate comms with supervisor, which started the manager in the first place
         s = CB_SOCKET_DIR + "skt-super-mgr"
         initMsg = {"id": "manager",
                    "msg": "status",
                    "status": "ok"} 
         try:
-            self.cbSupervisorFactory = CbClientFactory(self.processSuper, initMsg)
+            self.cbSupervisorFactory = CbClientFactory(self.onSuperMessage, initMsg)
             reactor.connectUNIX(s, self.cbSupervisorFactory, timeout=10)
             logger.info('%s Opened supervisor socket %s', ModuleName, s)
         except Exception as ex:
@@ -941,7 +949,29 @@ class ManageBridge:
             levels = "No battery level information available at this time"
         self.sendStatusMsg(levels)
 
-    def processSuper(self, msg):
+    def connectionWatchdog(self):
+        """ The final defence. Requests a reboot if no messages received for a long time. """
+        logger.debug('%s connectionWatchdog, rxCount: %s', ModuleName, self.rxCount)
+        if self.rxCount == 0:
+            self.cbSendSuperMsg({"msg": "reboot"})
+        else:
+            self.rxCount = 0
+        reactor.callLater(CONNECTION_WATCHDOG_INTERVAL, self.connectionWatchdog)
+
+    def sendWatchdogMsg(self):
+        msg = {"cmd": "msg",
+               "msg": {"source": self.bridge_id + "/AID0",
+                       "destination": WATCHDOG_CID,
+                       "body": {
+                                 "status": "OK"
+                               }
+                      }
+              }
+        logger.debug('%s Sending watchdog message: %s', ModuleName, msg)
+        self.cbSendConcMsg(msg)
+        reactor.callLater(WATCHDOG_SEND_INTERVAL, self.sendWatchdogMsg)
+ 
+    def onSuperMessage(self, msg):
         """  watchdog. Replies with status=ok or a restart/reboot command. """
         if msg["msg"] == "stopall":
             resp = {"msg": "status",
@@ -998,9 +1028,13 @@ class ManageBridge:
             self.processConduitStatus(msg)
             return
         logger.debug("%s Received from controller: %s", ModuleName, json.dumps(msg, indent=4))
+        self.rxCount += 1
+        logger.debug('%s onControlMessage, rxCount: %s', ModuleName, self.rxCount)
         if "command" in msg["body"]:
             command = msg["body"]["command"]
-            if command == "start":
+            if command == "none":
+                pass
+            elif command == "start":
                 if self.configured:
                     if self.state == "stopped":
                         logger.info('%s Starting adaptors and apps', ModuleName)
