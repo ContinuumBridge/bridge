@@ -9,7 +9,7 @@ START_DELAY = 2.0                       # Delay between starting each adaptor or
 CONDUIT_WATCHDOG_MAXTIME = 120          # Max time with no message before notifying supervisor
 CONDUIT_MAX_DISCONNECT_COUNT = 120      # Max number of messages before notifying supervisor
 ELEMENT_WATCHDOG_INTERVAL = 120         # Interval at which to check apps/adaptors have communicated
-ELEMENT_POLL_INTERVAL = 3               # Delay between polling each element
+ELEMENT_POLL_INTERVAL = 30              # Delay between polling each element
 APP_STOP_DELAY = 3                      # Time to allow apps/adaprts to stop before killing them
 MIN_DELAY = 1                           # Min time to wait when a delay is needed
 CONNECTION_WATCHDOG_INTERVAL = 60*60*3  # Reboot if no messages received for this time
@@ -108,7 +108,7 @@ class ManageBridge:
         self.batteryLevels = []
         self.idToName = {}
         self.bluetooth = False
-        self.rxCount = 0  # Used for watchdog
+        self.rxCount = 1  # Used for watchdog. Set to 1 to overcome NTP change on startup issues
 
         status = self.readConfig()
         logger.info('%s Read config status: %s', ModuleName, status)
@@ -1263,7 +1263,7 @@ class ManageBridge:
         reactor.callLater(ELEMENT_WATCHDOG_INTERVAL, self.elementWatchdog)
         if self.firstWatchdog:
             l = task.LoopingCall(self.pollElement)
-            l.start(ELEMENT_POLL_INTERVAL) # call every second
+            l.start(ELEMENT_POLL_INTERVAL)
             self.firstWatchdog = False
 
     def pollElement(self):
