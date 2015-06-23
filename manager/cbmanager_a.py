@@ -237,9 +237,6 @@ class ManageBridge:
                 logger.error('%s Failed to start %s', ModuleName, el["id"])
                 logger.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
     
-    def setRunning(self):
-        self.states("running")
-
     def removeSecondarySockets(self):
         # There should be no sockets to remove if there is no config file
         # Also there are no apps and adaptors without a config file
@@ -287,7 +284,7 @@ class ManageBridge:
         self.elements = {}
         for d in self.devices:
             id = d["id"]
-            self.elements[id] = True
+            self.elements[id] = False
             exe = d["adaptor"]["exe"]
             mgrSoc = d["adaptor"]["mgrSoc"]
             friendlyName = d["friendly_name"]
@@ -297,7 +294,7 @@ class ManageBridge:
         delay += START_DELAY*2
         for a in self.apps:
             id = a["app"]["id"]
-            self.elements[id] = True
+            self.elements[id] = False
             exe = a["app"]["exe"]
             mgrSoc = a["app"]["mgrSoc"]
             reactor.callLater(delay, self.startApp, exe, mgrSoc, id)
@@ -306,8 +303,7 @@ class ManageBridge:
         reactor.callLater(delay+ELEMENT_WATCHDOG_INTERVAL, self.elementWatchdog)
         # Monitor Bluetooth LE
         #reactor.callInThread(self.monitorLescan)
-        # Give time for everything to start before we consider ourselves running
-        reactor.callLater(delay+START_DELAY, self.setRunning)
+        reactor.callLater(5, self.checkRunning)
         logger.info('%s All adaptors and apps set to start', ModuleName)
 
     def startAdaptor(self, exe, mgrSoc, id, friendlyName):
@@ -328,6 +324,17 @@ class ManageBridge:
         except Exception as ex:
             logger.error('%s App %s failed to start. exe: %s, socket: %s', ModuleName, id, exe, mgrSoc)
             logger.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
+
+    def checkRunning(self):
+        logger.debug('%s checkRunning, elements: %s', ModuleName, str(self.elements))
+        running = True
+        for e in self.elements:
+            if self.elements[e] == False:
+                running = False
+        if running:
+            self.states("running")
+        else:
+            reactor.callLater(5, self.checkRunning)
 
     def monitorLescan(self):
         """ 
@@ -1245,17 +1252,14 @@ class ManageBridge:
     def elementWatchdog(self):
         """ Checks that all apps and adaptors have communicated within the designated interval. """
         #logger.debug('%s elementWatchdog, elements: %s', ModuleName, str(self.elements))
-        if self.state == "running":
-            for e in self.elements:
-                if self.elements[e] == False:
-                    if e != "conc":
-                        logger.warning('%s %s has not communicated within watchdog interval', ModuleName, e)
-                        self.sendStatusMsg("Watchdog timeout for " + e + " - Restarting")
-                        self.cbSendSuperMsg({"msg": "restart"})
-                        self.restarting = True
-                        break
-                else:
-                    self.elements[e] = False
+        for e in self.elements:
+            if self.elements[e] == False:
+                if e != "conc":
+                    logger.warning('%s %s has not communicated within watchdog interval', ModuleName, e)
+                    self.sendStatusMsg("Watchdog timeout for " + e)
+                    break
+            else:
+                self.elements[e] = False
         reactor.callLater(ELEMENT_WATCHDOG_INTERVAL, self.elementWatchdog)
         if self.firstWatchdog:
             l = task.LoopingCall(self.pollElement)
@@ -1273,9 +1277,9 @@ class ManageBridge:
                         self.elFactory["zwave"].sendMsg({"cmd": "status"})
                     else:
                         self.cbSendMsg({"cmd": "status"}, e)
-                except Exception as inst:
+                except Exception as ex:
                     logger.warning("%s pollElement. Could not send message to: %s", ModuleName, e)
-                    logger.warning("%s Exception: %s %s", ModuleName, type(inst), str(inst.args))
+                    logger.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
 
     def onUserMessage(self, msg):
         if "body" in msg:
@@ -1319,7 +1323,6 @@ class ManageBridge:
 
     def onClientMessage(self, msg):
         #logger.debug('%s Received msg; %s', ModuleName, msg)
-        # Set watchdog flag
         if not "status" in msg:
             logger.warning('%s No status key in message from client; %s', ModuleName, msg)
             return
@@ -1336,6 +1339,7 @@ class ManageBridge:
             if not "type" in msg:
                 logger.warning('%s No type key in message from client; %s', ModuleName, msg)
                 return
+            logger.info('%s %s running', ModuleName, msg["id"])
             if msg["type"] == "app":
                 for a in self.apps:
                     if a["app"]["id"] == msg["id"]:
