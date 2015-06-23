@@ -343,9 +343,16 @@ class CbApp:
         self.managerFactory.sendMsg(msg)
 
 class CbClient():
-    def __init__(self, aid , cid):
+    """
+    aid is to ID of the app.
+    cid is the client ID that the app is to communicate with.
+    keep is the number of message bodies to keep if messages are not acknowleged by the client.
+    CBClient will attempt to resend message bodies that are kept.
+    """
+    def __init__(self, aid , cid, keep=3):
         self.aid = aid
         self.cid = cid
+        self.keep = keep
         self.onClientMessage = None
         self.count = 0
         self.bodies = []
@@ -354,6 +361,8 @@ class CbClient():
         body["n"] = self.count
         self.count += 1
         self.bodies.append(body)
+        if len(self.bodies) > self.keep:
+            del self.bodies[0]
         message = {
                    "source": self.aid,
                    "destination": self.cid,
