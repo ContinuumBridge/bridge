@@ -63,7 +63,6 @@ class CbAdaptor:
         managerSocket = argv[1]
         self.id = argv[2]
         logging.info("%s Hello from %s", ModuleName, self.id)
-        procname.setprocname(self.id)
 
         initMsg = {"id": self.id,
                    "type": "adt",
@@ -372,7 +371,7 @@ class CbClient():
 
     def receive(self, message):
         try:
-            self.cbLog("debug", "Message from client: " + str(message))
+            #self.cbLog("debug", "Message from client: " + str(message))
             rx_n = 0
             sendAck = False
             if "body" in message:
@@ -420,7 +419,7 @@ class CbClientProtocol(LineReceiver):
         try:
             self.sendLine(json.dumps(msg))
         except:
-            logging.warning("%s Message not send: %s", ModuleName, self.id, msg)
+            logging.warning("%s Message not send: %s", ModuleName, msg)
 
 class CbClientFactory(ClientFactory):
     def __init__(self, processMsg, initMsg):
@@ -432,7 +431,10 @@ class CbClientFactory(ClientFactory):
         return self.proto
 
     def sendMsg(self, msg):
-        self.proto.sendMsg(msg)
+        try:
+            self.proto.sendMsg(msg)
+        except:
+            logging.warning("%s Message not send: %s", ModuleName, msg)
 
 class CbServerProtocol(LineReceiver):
     def __init__(self, processMsg):
@@ -445,7 +447,7 @@ class CbServerProtocol(LineReceiver):
         try:
             self.sendLine(json.dumps(msg))
         except:
-            logging.warning("%s Message not send: %s", ModuleName, self.id, msg)
+            logging.warning("%s Message not send: %s", ModuleName, msg)
 
 class CbServerFactory(Factory):
     def __init__(self, processMsg):
