@@ -5,7 +5,7 @@
 # Proprietary and confidential
 # Written by Peter Claydon
 #
-START_DELAY = 2.0                       # Delay between starting each adaptor or app
+START_DELAY = 0.2                       # Delay between starting each adaptor or app
 CONDUIT_WATCHDOG_MAXTIME = 120          # Max time with no message before notifying supervisor
 CONDUIT_MAX_DISCONNECT_COUNT = 120      # Max number of messages before notifying supervisor
 ELEMENT_WATCHDOG_INTERVAL = 120         # Interval at which to check apps/adaptors have communicated
@@ -138,7 +138,7 @@ class ManageBridge:
         else:
             logger.info('%s Running without Cloud Server', ModuleName)
         # Give time for node interface to start
-        reactor.callLater(START_DELAY + 5, self.startElements)
+        reactor.callLater(START_DELAY + 1, self.startElements)
         reactor.run()
 
     def checkBluetooth(self):

@@ -388,8 +388,8 @@ class CbClient():
                             for sent in self.bodies:
                                 if sent["n"] <= b["a"]:
                                     self.bodies.remove(sent)
-                                    self.cbLog("debug", "Removed body " + str(b["a"]) + " from queue")
-                                    self.cbLog("debug", "bodies " + str(self.bodies))
+                                    #self.cbLog("debug", "Removed body " + str(b["a"]) + " from queue")
+                                    #self.cbLog("debug", "bodies " + str(self.bodies))
                     elif self.onClientMessage:
                         self.onClientMessage(b)
                 if sendAck:
