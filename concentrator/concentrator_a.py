@@ -71,9 +71,9 @@ class Concentrator():
             self.cbLog("info", "onConfigure. appInstances: " + str(self.appInstances))
 
     def onControllerMessage(self, msg):
-        if "body" in msg:
-            if not "connected" in msg["body"]:
-                self.cbLog("debug", "Received from controller: " + str(json.dumps(msg, indent=4)))
+        #if "body" in msg:
+        #    if not "connected" in msg["body"]:
+        #        self.cbLog("debug", "Received from controller: " + str(json.dumps(msg, indent=4)))
         try:
             if not "destination" in msg:
                 msg["destination"] = self.bridge_id
