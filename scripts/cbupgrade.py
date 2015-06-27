@@ -20,6 +20,8 @@ logging.basicConfig(filename=CB_LOGFILE,level=logging.DEBUG,format='%(asctime)s 
 try:
     subprocess.call(["cp", "../../bridge_clone/scripts/cb", "/usr/bin/cb"])
     subprocess.call(["cp", "../../bridge_clone/scripts/cbridge", "/etc/init.d/cbridge"])
+    subprocess.call(["update-rc.d", "-f", "ntp", "remove"])
+    subprocess.call(["pkill", "ntpd"])
     if not os.path.exists("../../bridge_clone/node_modules"):
         subprocess.call(["cp", "-r", "../../bridge/node_modules", "../../bridge_clone/node_modules"])
         logging.info("%s Copied old node_modules", ModuleName)

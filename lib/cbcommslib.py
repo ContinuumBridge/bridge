@@ -421,7 +421,7 @@ class CbClientProtocol(LineReceiver):
         except:
             logging.warning("%s Message not send: %s", ModuleName, msg)
 
-class CbClientFactory(ClientFactory):
+class CbClientFactory(ReconnectingClientFactory):
     def __init__(self, processMsg, initMsg):
         self.processMsg = processMsg
         self.initMsg = initMsg
@@ -435,6 +435,14 @@ class CbClientFactory(ClientFactory):
             self.proto.sendMsg(msg)
         except:
             logging.warning("%s Message not send: %s", ModuleName, msg)
+
+    def clientConnectionLost(self, connector, reason):
+        logging.debug('%s Lost connection. Reason: %s', ModuleName, reason)
+        ReconnectingClientFactory.clientConnectionLost(self, connector, reason)
+
+    def clientConnectionFailed(self, connector, reason):
+        logging.debug('%s Failed  connection. Reason: %s', ModuleName, reason)
+        ReconnectingClientFactory.clientConnectionFailed(self, connector, reason)
 
 class CbServerProtocol(LineReceiver):
     def __init__(self, processMsg):

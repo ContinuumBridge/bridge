@@ -15,7 +15,7 @@ MIN_DELAY = 1                           # Min time to wait when a delay is neede
 CONNECTION_WATCHDOG_INTERVAL = 60*60*3  # Reboot if no messages received for this time
 WATCHDOG_CID = "CID65"                  # Client ID to send watchdog messages to
 WATCHDOG_SEND_INTERVAL = 60*30          # How often to send messages to watchdog client
-WATCHDOG_START_DELAY = 240              # How long to wait before sending first watchdog message
+WATCHDOG_START_DELAY = 60               # How long to wait before sending first watchdog message
 
 ModuleName = "Manager"
 id = "manager"
@@ -78,6 +78,7 @@ class ManageBridge:
                 v = v[:-1]
         except:
             v = "Unknown"
+        self.version = v
         logger.info("%s Bridge version =  %s", ModuleName, v)
         logger.info("%s ************************************************************", ModuleName)
         logger.info("%s CB_NO_CLOUD = %s", ModuleName, CB_NO_CLOUD)
@@ -109,6 +110,7 @@ class ManageBridge:
         self.idToName = {}
         self.bluetooth = False
         self.rxCount = 1  # Used for watchdog. Set to 1 to overcome NTP change on startup issues
+        self.upSince = 0  # To enable reporting
 
         status = self.readConfig()
         logger.info('%s Read config status: %s', ModuleName, status)
@@ -193,7 +195,7 @@ class ManageBridge:
                    "status": "ok"} 
         try:
             self.cbSupervisorFactory = CbClientFactory(self.onSuperMessage, initMsg)
-            reactor.connectUNIX(s, self.cbSupervisorFactory, timeout=10)
+            reactor.connectUNIX(s, self.cbSupervisorFactory, timeout=60)
             logger.info('%s Opened supervisor socket %s', ModuleName, s)
         except Exception as ex:
             logger.error('%s Cannot open supervisor socket %s', ModuleName, s)
@@ -223,7 +225,7 @@ class ManageBridge:
                 logger.debug('%s Socket was not present: %s', ModuleName, s)
             try:
                 self.elFactory[el["id"]] = CbServerFactory(self.onClientMessage)
-                self.elListen[el["id"]] = reactor.listenUNIX(s, self.elFactory[el["id"]], backlog=4)
+                self.elListen[el["id"]] = reactor.listenUNIX(s, self.elFactory[el["id"]], backlog=10)
                 logger.debug('%s Opened manager socket: %s', ModuleName, s)
             except Exception as ex:
                 logger.error('%s Failed to open socket: %s', ModuleName, s)
@@ -273,7 +275,7 @@ class ManageBridge:
         for s in mgrSocs:
             try:
                 self.cbFactory[s] = CbServerFactory(self.onClientMessage)
-                self.appListen[s] = reactor.listenUNIX(mgrSocs[s], self.cbFactory[s], backlog=4)
+                self.appListen[s] = reactor.listenUNIX(mgrSocs[s], self.cbFactory[s], backlog=10)
                 logger.info('%s Opened manager socket %s %s', ModuleName, s, mgrSocs[s])
             except:
                 logger.error('%s Manager socket already exists %s %s', ModuleName, s, mgrSocs[s])
@@ -291,7 +293,7 @@ class ManageBridge:
             reactor.callLater(delay, self.startAdaptor, exe, mgrSoc, id, friendlyName)
             delay += START_DELAY
         # Now start all the apps
-        delay += START_DELAY*2
+        delay += START_DELAY*4
         for a in self.apps:
             id = a["app"]["id"]
             self.elements[id] = False
@@ -333,6 +335,7 @@ class ManageBridge:
                 running = False
         if running:
             self.states("running")
+            self.upSince = time.time()
         else:
             reactor.callLater(5, self.checkRunning)
 
@@ -719,20 +722,6 @@ class ManageBridge:
             logger.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
             return "Error extraxting " + tarFile 
 
-    def getVersion(self, elementDir):
-        try:
-            versionFile =  CB_HOME + elementDir + "/version"
-            logger.debug('%s versionFile: %s', ModuleName, versionFile)
-            with open(versionFile, 'r') as f:
-                v = f.read()
-            if v.endswith('\n'):
-                v = v[:-1]
-            return v
-        except Exception as ex:
-            logger.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
-            logger.warning('%s No version file for %s', ModuleName, elementDir)
-            return "error"
-
     def updateElements(self):
         """
         Directoriies: CB_HOME/apps/<appname>, CB_HOME/adaptors/<adaptorname>.
@@ -971,7 +960,9 @@ class ManageBridge:
                "msg": {"source": self.bridge_id + "/AID0",
                        "destination": WATCHDOG_CID,
                        "body": {
-                                 "status": "OK"
+                                 "status": "OK",
+                                 "version": self.version,
+                                 "up_since": self.upSince
                                }
                       }
               }

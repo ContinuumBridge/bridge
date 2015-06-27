@@ -58,7 +58,7 @@ class Supervisor:
 
     def startManager(self, restart):
         self.starting = True
-        self.manageNTP()
+        self.manageNTP(False)
         # Try to remove all sockets, just in case
         for f in glob.glob(CB_SOCKET_DIR + "skt-*"):
             os.remove(f)
@@ -226,15 +226,16 @@ class Supervisor:
         #self.mgrPort.stopListening()
         reactor.callLater(REBOOT_WAIT, self.reboot)
 
-    def manageNTP(self):
-        if self.connected:
-            logging.info("%s Calling ntpd to update time", ModuleName)
-            reactor.callInThread(self.manageNTPThread)
-            reactor.callLater(NTP_UPDATE_INTERVAL, self.manageNTP)
+    def manageNTP(self, syncd):
+        if not syncd:
+            logging.info("%s Calling ntpd to update time, syncd: %s", ModuleName, syncd)
+            d = threads.deferToThread(self.manageNTPThread)
+            d.addCallback(self.manageNTP)
         else:
-            reactor.callLater(10, self.manageNTP)
+            reactor.callLater(NTP_UPDATE_INTERVAL, self.manageNTP, False)
 
     def manageNTPThread(self):
+        logging.debug("%s manageNTPThread", ModuleName)
         try:
             syncd = False
             while not syncd:
@@ -244,9 +245,11 @@ class Supervisor:
                     syncd = True
                 else:
                     time.sleep(10)
+            return syncd
         except Exception as ex:
-            logging.warning("%s Cannot run NTP", ModuleName)
-            logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
+            logging.warning("%s Cannot run NTP. Exception: %s %s", ModuleName, type(ex), str(ex.args))
+            time.sleep(10)
+            return False
         
     def reboot(self):
         logging.info("%s Rebooting", ModuleName)
