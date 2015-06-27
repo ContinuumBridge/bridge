@@ -15,7 +15,7 @@ MIN_DELAY = 1                           # Min time to wait when a delay is neede
 CONNECTION_WATCHDOG_INTERVAL = 60*60*3  # Reboot if no messages received for this time
 WATCHDOG_CID = "CID65"                  # Client ID to send watchdog messages to
 WATCHDOG_SEND_INTERVAL = 60*30          # How often to send messages to watchdog client
-WATCHDOG_START_DELAY = 60               # How long to wait before sending first watchdog message
+WATCHDOG_START_DELAY = 210              # How long to wait before sending first watchdog message
 
 ModuleName = "Manager"
 id = "manager"
