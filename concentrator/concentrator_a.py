@@ -164,6 +164,7 @@ class Concentrator():
     def appInit(self, appID):
         if appID not in self.readyApps:
             self.readyApps.append(appID)
+            self.cbSendMsg({"status": "ready"}, appID)
 
     def onAppData(self, msg):
         """
