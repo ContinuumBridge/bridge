@@ -1243,7 +1243,7 @@ class ManageBridge:
     def elementWatchdog(self):
         """ Checks that all apps and adaptors have communicated within the designated interval. """
         #logger.debug('%s elementWatchdog, elements: %s', ModuleName, str(self.elements))
-        if state == "running":
+        if self.state == "running":
             for e in self.elements:
                 if self.elements[e] == False:
                     if e != "conc":
