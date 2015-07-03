@@ -5,13 +5,18 @@
 # Proprietary and confidential
 # Written by Peter Claydon
 #
-START_DELAY = 2.0                  # Delay between starting each adaptor or app
-CONDUIT_WATCHDOG_MAXTIME = 120     # Max time with no message before notifying supervisor
-CONDUIT_MAX_DISCONNECT_COUNT = 120 # Max number of messages before notifying supervisor
-ELEMENT_WATCHDOG_INTERVAL = 120    # Interval at which to check apps/adaptors have communicated
-ELEMENT_POLL_INTERVAL = 3          # Delay between polling each element
-APP_STOP_DELAY = 3                 # Time to allow apps/adaprts to stop before killing them
-MIN_DELAY = 1                      # Min time to wait when a delay is needed
+START_DELAY = 0.2                       # Delay between starting each adaptor or app
+CONDUIT_WATCHDOG_MAXTIME = 120          # Max time with no message before notifying supervisor
+CONDUIT_MAX_DISCONNECT_COUNT = 120      # Max number of messages before notifying supervisor
+ELEMENT_WATCHDOG_INTERVAL = 120         # Interval at which to check apps/adaptors have communicated
+ELEMENT_POLL_INTERVAL = 30              # Delay between polling each element
+APP_STOP_DELAY = 3                      # Time to allow apps/adaprts to stop before killing them
+MIN_DELAY = 1                           # Min time to wait when a delay is needed
+CONNECTION_WATCHDOG_INTERVAL = 60*60*3  # Reboot if no messages received for this time
+WATCHDOG_CID = "CID65"                  # Client ID to send watchdog messages to
+WATCHDOG_SEND_INTERVAL = 60*30          # How often to send messages to watchdog client
+WATCHDOG_START_DELAY = 60               # How long to wait before sending first watchdog message
+
 ModuleName = "Manager"
 id = "manager"
 
@@ -73,6 +78,7 @@ class ManageBridge:
                 v = v[:-1]
         except:
             v = "Unknown"
+        self.version = v
         logger.info("%s Bridge version =  %s", ModuleName, v)
         logger.info("%s ************************************************************", ModuleName)
         logger.info("%s CB_NO_CLOUD = %s", ModuleName, CB_NO_CLOUD)
@@ -104,6 +110,8 @@ class ManageBridge:
         self.batteryLevels = []
         self.idToName = {}
         self.bluetooth = False
+        self.rxCount = 1  # Used for watchdog. Set to 1 to overcome NTP change on startup issues
+        self.upSince = 0  # To enable reporting
 
         status = self.readConfig()
         logger.info('%s Read config status: %s', ModuleName, status)
@@ -134,7 +142,7 @@ class ManageBridge:
         else:
             logger.info('%s Running without Cloud Server', ModuleName)
         # Give time for node interface to start
-        reactor.callLater(START_DELAY + 5, self.startElements)
+        reactor.callLater(START_DELAY + 1, self.startElements)
         reactor.run()
 
     def checkBluetooth(self):
@@ -179,7 +187,26 @@ class ManageBridge:
         return mgrSocs
 
     def startElements(self):
-        reactor.callInThread(self.checkBluetooth)
+        # First start connection watchdog, in case anything goes wrong
+        reactor.callLater(CONNECTION_WATCHDOG_INTERVAL, self.connectionWatchdog)
+        reactor.callLater(WATCHDOG_START_DELAY, self.sendWatchdogMsg)
+        # Initiate comms with supervisor, which started the manager in the first place
+        s = CB_SOCKET_DIR + "skt-super-mgr"
+        initMsg = {"id": "manager",
+                   "msg": "status",
+                   "status": "ok"} 
+        try:
+            self.cbSupervisorFactory = CbClientFactory(self.onSuperMessage, initMsg)
+            reactor.connectUNIX(s, self.cbSupervisorFactory, timeout=60)
+            logger.info('%s Opened supervisor socket %s', ModuleName, s)
+        except Exception as ex:
+            logger.error('%s Cannot open supervisor socket %s', ModuleName, s)
+            logger.error("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
+
+        try:
+            reactor.callInThread(self.checkBluetooth)
+        except Exception as ex:
+            logger.warning("%s Unable to to call checkBluetooth, exception: %s %s", ModuleName, type(ex), str(ex.args))
         if self.configured:
             self.removeSecondarySockets()
         els = [{"id": "conc",
@@ -200,7 +227,7 @@ class ManageBridge:
                 logger.debug('%s Socket was not present: %s', ModuleName, s)
             try:
                 self.elFactory[el["id"]] = CbServerFactory(self.onClientMessage)
-                self.elListen[el["id"]] = reactor.listenUNIX(s, self.elFactory[el["id"]], backlog=4)
+                self.elListen[el["id"]] = reactor.listenUNIX(s, self.elFactory[el["id"]], backlog=10)
                 logger.debug('%s Opened manager socket: %s', ModuleName, s)
             except Exception as ex:
                 logger.error('%s Failed to open socket: %s', ModuleName, s)
@@ -214,22 +241,6 @@ class ManageBridge:
                 logger.error('%s Failed to start %s', ModuleName, el["id"])
                 logger.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
     
-        # Initiate comms with supervisor, which started the manager in the first place
-        s = CB_SOCKET_DIR + "skt-super-mgr"
-        initMsg = {"id": "manager",
-                   "msg": "status",
-                   "status": "ok"} 
-        try:
-            self.cbSupervisorFactory = CbClientFactory(self.onSuperMessage, initMsg)
-            reactor.connectUNIX(s, self.cbSupervisorFactory, timeout=10)
-            logger.info('%s Opened supervisor socket %s', ModuleName, s)
-        except Exception as ex:
-            logger.error('%s Cannot open supervisor socket %s', ModuleName, s)
-            logger.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
-
-    def setRunning(self):
-        self.states("operational")
-
     def removeSecondarySockets(self):
         # There should be no sockets to remove if there is no config file
         # Also there are no apps and adaptors without a config file
@@ -271,7 +282,6 @@ class ManageBridge:
                     logger.info('%s Opened manager socket %s %s', ModuleName, s, mgrSocs[s])
                 except:
                     logger.info('%s Manager socket already exists %s %s', ModuleName, s, mgrSocs[s])
-
         # Start adaptors with 2 secs between them to give time for each to start
         delay = START_DELAY 
         # This ensures that any deleted adaptors/apps are removed from watchdog:
@@ -286,7 +296,7 @@ class ManageBridge:
                 reactor.callLater(delay, self.startAdaptor, exe, mgrSoc, id, friendlyName)
                 delay += START_DELAY
         # Now start all the apps
-        delay += START_DELAY*2
+        delay += START_DELAY*4
         for a in self.apps:
             id = a["app"]["id"]
             self.elements[id] = True
@@ -322,6 +332,18 @@ class ManageBridge:
         except Exception as ex:
             logger.error('%s App %s failed to start. exe: %s, socket: %s', ModuleName, id, exe, mgrSoc)
             logger.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
+
+    def checkRunning(self):
+        logger.debug('%s checkRunning, elements: %s', ModuleName, str(self.elements))
+        running = True
+        for e in self.elements:
+            if self.elements[e] == False:
+                running = False
+        if running:
+            self.states("running")
+            self.upSince = time.time()
+        else:
+            reactor.callLater(5, self.checkRunning)
 
     def monitorLescan(self):
         """ 
@@ -721,20 +743,6 @@ class ManageBridge:
             logger.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
             return "Error extraxting " + tarFile 
 
-    def getVersion(self, elementDir):
-        try:
-            versionFile =  CB_HOME + elementDir + "/version"
-            logger.debug('%s versionFile: %s', ModuleName, versionFile)
-            with open(versionFile, 'r') as f:
-                v = f.read()
-            if v.endswith('\n'):
-                v = v[:-1]
-            return v
-        except Exception as ex:
-            logger.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
-            logger.warning('%s No version file for %s', ModuleName, elementDir)
-            return "error"
-
     def updateElements(self):
         """
         Directoriies: CB_HOME/apps/<appname>, CB_HOME/adaptors/<adaptorname>.
@@ -1029,6 +1037,30 @@ class ManageBridge:
             levels = "No battery level information available at this time"
         self.sendStatusMsg(levels)
 
+    def connectionWatchdog(self):
+        """ The final defence. Requests a reboot if no messages received for a long time. """
+        logger.debug('%s connectionWatchdog, rxCount: %s', ModuleName, self.rxCount)
+        if self.rxCount == 0:
+            self.cbSendSuperMsg({"msg": "reboot"})
+        else:
+            self.rxCount = 0
+        reactor.callLater(CONNECTION_WATCHDOG_INTERVAL, self.connectionWatchdog)
+
+    def sendWatchdogMsg(self):
+        msg = {"cmd": "msg",
+               "msg": {"source": self.bridge_id + "/AID0",
+                       "destination": WATCHDOG_CID,
+                       "body": {
+                                 "status": "OK",
+                                 "version": self.version,
+                                 "up_since": self.upSince
+                               }
+                      }
+              }
+        logger.debug('%s Sending watchdog message: %s', ModuleName, msg)
+        self.cbSendConcMsg(msg)
+        reactor.callLater(WATCHDOG_SEND_INTERVAL, self.sendWatchdogMsg)
+ 
     def onSuperMessage(self, msg):
         """  watchdog. Replies with status=ok or a restart/reboot command. """
         if msg["msg"] == "stopall":
@@ -1108,9 +1140,13 @@ class ManageBridge:
         if "resource_uri" in msg["body"]:
             msg["body"]["resource"] = msg["body"].pop("resource_uri")
             #logger.debug('%s resource_uri in message body, replacing: %s', ModuleName, json.dumps(msg, indent=4))
+        self.rxCount += 1
+        logger.debug('%s onControlMessage, rxCount: %s', ModuleName, self.rxCount)
         if "command" in msg["body"]:
             command = msg["body"]["command"]
-            if command == "start":
+            if command == "none":
+                pass
+            elif command == "start":
                 if self.configured:
                     if self.state == "stopped":
                         logger.info('%s Starting adaptors and apps', ModuleName)
@@ -1148,7 +1184,7 @@ class ManageBridge:
                 reactor.callLater(APP_STOP_DELAY, self.killAppProcs)
                 reactor.callLater(APP_STOP_DELAY + MIN_DELAY, self.waitToUpgrade, command)
             elif command == "sendlog" or command == "send_log":
-                self.sendLog(CB_CONFIG_DIR + '/bridge.log', 'bridge.log')
+                self.sendLog('/var/log/cbridge.log', 'cbridge.log')
             elif command == "battery":
                 self.sendBatteryLevels()
             elif command.startswith("call"):
@@ -1329,17 +1365,15 @@ class ManageBridge:
                 if self.elements[e] == False:
                     if e != "conc":
                         logger.warning('%s %s has not communicated within watchdog interval', ModuleName, e)
-                        self.sendStatusMsg("Watchdog timeout for " + e + " - Restarting")
-                        self.cbSendSuperMsg({"msg": "restart"})
-                        self.restarting = True
+                        self.sendStatusMsg("Watchdog timeout for " + e)
                         break
                 else:
                     self.elements[e] = False
+            if self.firstWatchdog:
+                l = task.LoopingCall(self.pollElement)
+                l.start(ELEMENT_POLL_INTERVAL)
+                self.firstWatchdog = False
         reactor.callLater(ELEMENT_WATCHDOG_INTERVAL, self.elementWatchdog)
-        if self.firstWatchdog:
-            l = task.LoopingCall(self.pollElement)
-            l.start(ELEMENT_POLL_INTERVAL) # call every second
-            self.firstWatchdog = False
 
     def pollElement(self):
         for e in self.elements:
@@ -1352,9 +1386,9 @@ class ManageBridge:
                         self.elFactory["zwave"].sendMsg({"cmd": "status"})
                     else:
                         self.cbSendMsg({"cmd": "status"}, e)
-                except Exception as inst:
+                except Exception as ex:
                     logger.warning("%s pollElement. Could not send message to: %s", ModuleName, e)
-                    logger.warning("%s Exception: %s %s", ModuleName, type(inst), str(inst.args))
+                    logger.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
 
     def onUserMessage(self, msg):
         if "body" in msg:
@@ -1498,6 +1532,7 @@ class ManageBridge:
             if not "type" in msg:
                 logger.warning('%s No type key in message from client; %s', ModuleName, msg)
                 return
+            logger.info('%s %s running', ModuleName, msg["id"])
             if msg["type"] == "app":
                 for a in self.apps:
                     if a["app"]["id"] == msg["id"]:

@@ -44,6 +44,7 @@ class Supervisor:
         self.checkingManager = False
         self.disconnectCount = 0
         self.timeStamp = 0
+        self.mangerPings = 0
         signal.signal(signal.SIGINT, self.signalHandler)  # For catching SIGINT
         signal.signal(signal.SIGTERM, self.signalHandler)  # For catching SIGTERM
         reactor.callLater(0.1, self.startConman)
@@ -57,7 +58,7 @@ class Supervisor:
 
     def startManager(self, restart):
         self.starting = True
-        self.manageNTP()
+        self.manageNTP(False)
         # Try to remove all sockets, just in case
         for f in glob.glob(CB_SOCKET_DIR + "skt-*"):
             os.remove(f)
@@ -156,11 +157,21 @@ class Supervisor:
         if not self.starting:
             # -1 is allowance for times not being sync'd (eg: separate devices)
             if self.timeStamp > startTime - 1:
-                reactor.callLater(WATCHDOG_INTERVAL, self.checkManager, time.time())
-                msg = {"msg": "status",
-                       "status": "ok"
-                      }
-                self.cbSendManagerMsg(msg)
+                try:
+                    msg = {"msg": "status",
+                           "status": "ok"
+                          }
+                    self.cbSendManagerMsg(msg)
+                except Exception as ex:
+                    # Caters for ntp changing time & hence doing check before manager has started
+                    if self.managerPings < 2:
+                        self.mangerPings +=1
+                        logger.warning("%s Unable to to send status message to manager, exception: %s %s", ModuleName, type(ex), str(ex.args))
+                    else:
+                        logger.error("%s Cannot communicate with manager. Rebooting, exception: %s %s", ModuleName, type(ex), str(ex.args))
+                        self.reboot()
+                finally:
+                    reactor.callLater(WATCHDOG_INTERVAL, self.checkManager, time.time())
             else:
                 logging.warning("%s Manager appears to be dead. Trying to restart nicely", ModuleName)
                 msg = {"msg": "stopall"
@@ -215,15 +226,16 @@ class Supervisor:
         #self.mgrPort.stopListening()
         reactor.callLater(REBOOT_WAIT, self.reboot)
 
-    def manageNTP(self):
-        if self.connected:
-            logging.info("%s Calling ntpd to update time", ModuleName)
-            reactor.callInThread(self.manageNTPThread)
-            reactor.callLater(NTP_UPDATE_INTERVAL, self.manageNTP)
+    def manageNTP(self, syncd):
+        if not syncd:
+            logging.info("%s Calling ntpd to update time, syncd: %s", ModuleName, syncd)
+            d = threads.deferToThread(self.manageNTPThread)
+            d.addCallback(self.manageNTP)
         else:
-            reactor.callLater(10, self.manageNTP)
+            reactor.callLater(NTP_UPDATE_INTERVAL, self.manageNTP, False)
 
     def manageNTPThread(self):
+        logging.debug("%s manageNTPThread", ModuleName)
         try:
             syncd = False
             while not syncd:
@@ -233,9 +245,11 @@ class Supervisor:
                     syncd = True
                 else:
                     time.sleep(10)
+            return syncd
         except Exception as ex:
-            logging.warning("%s Cannot run NTP", ModuleName)
-            logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
+            logging.warning("%s Cannot run NTP. Exception: %s %s", ModuleName, type(ex), str(ex.args))
+            time.sleep(10)
+            return False
         
     def reboot(self):
         logging.info("%s Rebooting", ModuleName)

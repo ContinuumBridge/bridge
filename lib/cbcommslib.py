@@ -63,7 +63,6 @@ class CbAdaptor:
         managerSocket = argv[1]
         self.id = argv[2]
         logging.info("%s Hello from %s", ModuleName, self.id)
-        procname.setprocname(self.id)
 
         initMsg = {"id": self.id,
                    "type": "adt",
@@ -273,7 +272,7 @@ class CbApp:
 
     def cbConfigure(self, config):
         """Config is based on what adaptors are available."""
-        #logging.debug("%s %s Config: %s", ModuleName, self.id, config)
+        #logging.debug("%s %s Config: %s", ModuleName, self.id, json.dumps(config, indent=4))
         # Connect to socket for each adaptor
         self.bridge_id = config["bridge_id"]
         for adaptor in config["adaptors"]:
@@ -342,6 +341,69 @@ class CbApp:
     def sendManagerMessage(self, msg):
         self.managerFactory.sendMsg(msg)
 
+class CbClient():
+    """
+    aid is to ID of the app.
+    cid is the client ID that the app is to communicate with.
+    keep is the number of message bodies to keep if messages are not acknowleged by the client.
+    CBClient will attempt to resend message bodies that are kept.
+    """
+    def __init__(self, aid , cid, keep=3):
+        self.aid = aid
+        self.cid = cid
+        self.keep = keep
+        self.onClientMessage = None
+        self.count = 0
+        self.bodies = []
+
+    def send(self, body):
+        body["n"] = self.count
+        self.count += 1
+        self.bodies.append(body)
+        if len(self.bodies) > self.keep:
+            del self.bodies[0]
+        message = {
+                   "source": self.aid,
+                   "destination": self.cid,
+                   "body": self.bodies
+                  }
+        self.sendMessage(message, "conc")
+
+    def receive(self, message):
+        try:
+            #self.cbLog("debug", "Message from client: " + str(message))
+            rx_n = 0
+            sendAck = False
+            if "body" in message:
+                for b in message["body"]:
+                    if "n" in b:
+                        if rx_n < b["n"]:
+                            rx_n = b["n"]
+                        del b["n"]
+                        sendAck = True
+                    if "a" in b:
+                        if b["a"] == 0:
+                            self.bodies = []
+                        else:
+                            for sent in self.bodies:
+                                if sent["n"] <= b["a"]:
+                                    self.bodies.remove(sent)
+                                    #self.cbLog("debug", "Removed body " + str(b["a"]) + " from queue")
+                                    #self.cbLog("debug", "bodies " + str(self.bodies))
+                    elif self.onClientMessage:
+                        self.onClientMessage(b)
+                if sendAck:
+                    ack = {
+                           "source": self.aid,
+                           "destination": self.cid,
+                           "body": [{"a": rx_n}]
+                           }
+                    self.sendMessage(ack, "conc")
+            else:
+                self.cbLog("warning", "Received message from client with no body")
+        except Exception as ex:
+            self.cbLog("warning", "Client receive exception. Type: " + str(type(ex)) + "exception: " +  str(ex.args))
+
 class CbClientProtocol(LineReceiver):
     def __init__(self, processMsg, initMsg):
         self.processMsg = processMsg
@@ -357,9 +419,9 @@ class CbClientProtocol(LineReceiver):
         try:
             self.sendLine(json.dumps(msg))
         except:
-            logging.warning("%s Message not send: %s", ModuleName, self.id, msg)
+            logging.warning("%s Message not send: %s", ModuleName, msg)
 
-class CbClientFactory(ClientFactory):
+class CbClientFactory(ReconnectingClientFactory):
     def __init__(self, processMsg, initMsg):
         self.processMsg = processMsg
         self.initMsg = initMsg
@@ -369,7 +431,18 @@ class CbClientFactory(ClientFactory):
         return self.proto
 
     def sendMsg(self, msg):
-        self.proto.sendMsg(msg)
+        try:
+            self.proto.sendMsg(msg)
+        except:
+            logging.warning("%s Message not send: %s", ModuleName, msg)
+
+    def clientConnectionLost(self, connector, reason):
+        logging.debug('%s Lost connection. Reason: %s', ModuleName, reason)
+        ReconnectingClientFactory.clientConnectionLost(self, connector, reason)
+
+    def clientConnectionFailed(self, connector, reason):
+        logging.debug('%s Failed  connection. Reason: %s', ModuleName, reason)
+        ReconnectingClientFactory.clientConnectionFailed(self, connector, reason)
 
 class CbServerProtocol(LineReceiver):
     def __init__(self, processMsg):
@@ -382,7 +455,7 @@ class CbServerProtocol(LineReceiver):
         try:
             self.sendLine(json.dumps(msg))
         except:
-            logging.warning("%s Message not send: %s", ModuleName, self.id, msg)
+            logging.warning("%s Message not send: %s", ModuleName, msg)
 
 class CbServerFactory(Factory):
     def __init__(self, processMsg):

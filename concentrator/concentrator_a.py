@@ -72,8 +72,8 @@ class Concentrator():
 
     def onControllerMessage(self, msg):
         #if "body" in msg:
-            #if not "connected" in msg["body"]:
-                #self.cbLog("debug", "Received from controller: " + str(json.dumps(msg, indent=4)))
+        #    if not "connected" in msg["body"]:
+        #        self.cbLog("debug", "Received from controller: " + str(json.dumps(msg, indent=4)))
         try:
             if not "destination" in msg:
                 msg["destination"] = self.bridge_id
@@ -88,14 +88,18 @@ class Concentrator():
                 if "message" in msg:
                     msg["type"] = msg.pop("message")
                 self.cbSendManagerMsg(msg)
-            except Exception as inst:
-                self.cbLog("warning", "onControllerMessage. Unexpected manager message: " + str(json.dumps(msg, indent=4)))
-                self.cbLog("warning", "Exception: " + str(type(inst)) + " " +  str(inst.args))
+            except Exception as ex:
+                self.cbLog("warning", "onControllerMessage. Unexpected manager message. Exception: " + str(type(ex)) + " " +  str(ex.args))
         else:
             try:
                 dest = msg["destination"].split('/')
                 if dest[0] == self.bridge_id:
+                    if dest[1] == "AID0":
+                         msg["status"] = "control_msg"
+                         msg["id"] = self.id
+                         self.cbSendManagerMsg(msg)
                     if dest[1] in self.appInstances:
+
                         msg["destination"] = dest[1]
                         if dest[1] in self.readyApps:
                             self.cbLog("debug", "onControllerMessage, sending to: " +  dest[1])
@@ -158,10 +162,9 @@ class Concentrator():
         self.cbSendManagerMsg(msg)
 
     def appInit(self, appID):
-        resp = {"id": "conc",
-                "resp": "config"}
-        self.cbSendMsg(resp, appID)
-        self.readyApps.append(appID)
+        if appID not in self.readyApps:
+            self.readyApps.append(appID)
+            self.cbSendMsg({"status": "ready"}, appID)
 
     def onAppData(self, msg):
         """
@@ -174,18 +177,17 @@ class Concentrator():
                     if "appID" in msg:
                         self.appInit(msg["appID"])
                     else:
-                        self.cbLog("warning", "Message from app with no ID: " + str(msg)[:100])
+                        self.cbLog("warning", "Message from app with no ID: " + str(json.dumps(msg, indent=4)))
             elif not "destination" in msg:
-                self.cbLog("warning", "Message from app with no destination: " + str(msg)[:100])
+                self.cbLog("warning", "Message from app with no destination: " + str(json.dumps(msg, indent=4)))
             else:
                 if msg["destination"].startswith("CID"):
                     msg["source"] = self.bridge_id + "/" + msg["source"]
                     self.concFactory.sendMsg(msg)
                 else:
-                    self.cbLog("warning","Illegal desination in app message: " + str(msg)[:100])
-        except Exception as inst:
-            self.cbLog("warning", "onAppData. Malformed message: " + str(msg)[:100])
-            self.cbLog("warning", "Exception: " + str(type(inst)) + str(inst.args))
+                    self.cbLog("warning","Illegal desination in app message. Should be CIDn: " + str(json.dumps(msg, indent=4)))
+        except Exception as ex:
+            self.cbLog("warning", "Malformed message from app. Exception: Type: " + str(type(ex)) + "exception: " +  str(ex.args))
     
 if __name__ == '__main__':
     Concentrator(sys.argv)
