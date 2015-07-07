@@ -950,6 +950,7 @@ class ManageBridge:
         """ The final defence. Requests a reboot if no messages received for a long time. """
         logger.debug('%s connectionWatchdog, rxCount: %s', ModuleName, self.rxCount)
         if self.rxCount == 0:
+            logger.debug('%s connectionWatchdog, rxCount: %si, sending reboot message to supervisor', ModuleName, self.rxCount)
             self.cbSendSuperMsg({"msg": "reboot"})
         else:
             self.rxCount = 0
