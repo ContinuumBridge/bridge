@@ -409,7 +409,7 @@ class ZwaveCtrl():
                           "value": "",
                           "instance": msg["instance"]
                          }
-                self.cbLog("debug", "New getStr (check): " + str(json.dumps(d, indent=4)))
+                self.cbLog("debug", "New getStr (check): " + str(json.dumps(getStr, indent=4)))
                 self.getStrs.append(getStr)
             elif msg["request"] == "get":
                 g = "devices." + msg["address"] + ".instances." + msg["instance"] + \
