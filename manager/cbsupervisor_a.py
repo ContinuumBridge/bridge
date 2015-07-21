@@ -60,7 +60,7 @@ class Supervisor:
         self.starting = True
         self.manageNTP(False)
         # Try to remove all sockets, just in case
-        for f in glob.glob(CB_SOCKET_DIR + "skt-*"):
+        for f in glob.glob(CB_SOCKET_DIR + "SKT-*"):
             os.remove(f)
         for f in glob.glob(CB_SOCKET_DIR + "SKT-*"):
             os.remove(f)
@@ -68,7 +68,7 @@ class Supervisor:
         if os.path.exists(CB_MANAGER_EXIT):
             os.remove(CB_MANAGER_EXIT)
         # Open a socket for communicating with the bridge manager
-        s = CB_SOCKET_DIR + "skt-super-mgr"
+        s = CB_SOCKET_DIR + "SKT-SUPER-MGR"
         self.cbManagerFactory = CbServerFactory(self.onManagerMessage)
         self.mgrPort = reactor.listenUNIX(s, self.cbManagerFactory, backlog=4)
 
@@ -98,7 +98,7 @@ class Supervisor:
             logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
 
     def onManagerMessage(self, msg):
-        #logging.debug("%s onManagerMessage received message: %s", ModuleName, msg)
+        logging.debug("%s onManagerMessage received message: %s", ModuleName, msg)
         # Regardless of message content, timeStamp is the time when we last heard from the manager
         self.timeStamp = time.time()
         if msg["msg"] == "restart":
@@ -129,10 +129,11 @@ class Supervisor:
 
     def checkDisconnected(self, connected):
         if connected:
-            logging.info("%s onDisconnected. Manager disconnected, conman connected. Restarting manager", ModuleName)
-            self.cbSendManagerMsg({"msg": "stopall"})
-            self.starting = True
-            reactor.callLater(RESTART_INTERVAL, self.checkManagerStopped, 0)
+            logging.info("%s onDisconnected. Manager disconnected, conman connected. Requesting reconnect", ModuleName)
+            #self.cbSendManagerMsg({"msg": "stopall"})
+            self.cbSendManagerMsg({"msg": "reconnect"})
+            #self.starting = True
+            #reactor.callLater(RESTART_INTERVAL, self.checkManagerStopped, 0)
             self.disconnectCount = 0
         else:
             logging.info("%s onDisconnected. Manager disconnected, conman disconnected. Asking conman to reconnect", ModuleName)

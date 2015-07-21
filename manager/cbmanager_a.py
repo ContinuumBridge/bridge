@@ -5,17 +5,17 @@
 # Proprietary and confidential
 # Written by Peter Claydon
 #
-START_DELAY = 0.2                       # Delay between starting each adaptor or app
-CONDUIT_WATCHDOG_MAXTIME = 120          # Max time with no message before notifying supervisor
-CONDUIT_MAX_DISCONNECT_COUNT = 120      # Max number of messages before notifying supervisor
-ELEMENT_WATCHDOG_INTERVAL = 120         # Interval at which to check apps/adaptors have communicated
-ELEMENT_POLL_INTERVAL = 30              # Delay between polling each element
-APP_STOP_DELAY = 3                      # Time to allow apps/adaprts to stop before killing them
-MIN_DELAY = 1                           # Min time to wait when a delay is needed
-CONNECTION_WATCHDOG_INTERVAL = 60*60*3  # Reboot if no messages received for this time
-WATCHDOG_CID = "CID65"                  # Client ID to send watchdog messages to
-WATCHDOG_SEND_INTERVAL = 60*30          # How often to send messages to watchdog client
-WATCHDOG_START_DELAY = 60               # How long to wait before sending first watchdog message
+START_DELAY = 0.2                        # Delay between starting each adaptor or app
+CONDUIT_WATCHDOG_MAXTIME = 120           # Max time with no message before notifying supervisor
+CONDUIT_MAX_DISCONNECT_COUNT = 120       # Max number of messages before notifying supervisor
+ELEMENT_WATCHDOG_INTERVAL = 120          # Interval at which to check apps/adaptors have communicated
+ELEMENT_POLL_INTERVAL = 30               # Delay between polling each element
+APP_STOP_DELAY = 3                       # Time to allow apps/adaprts to stop before killing them
+MIN_DELAY = 1                            # Min time to wait when a delay is needed
+CONNECTION_WATCHDOG_INTERVAL = 60*60*1.5 # Reboot if no messages received for this time
+WATCHDOG_CID = "CID65"                   # Client ID to send watchdog messages to
+WATCHDOG_SEND_INTERVAL = 60*30           # How often to send messages to watchdog client
+WATCHDOG_START_DELAY = 60                # How long to wait before sending first watchdog message
 
 ModuleName = "Manager"
 id = "manager"
@@ -93,6 +93,7 @@ class ManageBridge:
         self.configured = False
         self.restarting = False
         self.zExcluding = False
+        self.zwaveShouldExcludeID = None
         self.reqSync = False
         self.state = "stopped"
         self.concNoApps = False
@@ -119,28 +120,37 @@ class ManageBridge:
             self.simDiscover = SimDiscover(self.bridge_id)
         self.initBridge()
 
-    def states(self, action):
+    def setState(self, action):
         if action == "clear_error":
             self.state = "running"
         else:
             self.state = action
         logger.info('%s state = %s', ModuleName, self.state)
         self.sendControllerMsg("patch", "/api/bridge/v1/bridge/" + self.bridge_id[3:] + "/", {"status": self.state})
-        self.sendStatusMsg("Bridge state: " + self.state)
+        #self.sendStatusMsg("Bridge state: " + self.state)
 
-    def initBridge(self):
+    def reconnect(self):
+        logger.info('%s reconnecting conduit')
+        try:
+            self.nodejsProc.kill()
+        except:
+            logger.debug('%s reconnect, no node  process to kill', ModuleName)
+        self.connectConduit()
+        
+    def connectConduit(self):
         if CB_NO_CLOUD != "True":
             logger.info('%s Starting conduit', ModuleName)
             exe = "/opt/node/bin/node"
             path = CB_BRIDGE_ROOT + "/nodejs/index.js"
             try:
-                self.nodejsProc = subprocess.Popen([exe, path,  CB_CONTROLLER_ADDR, \
-                                                    CB_BRIDGE_EMAIL, CB_BRIDGE_PASSWORD])
+                self.nodejsProc = subprocess.Popen([exe, path,  CB_CONTROLLER_ADDR, CB_BRIDGE_EMAIL, CB_BRIDGE_PASSWORD])
             except Exception as ex:
-                logger.error('%s node failed to start. exe = %s', ModuleName, exe)
-                logger.error("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
+                logger.error('%s node failed to start. exe = %s. Exception: %s, %s', ModuleName, exe, type(ex), str(ex.args))
         else:
             logger.info('%s Running without Cloud Server', ModuleName)
+
+    def initBridge(self):
+        self.connectConduit()
         # Give time for node interface to start
         reactor.callLater(START_DELAY + 1, self.startElements)
         reactor.run()
@@ -191,7 +201,7 @@ class ManageBridge:
         reactor.callLater(CONNECTION_WATCHDOG_INTERVAL, self.connectionWatchdog)
         reactor.callLater(WATCHDOG_START_DELAY, self.sendWatchdogMsg)
         # Initiate comms with supervisor, which started the manager in the first place
-        s = CB_SOCKET_DIR + "skt-super-mgr"
+        s = CB_SOCKET_DIR + "SKT-SUPER-MGR"
         initMsg = {"id": "manager",
                    "msg": "status",
                    "status": "ok"} 
@@ -207,24 +217,24 @@ class ManageBridge:
             reactor.callInThread(self.checkBluetooth)
         except Exception as ex:
             logger.warning("%s Unable to to call checkBluetooth, exception: %s %s", ModuleName, type(ex), str(ex.args))
-        if self.configured:
-            self.removeSecondarySockets()
+        #if self.configured:
+        #    self.removeSecondarySockets()
         els = [{"id": "conc",
-                "socket": "skt-mgr-conc",
+                "socket": "SKT-MGR-CONC",
                 "exe": CONCENTRATOR_PATH
                }]
         if CB_ZWAVE_BRIDGE:
             els.append(
                {"id": "zwave",
-                "socket": "skt-mgr-zwave",
+                "socket": "SKT-MGR-ZWAVE",
                 "exe": ZWAVE_PATH
                })
         for el in els:
             s = CB_SOCKET_DIR + el["socket"]
-            try:
-                os.remove(s)
-            except:
-                logger.debug('%s Socket was not present: %s', ModuleName, s)
+            #try:
+            #    os.remove(s)
+            #except:
+            #    logger.debug('%s Socket was not present: %s', ModuleName, s)
             try:
                 self.elFactory[el["id"]] = CbServerFactory(self.onClientMessage)
                 self.elListen[el["id"]] = reactor.listenUNIX(s, self.elFactory[el["id"]], backlog=10)
@@ -262,17 +272,9 @@ class ManageBridge:
                         logger.debug('%s Socket %s already removed', ModuleName, socket)
 
     def startAll(self):
-        self.states("starting")
-        # Manager sockets may already exist. If so, delete them
+        self.configureConc()
+        self.cbFactory.clear()
         mgrSocs = self.listMgrSocs()
-        #for s in mgrSocs:
-        #    try:
-        #        os.remove(mgrSocs[s])
-        #    except:
-        #        pass
-        # Clear dictionary so that we can recreate sockets
-        #self.cbFactory.clear()
-
         # Open sockets for communicating with all apps and adaptors
         for s in mgrSocs:
             if s not in self.cbFactory:
@@ -282,13 +284,12 @@ class ManageBridge:
                     logger.info('%s Opened manager socket %s %s', ModuleName, s, mgrSocs[s])
                 except:
                     logger.info('%s Manager socket already exists %s %s', ModuleName, s, mgrSocs[s])
-        # Start adaptors with 2 secs between them to give time for each to start
         delay = START_DELAY 
         # This ensures that any deleted adaptors/apps are removed from watchdog:
         self.elements = {}
         for d in self.devices:
             id = d["id"]
-            self.elements[id] = True
+            self.elements[id] = False
             if not id in self.appProcs:
                 exe = d["adaptor"]["exe"]
                 mgrSoc = d["adaptor"]["mgrSoc"]
@@ -299,7 +300,7 @@ class ManageBridge:
         delay += START_DELAY*4
         for a in self.apps:
             id = a["app"]["id"]
-            self.elements[id] = True
+            self.elements[id] = False
             if not id in self.appProcs:
                 exe = a["app"]["exe"]
                 mgrSoc = a["app"]["mgrSoc"]
@@ -308,11 +309,10 @@ class ManageBridge:
         # Start watchdog to monitor apps and adaptors (only first time through)
         if self.firstWatchdog:
             reactor.callLater(delay+ELEMENT_WATCHDOG_INTERVAL, self.elementWatchdog)
-            # Monitor Bluetooth LE
-            #reactor.callInThread(self.monitorLescan)
             # Give time for everything to start before we consider ourselves running
-            reactor.callLater(delay+START_DELAY, self.setRunning)
-            logger.info('%s All adaptors and apps set to start', ModuleName)
+        self.setState("starting")
+        reactor.callLater(5, self.checkRunning)
+        logger.info('%s All adaptors and apps set to start', ModuleName)
 
     def startAdaptor(self, exe, mgrSoc, id, friendlyName):
         try:
@@ -340,49 +340,10 @@ class ManageBridge:
             if self.elements[e] == False:
                 running = False
         if running:
-            self.states("running")
+            self.setState("running")
             self.upSince = time.time()
         else:
             reactor.callLater(5, self.checkRunning)
-
-    def monitorLescan(self):
-        """ 
-            This method is assumed to be called in a Twisted thread.
-            It may taken up to LESCAN_TIMEOUT seconds before the thread realises that it should end,
-            so this should be set to a fairly small number, certain less than about 6 seconds.
-        """
-        logger.debug('%s Starting monitorLescan, state = %s', ModuleName, self.state)
-        LESCAN_TIMEOUT = 2
-        LESCAN_MAX_LOOPS = 20
-        while self.state != "stopping":
-            time.sleep(2)
-            try:
-                lescan = pexpect.spawn("hcitool lescan")
-            except:
-                logger.warning('%s Could not launch lescan pexpect', ModuleName)
-            loop = 0
-            while self.state != "stopping" and loop < LESCAN_MAX_LOOPS: 
-                index = lescan.expect(['.*', pexpect.TIMEOUT, pexpect.EOF], timeout=LESCAN_TIMEOUT)
-                #logger.debug('%s monitorLescan. loop:: %s, index %s', ModuleName, str(loop), str(index))
-                if index == 0:
-                    a = lescan.after.split()
-                    #logger.debug('%s : monitorLescan found: %s', ModuleName, a)
-                    # a[0] is normally the BT addr. If things have gone wrong it will be the first word of:
-                    # "Set scan parameters, failed: Connection timed out". This is pretty fatal, so just 
-                    # exit this thread and let any adaptors that care sort out their error conditions.
-                    if a != []:
-                        if a[0] == "Set":
-                            logger.warning('%s monitorLescan fatal error', ModuleName)
-                            lescan.sendcontrol("c")
-                            time.sleep(1)
-                            lescan.kill(9)
-                            return 
-                        loop = 0
-                else:
-                    loop += 1
-            lescan.sendcontrol("c")
-            time.sleep(1)
-            lescan.kill(9)
  
     def bleDiscover(self):
         self.resetBluetooth()
@@ -486,7 +447,7 @@ class ManageBridge:
     def onBLEDiscovered(self):
         logger.debug('%s onBLEDiscovered', ModuleName)
         self.bleDiscovered = True
-        if not self.zwaveDiscovered or self.zwaveDiscovering:
+        if not (self.zwaveDiscovered or self.zwaveDiscovering):
             self.gatherDiscovered()
 
     def gatherDiscovered(self):
@@ -510,7 +471,6 @@ class ManageBridge:
                     self.bleDiscoverPosted = True
                 else:
                     self.sendStatusMsg("No Bluetooth devices found.")
-            #if self.zwaveDiscovered and not self.bleDiscoverPosted:
             if self.zwaveDiscovered:
                 for b in self.zwaveDiscoveredData:
                     d["body"]["body"]["objects"].append(b)
@@ -520,7 +480,6 @@ class ManageBridge:
                    "msg": d}
             self.cbSendConcMsg(msg)
         if self.zwaveDiscovered:
-            self.zwaveDiscovered = False
             self.sendControllerMsg("patch", "/api/bridge/v1/bridge/" + self.bridge_id[3:] + "/", {"zwave": "operational"})
 
     def discover(self):
@@ -607,10 +566,11 @@ class ManageBridge:
                     break
             if not found:
                 if self.zwaveShouldExcludeID != None:
-                    self.sendControllerMsg("patch", "/api/bridge/v1/device_install/" + strself.zwaveShouldExcludeID +"/", {"status": "operational"})
+                    self.sendControllerMsg("patch", "/api/bridge/v1/device_install/" + self.zwaveShouldExcludeID +"/", {"status": "operational"})
                 msg= "Excluded Z-Wave device at address " + address + ".\n Device interview may not have been completed.\n You may need to rerun discover devices?"
         self.sendControllerMsg("patch", "/api/bridge/v1/bridge/" + self.bridge_id[3:] + "/", {"zwave": "operational"})
         self.zExcluding = False
+        self.zwaveShouldExcludeID = None
         reactor.callLater(0.5, self.sendStatusMsg, msg)
 
     def zwaveExclude(self):
@@ -684,7 +644,7 @@ class ManageBridge:
                 logger.debug('%s exe: %s', ModuleName, d["adaptor"]["exe"])
                 logger.debug('%s protocol: %s', ModuleName, d["device"]["protocol"])
                 if d["device"]["protocol"] == "zwave":
-                    d["adaptor"]["zwave_socket"] =  CB_SOCKET_DIR + "skt-" + d["id"] + "-zwave"
+                    d["adaptor"]["zwave_socket"] =  CB_SOCKET_DIR + "SKT-" + d["id"] + "-zwave"
                 # Add a apps list to each device adaptor
                 d["adaptor"]["apps"] = []
                 if d["id"] not in self.idToName:
@@ -709,7 +669,7 @@ class ManageBridge:
                     uri = appDev["device_install"]
                     for d in self.devices: 
                         if d["resource_uri"] == uri:
-                            socket = CB_SOCKET_DIR + "skt-" \
+                            socket = CB_SOCKET_DIR + "SKT-" \
                                 + str(d["id"]) + "-" + str(a["app"]["id"])
                             d["adaptor"]["apps"].append(
                                                     {"adtSoc": socket,
@@ -816,7 +776,7 @@ class ManageBridge:
     def updateConfig(self, msg):
         # THIS METHOD IS IN A THREAD
         #logger.info('%s Config update received from controller', ModuleName)
-        reactor.callFromThread(self.sendStatusMsg, "Updating. This may take a minute")
+        #reactor.callFromThread(self.sendStatusMsg, "Updating. This may take a minute")
         #logger.debug('%s %s', ModuleName, str(msg))
         configFile = CB_CONFIG_DIR + "/bridge.config"
         with open(configFile, 'w') as configFile:
@@ -835,11 +795,11 @@ class ManageBridge:
             logger.warning('%s Update config. Failed to update ', ModuleName)
         reactor.callFromThread(self.sendStatusMsg, status)
         # Need to give concentrator new config if initial one was without apps
-        if self.concNoApps:
-            req = {"status": "req-config",
-                   "type": "conc"}
-            reactor.callFromThread(self.onClientMessage, req)
-            self.concNoApps = False
+        #if self.concNoApps:
+        #    req = {"status": "req-config",
+        #           "type": "conc"}
+        #    reactor.callFromThread(self.onClientMessage, req)
+        #    self.concNoApps = False
 
     def getConfig(self):
         req = {"cmd": "msg",
@@ -855,6 +815,7 @@ class ManageBridge:
         self.cbSendConcMsg(req)
 
     def upgradeBridge(self, command):
+        self.setState("upgrading")
         reactor.callFromThread(self.sendStatusMsg, "Upgrade in progress. Please wait")
         try:
             u = command.split()
@@ -961,7 +922,6 @@ class ManageBridge:
 
     def onDeviceInstall(self, msg):
         logger.debug('%s onDeviceInstall', ModuleName)
-        self.zwaveShouldExcludeID = None
         try:
             logger.debug('%s onDeviceInstall, verb: %s', ModuleName, msg["body"]["verb"])
             if msg["body"]["verb"] == "update":
@@ -996,7 +956,7 @@ class ManageBridge:
                     # Until real-time updates implemented, just get full config when delete received
                     #self.getConfig()
                 elif msg["body"]["body"]["status"] == "should_uninstall":
-                    self.sendControllerMsg("patch", msg["body"]["body"]["resource_uri"] + "/", {"status": "uninstalling"})
+                    #self.sendControllerMsg("patch", msg["body"]["body"]["resource_uri"] + "/", {"status": "uninstalling"})
                     self.sendControllerMsg("delete", msg["body"]["body"]["resource_uri"] + "/")
                     # Until real-time updates implemented, just get full config when delete received
                     #self.getConfig()
@@ -1071,6 +1031,8 @@ class ManageBridge:
             self.stopApps()
             reactor.callLater(APP_STOP_DELAY, self.killAppProcs)
             reactor.callLater(APP_STOP_DELAY + MIN_DELAY, self.stopAll)
+        elif msg["msg"] == "reconnect":
+            self.reconnect()
         else:
             if time.time() - self.timeLastConduitMsg > CONDUIT_WATCHDOG_MAXTIME and not CB_NO_CLOUD: 
                 logger.info('%s Not heard from conduit for %s. Notifyinng supervisor', ModuleName, CONDUIT_WATCHDOG_MAXTIME)
@@ -1167,7 +1129,8 @@ class ManageBridge:
                 logger.info('%s Received restart command', ModuleName)
                 self.cbSendSuperMsg({"msg": "restart"})
                 self.restarting = True
-                self.sendStatusMsg("restarting")
+                self.setState("restarting")
+                #self.sendStatusMsg("restarting")
             elif command == "reboot":
                 logger.info('%s Received reboot command', ModuleName)
                 self.cbSendSuperMsg({"msg": "reboot"})
@@ -1222,6 +1185,8 @@ class ManageBridge:
                     self.sendStatusMsg("Usage: action <device name> <action>")
             elif command == "z-exclude" or command == "z_exclude":
                 self.sendStatusMsg("Hello. This is bridge " + self.bridge_id)
+            elif command == "":
+                self.sendStatusMsg("Hello. Bridge " + self.bridge_id + ", software version: " + self.version)
             else:
                 logger.warning('%s Unrecognised command message received from controller: %s', ModuleName, msg)
                 self.sendStatusMsg("Unrecognised command message received from controller")
@@ -1234,7 +1199,8 @@ class ManageBridge:
     def stopApps(self):
         """ Asks apps & adaptors to clean up nicely and die. """
         if self.state != "stopped" and self.state != "stopping":
-            self.states("stopping")
+            if self.state != "restarting":
+                self.setState("stopping")
             logger.info('%s Stopping apps and adaptors', ModuleName)
             mgrSocs = self.listMgrSocs()
             for a in mgrSocs:
@@ -1242,9 +1208,7 @@ class ManageBridge:
                     self.cbSendMsg({"cmd": "stop"}, a)
                     logger.info('%s Stopping %s', ModuleName, a)
                 except Exception as ex:
-                    logger.warning('%s Could not send stop message to  %s', ModuleName, a)
-                    logger.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
-        self.cbSendSuperMsg({"msg": "end of stopApps"})
+                    logger.warning('%s Could not send stop message to %s. Exception: %s, %s', ModuleName, a, type(ex), str(ex.args))
 
     def killAppProcs(self):
         # If not configured there will be no app processes & no mgrSocs
@@ -1264,16 +1228,18 @@ class ManageBridge:
                     self.appProcs[p].kill()
                 except:
                     logger.debug('%s No process to kill', ModuleName)
-            self.removeSecondarySockets()
+            self.appProcs = {}
+            #self.removeSecondarySockets()
             # In case some adaptors have not killed gatttool processes:
             try:
                 subprocess.call(["killall", "gatttool"])
             except:
                 pass
-            self.states("stopped")
+            if self.state != "restarting":
+                self.setState("stopped")
 
     def stopAll(self):
-        self.sendStatusMsg("Disconnecting. Goodbye, back soon ...")
+        #self.sendStatusMsg("Disconnecting. Goodbye, back soon ...")
         logger.info('%s Stopping concentrator', ModuleName)
         if CB_ZWAVE_BRIDGE:
             self.elFactory["zwave"].sendMsg({"cmd": "stop"})
@@ -1283,7 +1249,6 @@ class ManageBridge:
 
     def stopManager(self):
         logger.debug('%s stopManager', ModuleName)
-        logger.debug('%s stopManager send stopped message to supervisor', ModuleName)
         for el in self.elListen:
             self.elListen[el].stopListening()
         for el in self.elProc:
@@ -1297,13 +1262,13 @@ class ManageBridge:
         except:
             logger.debug('%s No node  process to kill', ModuleName)
         logger.debug('%s stopManager, stopped node', ModuleName)
-        for soc in self.concConfig:
-            socket = soc["appConcSoc"]
-            try:
-                os.remove(socket) 
-                logger.debug('%s Socket %s renoved', ModuleName, socket)
-            except:
-                logger.debug('%s Socket %s already renoved', ModuleName, socket)
+        #for soc in self.concConfig:
+            #socket = soc["appConcSoc"]
+            #try:
+            #    os.remove(socket) 
+            #    logger.debug('%s Socket %s renoved', ModuleName, socket)
+            #except:
+            #    logger.debug('%s Socket %s already renoved', ModuleName, socket)
         logger.info('%s Stopping reactor', ModuleName)
         reactor.stop()
         # touch a file so that supervisor can see we have finished
@@ -1544,10 +1509,10 @@ class ManageBridge:
                         self.configureAdaptor(self.devices.index(d))
                         break
             elif msg["type"] == "conc":
-                self.configureConc()
+                #self.configureConc()
                 # Only start apps & adaptors after concentrator has responded
-                if self.configured:
-                    reactor.callLater(MIN_DELAY, self.startAll)
+                #if self.configured:
+                self.startAll()
             elif msg["type"] == "zwave":
                 self.configureZwave()
             else:
@@ -1589,11 +1554,8 @@ class ManageBridge:
             else:
                 logger.warning('%s Received battery_level message from %s with no battery_level', ModuleName, msg["id"])
         elif msg["status"] == "error":
-            if not self.restarting:
-                logger.warning('%s Error status received from %s. Restarting', ModuleName, msg["id"])
-                self.sendStatusMsg("Error status received from " + msg["id"] + " - Restarting")
-                self.cbSendSuperMsg({"msg": "restart"})
-                self.restarting = True
+                logger.warning('%s Error status received from %s.', ModuleName, msg["id"])
+                self.sendStatusMsg("Error status received from " + msg["id"])
         elif msg["status"] != "ok":
             logger.debug('%s Messagge from client: %s', ModuleName, msg)
  
