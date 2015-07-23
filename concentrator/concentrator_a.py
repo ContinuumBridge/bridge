@@ -29,6 +29,8 @@ class Concentrator():
         procname.setprocname('concentrator')
         self.status = "ok"
         self.readyApps = []
+        self.cbFactory = {}
+        self.appInstances = []
         self.conc_mode = os.getenv('CB_CONCENTRATOR', 'client')
 
         if len(argv) < 3:
@@ -43,23 +45,28 @@ class Concentrator():
                    "status": "req-config"} 
         self.managerFactory = CbClientFactory(self.onManager, initMsg)
         self.managerConnect = reactor.connectUNIX(managerSocket, self.managerFactory, timeout=10)
+        self.connectConduit()
+        reactor.run()
 
-        # Connection to conduit process
+    def connectConduit(self):
         initMsg = {"type": "status",
                    "time_sent": isotime(),
-                   "body": "bridge manager started"}
+                   "body": "bridge connected"}
         self.concFactory = CbClientFactory(self.onControllerMessage, initMsg)
         self.jsConnect = reactor.connectTCP("localhost", 5000, self.concFactory, timeout=30)
 
-        reactor.run()
+    def reconnectConduit(self):
+        try:
+            self.jsConnect.disconnect()
+        except Exception as ex:
+            self.cbLog("debug", "reconnectConduit exception: " + str(type(ex)) + " " +  str(ex.args))
+        self.connectConduit()
 
     def onConfigure(self, config):
         """Config is based on what apps are available."""
         #self.cbLog("info", "onConfigure: " + str(config))
         self.bridge_id = config["bridge_id"]
         if "apps" in config:
-            self.cbFactory = {}
-            self.appInstances = []
             for app in config["apps"]:
                 iName = app["id"]
                 if iName not in self.appInstances:
@@ -81,7 +88,7 @@ class Concentrator():
             self.cbLog("warning", "onControllerMessage. Unexpected message: " + str(json.dumps(msg, indent=4)))
             self.cbLog("warning", "Exception: " + str(type(inst)) + " " +  str(inst.args))
             return
-        if msg["destination"] == self.bridge_id:
+        if msg["destination"] == self.bridge_id or msg["destination"] == "broadcast":
             try:
                 msg["status"] = "control_msg"
                 msg["id"] = self.id
@@ -134,6 +141,8 @@ class Concentrator():
             self.onConfigure(cmd["config"])
             msg = {"id": self.id,
                    "status": "ready"}
+        elif cmd["cmd"] == "reconnect":
+            self.reconnectConduit()
         else:
             msg = {"id": self.id,
                    "status": "ok"}
@@ -164,6 +173,7 @@ class Concentrator():
     def appInit(self, appID):
         if appID not in self.readyApps:
             self.readyApps.append(appID)
+            self.cbSendMsg({"status": "ready"}, appID)
 
     def onAppData(self, msg):
         """
