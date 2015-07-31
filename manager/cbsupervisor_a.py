@@ -40,6 +40,8 @@ class Supervisor:
         procname.setprocname('cbsupervisor')
         logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(levelname)s: %(message)s')
         logging.info("%s ************************************************************", ModuleName)
+        if not os.path.exists(CB_SOCKET_DIR):
+            os.makedirs(CB_SOCKET_DIR)
         self.connected = False
         self.checkingManager = False
         self.disconnectCount = 0
@@ -261,7 +263,16 @@ class Supervisor:
             logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
         if CB_SIM_LEVEL == '0':
             try:
-                logging.info("%s Rebooting now. Goodbye ...", ModuleName)
+                logging.info("%s Saving logs and rebooting now. Goodbye ...", ModuleName)
+                call(['cp', CB_LOGFILE, CB_CONFIG_DIR + "cbridge.savelog"]) 
+                call(['cp', "/var/log/syslog", CB_CONFIG_DIR + "syslog.savelog"]) 
+                call(['cp', "/var/log/auth.log", CB_CONFIG_DIR + "auth.savelog"]) 
+                call(['cp', "/var/log/daemon.log", CB_CONFIG_DIR + "daemon.savelog"]) 
+                call(['cp', "/var/log/z-way-server.log", CB_CONFIG_DIR + "z-way-server.savelog"]) 
+                call(['cp', "/var/log/cbshell.log", CB_CONFIG_DIR + "cbshell.savelog"]) 
+            except Exception as ex:
+                logging.warning("%s Unable to copy log some files. Exception: %s %s", ModuleName, type(ex), str(ex.args))
+            try:
                 call(["reboot"])
             except Exception as ex:
                 logging.info("%s Unable to reboot, probably because bridge not run as root", ModuleName)

@@ -22,6 +22,7 @@ try:
     subprocess.call(["cp", "../../bridge_clone/scripts/cbridge", "/etc/init.d/cbridge"])
     subprocess.call(["update-rc.d", "-f", "ntp", "remove"])
     subprocess.call(["pkill", "ntpd"])
+    subprocess.call(["cp", "../../bridge_clone/scripts/fstab", "/etc/fstab"])
     if not os.path.exists("../../bridge_clone/node_modules"):
         subprocess.call(["cp", "-r", "../../bridge/node_modules", "../../bridge_clone/node_modules"])
         logging.info("%s Copied old node_modules", ModuleName)

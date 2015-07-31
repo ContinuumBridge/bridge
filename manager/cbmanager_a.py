@@ -231,10 +231,6 @@ class ManageBridge:
                })
         for el in els:
             s = CB_SOCKET_DIR + el["socket"]
-            #try:
-            #    os.remove(s)
-            #except:
-            #    logger.debug('%s Socket was not present: %s', ModuleName, s)
             try:
                 self.elFactory[el["id"]] = CbServerFactory(self.onClientMessage)
                 self.elListen[el["id"]] = reactor.listenUNIX(s, self.elFactory[el["id"]], backlog=10)
@@ -815,6 +811,9 @@ class ManageBridge:
         self.cbSendConcMsg(req)
 
     def upgradeBridge(self, command):
+        if self.state == "upgrading":
+            reactor.callFromThread(self.sendStatusMsg, "Upgrade already in progress. Command ignored")
+            return
         self.setState("upgrading")
         reactor.callFromThread(self.sendStatusMsg, "Upgrade in progress. Please wait")
         try:
@@ -1510,10 +1509,10 @@ class ManageBridge:
                         self.configureAdaptor(self.devices.index(d))
                         break
             elif msg["type"] == "conc":
-                #self.configureConc()
+                self.configureConc()
                 # Only start apps & adaptors after concentrator has responded
-                #if self.configured:
-                self.startAll()
+                if self.configured:
+                    self.startAll()
             elif msg["type"] == "zwave":
                 self.configureZwave()
             else:
