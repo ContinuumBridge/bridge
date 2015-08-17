@@ -38,6 +38,7 @@ class Concentrator():
             exit(1)
         managerSocket = argv[1]
         self.id = argv[2]
+        self.bridge_id = argv[3]
 
         # Connection to manager
         initMsg = {"id": self.id,
@@ -49,9 +50,18 @@ class Concentrator():
         reactor.run()
 
     def connectConduit(self):
-        initMsg = {"type": "status",
-                   "time_sent": isotime(),
-                   "body": "bridge connected"}
+        initMsg = {
+            "source": self.bridge_id,
+            "destination": "cb",
+            "time_sent": isotime(),
+            "body": {
+                "verb": "patch",
+                "resource": "/api/bridge/v1/bridge/" + self.bridge_id[3:] + "/",
+                "body": {
+                    "status": "starting"
+                }
+            }
+        }
         self.concFactory = CbClientFactory(self.onControllerMessage, initMsg)
         self.jsConnect = reactor.connectTCP("localhost", 5000, self.concFactory, timeout=30)
 
@@ -65,7 +75,6 @@ class Concentrator():
     def onConfigure(self, config):
         """Config is based on what apps are available."""
         #self.cbLog("info", "onConfigure: " + str(config))
-        self.bridge_id = config["bridge_id"]
         if "apps" in config:
             for app in config["apps"]:
                 iName = app["id"]

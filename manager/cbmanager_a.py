@@ -241,7 +241,10 @@ class ManageBridge:
     
             # Now start the element in a subprocess
             try:
-                self.elProc[el["id"]] = subprocess.Popen([el["exe"], s, el["id"]])
+                if el["id"] == "conc":
+                    self.elProc[el["id"]] = subprocess.Popen([el["exe"], s, el["id"], self.bridge_id])
+                else:
+                    self.elProc[el["id"]] = subprocess.Popen([el["exe"], s, el["id"]])
                 logger.debug('%s Started %s', ModuleName, el["id"])
             except Exception as ex:
                 logger.error('%s Failed to start %s', ModuleName, el["id"])
