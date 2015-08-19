@@ -1399,7 +1399,7 @@ class ManageBridge:
             self.cbSendMsg(msg, a)
 
     def configureApp(self, app):
-        logger.debug('%s configureApp: %s', ModuleName, str(app))
+        #logger.debug('%s configureApp: %s', ModuleName, str(app))
         try:
             id = self.apps[app]["app"]["id"]
             for c in self.concConfig:
@@ -1418,7 +1418,7 @@ class ManageBridge:
             logger.warning("%s ConfigureApp. Exception: %s %s", ModuleName, type(ex), str(ex.args))
 
     def configureAdaptor(self, adt):
-        logger.debug('%s configureAdaptor: %s', ModuleName, str(adt))
+        #logger.debug('%s configureAdaptor: %s', ModuleName, str(adt))
         try:
             d = self.devices[adt]
             id = d["id"]
@@ -1436,7 +1436,7 @@ class ManageBridge:
                        }
             if d["device"]["protocol"] == "zwave":
                 message["config"]["zwave_socket"] = d["adaptor"]["zwave_socket"]
-            #logger.debug('%s Response: %s %s', ModuleName, msg['id'], message)
+            #logger.debug('%s Response: %s %s', ModuleName, id, message)
             self.cbSendMsg(message, id)
         except Exception as ex:
             logger.warning("%s ConfigureAdaptor. Exception: %s %s", ModuleName, type(ex), str(ex.args))

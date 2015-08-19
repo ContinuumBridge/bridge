@@ -68,7 +68,7 @@ class CbAdaptor:
                    "type": "adt",
                    "status": "req-config"} 
         self.managerFactory = CbClientFactory(self.processManager, initMsg)
-        reactor.connectUNIX(managerSocket, self.managerFactory, timeout=30)
+        reactor.connectUNIX(managerSocket, self.managerFactory, timeout=2)
 
         reactor.callLater(TIME_TO_MONITOR_STATUS, self.sendStatus)
         reactor.run()
@@ -222,7 +222,7 @@ class CbApp:
                    "type": "app",
                    "status": "req-config"} 
         self.managerFactory = CbClientFactory(self.processManager, initMsg)
-        reactor.connectUNIX(managerSocket, self.managerFactory, timeout=30)
+        reactor.connectUNIX(managerSocket, self.managerFactory, timeout=2)
 
         reactor.callLater(TIME_TO_MONITOR_STATUS, self.sendStatus)
         reactor.run()
