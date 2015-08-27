@@ -14,7 +14,8 @@ APP_STOP_DELAY = 3                       # Time to allow apps/adaprts to stop be
 MIN_DELAY = 1                            # Min time to wait when a delay is needed
 CONNECTION_WATCHDOG_INTERVAL = 60*60*1.5 # Reboot if no messages received for this time
 WATCHDOG_CID = "CID65"                   # Client ID to send watchdog messages to
-WATCHDOG_SEND_INTERVAL = 60*30           # How often to send messages to watchdog client
+#WATCHDOG_SEND_INTERVAL = 60*30           # How often to send messages to watchdog client
+WATCHDOG_SEND_INTERVAL = 60              # How often to send messages to watchdog client
 WATCHDOG_START_DELAY = 60                # How long to wait before sending first watchdog message
 
 ModuleName = "Manager"
@@ -91,6 +92,7 @@ class ManageBridge:
         self.zwaveDiscovered = False
         self.bleDiscovered = False
         self.configured = False
+        self.connection = "none"
         self.restarting = False
         self.zExcluding = False
         self.zwaveShouldExcludeID = None
@@ -1010,21 +1012,25 @@ class ManageBridge:
         reactor.callLater(CONNECTION_WATCHDOG_INTERVAL, self.connectionWatchdog)
 
     def sendWatchdogMsg(self):
+        uptime = subprocess.check_output(["uptime"])[:-1]
         msg = {"cmd": "msg",
                "msg": {"source": self.bridge_id + "/AID0",
                        "destination": WATCHDOG_CID,
                        "body": {
                                  "status": "OK",
                                  "version": self.version,
-                                 "up_since": self.upSince
+                                 "connection": self.connection,
+                                 "up_since": self.upSince,
+                                 "uptime": uptime
                                }
                       }
               }
-        logger.debug('%s Sending watchdog message: %s', ModuleName, msg)
+        logger.debug('%s Sending watchdog message: %s', ModuleName, json.dumps(msg, indent=4))
         self.cbSendConcMsg(msg)
         reactor.callLater(WATCHDOG_SEND_INTERVAL, self.sendWatchdogMsg)
  
     def onSuperMessage(self, msg):
+        logger.debug("%s Received from supervisor: %s", ModuleName, json.dumps(msg, indent=4))
         """  watchdog. Replies with status=ok or a restart/reboot command. """
         if msg["msg"] == "stopall":
             resp = {"msg": "status",
@@ -1037,6 +1043,8 @@ class ManageBridge:
         elif msg["msg"] == "reconnect":
             self.reconnect()
         else:
+            if "connection" in msg:
+                self.connection = msg["connection"]
             if time.time() - self.timeLastConduitMsg > CONDUIT_WATCHDOG_MAXTIME and not CB_NO_CLOUD: 
                 logger.info('%s Not heard from conduit for %s. Notifyinng supervisor', ModuleName, CONDUIT_WATCHDOG_MAXTIME)
                 resp = {"msg": "status",

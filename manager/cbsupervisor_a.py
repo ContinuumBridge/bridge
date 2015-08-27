@@ -27,7 +27,6 @@ sys.path.insert(0, CB_BRIDGE_ROOT + "/conman")
 import conman
 
 MANAGER_START_TIME = 3            # Time to allow for manager to start before starting to monitor it (secs)
-TIME_TO_IFUP = 90                 # Time to wait before checking if we have an Internet connection (secs)
 WATCHDOG_INTERVAL = 30            # Time between manager checks (secs)
 REBOOT_WAIT = 10                  # Time to allow bridge to stop before rebooting
 RESTART_INTERVAL = 10             # Time between telling manager to stop and starting it again
@@ -46,7 +45,7 @@ class Supervisor:
         self.checkingManager = False
         self.disconnectCount = 0
         self.timeStamp = 0
-        self.mangerPings = 0
+        self.managerPings = 0
         signal.signal(signal.SIGINT, self.signalHandler)  # For catching SIGINT
         signal.signal(signal.SIGTERM, self.signalHandler)  # For catching SIGTERM
         reactor.callLater(0.1, self.startConman)
@@ -55,8 +54,9 @@ class Supervisor:
         reactor.run()
 
     def startConman(self):
+        logging.debug("%s startConman: CB_CELLULAR_PRIORITY: %s", ModuleName, CB_CELLULAR_PRIORITY)
         self.conman = conman.Conman()
-        self.conman.start(logFile=CB_LOGFILE, logLevel=CB_LOGGING_LEVEL)
+        self.conman.start(logFile=CB_LOGFILE, logLevel=CB_LOGGING_LEVEL, cellularPriority=CB_CELLULAR_PRIORITY)
 
     def startManager(self, restart):
         self.starting = True
@@ -157,21 +157,24 @@ class Supervisor:
         self.starting = False
 
     def checkManager(self, startTime):
+        logging.debug("%s checkManager, starting: %s", ModuleName, self.starting)
         if not self.starting:
             # -1 is allowance for times not being sync'd (eg: separate devices)
             if self.timeStamp > startTime - 1:
                 try:
+                    connection = self.conman.connectedBy()
                     msg = {"msg": "status",
+                           "connection": connection,
                            "status": "ok"
                           }
                     self.cbSendManagerMsg(msg)
                 except Exception as ex:
                     # Caters for ntp changing time & hence doing check before manager has started
                     if self.managerPings < 2:
-                        self.mangerPings +=1
-                        logger.warning("%s Unable to to send status message to manager, exception: %s %s", ModuleName, type(ex), str(ex.args))
+                        self.managerPings +=1
+                        logging.warning("%s Unable to to send status message to manager, exception: %s %s", ModuleName, type(ex), str(ex.args))
                     else:
-                        logger.error("%s Cannot communicate with manager. Rebooting, exception: %s %s", ModuleName, type(ex), str(ex.args))
+                        logging.error("%s Cannot communicate with manager. Rebooting, exception: %s %s", ModuleName, type(ex), str(ex.args))
                         self.reboot()
                 finally:
                     reactor.callLater(WATCHDOG_INTERVAL, self.checkManager, time.time())
