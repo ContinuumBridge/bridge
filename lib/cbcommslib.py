@@ -35,7 +35,6 @@ from twisted.internet import task
 from twisted.internet import threads
 from twisted.internet import defer
 from twisted.internet import reactor
-from data_store import DataStore, DataModel
 LineReceiver.MAX_LENGTH = 262143
 
 def isotime():

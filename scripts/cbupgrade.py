@@ -23,6 +23,8 @@ try:
     subprocess.call(["update-rc.d", "-f", "ntp", "remove"])
     subprocess.call(["pkill", "ntpd"])
     subprocess.call(["cp", "../../bridge_clone/scripts/fstab", "/etc/fstab"])
+    subprocess.call(["cp", "../../bridge_clone/scripts/UpdateXMLs.sh", "/opt/z-way-server/ZDDX/UpdateXMLs.sh"])
+    subprocess.call(["cd /opt/z-way-server/ZDDX;" "./UpdateXMLs.sh"])
     if not os.path.exists("../../bridge_clone/node_modules"):
         subprocess.call(["cp", "-r", "../../bridge/node_modules", "../../bridge_clone/node_modules"])
         logging.info("%s Copied old node_modules", ModuleName)
