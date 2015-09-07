@@ -14,8 +14,7 @@ APP_STOP_DELAY = 3                       # Time to allow apps/adaprts to stop be
 MIN_DELAY = 1                            # Min time to wait when a delay is needed
 CONNECTION_WATCHDOG_INTERVAL = 60*60*1.5 # Reboot if no messages received for this time
 WATCHDOG_CID = "CID65"                   # Client ID to send watchdog messages to
-#WATCHDOG_SEND_INTERVAL = 60*30           # How often to send messages to watchdog client
-WATCHDOG_SEND_INTERVAL = 60              # How often to send messages to watchdog client
+WATCHDOG_SEND_INTERVAL = 60*30           # How often to send messages to watchdog client
 WATCHDOG_START_DELAY = 60                # How long to wait before sending first watchdog message
 
 ModuleName = "Manager"
@@ -41,7 +40,6 @@ from cbcommslib import isotime
 from cbconfig import *
 from dropbox.client import DropboxClient, DropboxOAuth2Flow, DropboxOAuth2FlowNoRedirect
 from dropbox.rest import ErrorResponse, RESTSocketError
-from dropbox.datastore import DatastoreError, DatastoreManager, Date, Bytes
 import procname
 if CB_SIM_LEVEL == '1':
     from simdiscover import SimDiscover
