@@ -46,6 +46,7 @@ class Supervisor:
         self.disconnectCount = 0
         self.timeStamp = 0
         self.managerPings = 0
+        self.timeChanged = False
         signal.signal(signal.SIGINT, self.signalHandler)  # For catching SIGINT
         signal.signal(signal.SIGTERM, self.signalHandler)  # For catching SIGTERM
         reactor.callLater(0.1, self.startConman)
@@ -79,8 +80,6 @@ class Supervisor:
         try:
             self.managerProc = Popen([exe])
             logging.info("%s Starting bridge manager", ModuleName)
-            # Give time for manager to start before setting self.starting
-            reactor.callLater(MANAGER_START_TIME, self.setStartingOff)
             if not CB_DEV_BRIDGE:
                 if not self.checkingManager:
                     reactor.callLater(3*WATCHDOG_INTERVAL, self.checkManager, time.time())
@@ -100,7 +99,7 @@ class Supervisor:
             logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
 
     def onManagerMessage(self, msg):
-        logging.debug("%s onManagerMessage received message: %s", ModuleName, msg)
+        #logging.debug("%s onManagerMessage received message: %s", ModuleName, msg)
         # Regardless of message content, timeStamp is the time when we last heard from the manager
         self.timeStamp = time.time()
         if msg["msg"] == "restart":
@@ -153,12 +152,10 @@ class Supervisor:
             logging.warning("%s checkManagerStopped. Manager not stopped after count %s, rebooting", ModuleName, count)
             self.reboot()
 
-    def setStartingOff(self):
-        self.starting = False
-
     def checkManager(self, startTime):
-        logging.debug("%s checkManager, starting: %s", ModuleName, self.starting)
-        if not self.starting:
+        #logging.debug("%s checkManager, starting: %s, timeChanged: %s, timeStamp: %s, startTime: %s", ModuleName, self.starting, \
+        #    self.timeChanged, self.timeStamp, startTime)
+        if not self.starting and not self.timeChanged:
             # -1 is allowance for times not being sync'd (eg: separate devices)
             if self.timeStamp > startTime - 1:
                 try:
@@ -189,6 +186,19 @@ class Supervisor:
                     logging.warning("%s Cannot send message to manager. Rebooting", ModuleName)
                     logging.error("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
                     self.reboot()
+        else:
+            try:
+                connection = self.conman.connectedBy()
+                msg = {"msg": "status",
+                       "connection": connection,
+                       "status": "ok"
+                      }
+                self.cbSendManagerMsg(msg)
+            except Exception as ex:
+                logging.warning("%s Unable to to send status message to manager (1), exception: %s %s", ModuleName, type(ex), str(ex.args))
+            self.starting = False
+            self.timeChanged = False
+            reactor.callLater(WATCHDOG_INTERVAL, self.checkManager, time.time())
 
     def recheckManager(self, startTime):
         logging.debug("%s recheckManager", ModuleName)
@@ -248,6 +258,7 @@ class Supervisor:
                 s = check_output(["sudo", "/usr/sbin/ntpd", "-p", "/var/run/ntpd.pid", "-g", "-q"])
                 logging.info("%s NTP time updated %s", ModuleName, str(s))
                 if "time" in str(s):
+                    self.timeChanged = True
                     syncd = True
                 else:
                     time.sleep(10)
