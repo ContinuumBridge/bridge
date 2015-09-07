@@ -24,6 +24,7 @@ try:
     subprocess.call(["pkill", "ntpd"])
     subprocess.call(["cp", "../../bridge_clone/scripts/fstab", "/etc/fstab"])
     subprocess.call(["cp", "../../bridge_clone/scripts/rsyslog.logrotate", "/etc/logrotate.d/rsyslog"])
+    subprocess.call(["cp", "../../bridge_clone/scripts/cbshell.logrotate", "/etc/logrotate.d/cbshell"])
     #subprocess.call(["cp", "../../bridge_clone/scripts/UpdateXMLs.sh", "/opt/z-way-server/ZDDX/UpdateXMLs.sh"])
     #subprocess.call(["cd /opt/z-way-server/ZDDX;" "./UpdateXMLs.sh"])
     if not os.path.exists("../../bridge_clone/node_modules"):
