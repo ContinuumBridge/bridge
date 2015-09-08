@@ -88,6 +88,7 @@ class ManageBridge:
         self.disconnectedCount = 0  # Used to count "disconnected" messages from conduit
         self.controllerConnected = False
         self.zwaveDiscovered = False
+        self.zwaveDiscovering = False
         self.bleDiscovered = False
         self.configured = False
         self.connection = "none"
@@ -1028,7 +1029,7 @@ class ManageBridge:
         reactor.callLater(WATCHDOG_SEND_INTERVAL, self.sendWatchdogMsg)
  
     def onSuperMessage(self, msg):
-        logger.debug("%s Received from supervisor: %s", ModuleName, json.dumps(msg, indent=4))
+        #logger.debug("%s Received from supervisor: %s", ModuleName, json.dumps(msg, indent=4))
         """  watchdog. Replies with status=ok or a restart/reboot command. """
         if msg["msg"] == "stopall":
             resp = {"msg": "status",

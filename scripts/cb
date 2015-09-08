@@ -116,11 +116,12 @@ def checkget(get, expected, action, obj, sessionid, doExit):
 @click.option('--name', nargs=1, help='The name to give a bridge.')
 @click.option('--app', nargs=2, help='Usage: post|patch|get|delete <config file name>.')
 @click.option('--device', nargs=2, help='Usage: post|patch|get|delete <config file name>.')
+@click.option('--device_install', nargs=2, help='Usage: get|delete <device_install ID>.')
 @click.option('--staging', nargs=1, help='Options: True|False.')
 @click.option('--user', prompt='User name', help='Username. If not specified a prompt will be given.')
 @click.option('--password', prompt=True, hide_input=True, help='Password. If not specified a prompt will be given.')
 
-def cb(bridge, app, device, user, staging, password, name):
+def cb(bridge, app, device, device_install, user, staging, password, name):
 
     global ADDRESS
     if bridge:
@@ -348,6 +349,26 @@ def cb(bridge, app, device, user, staging, password, name):
             print "Error. Failed to patch config file"
             print "Exception type: ", type(inst)
             print "Exception args: ", str(inst.args)
+        logout(sessionid)
+
+    if device_install:
+        action = device_install[0]
+        device_install_id = device_install[1]
+        url = ADDRESS + "api/bridge/v1/device_install/" + device_install_id + "/"
+        sessionid = login(user, password) 
+        print "device_install: ", action
+        headers = {'Content-Type': 'application/json'}
+        cookies = {'sessionid': sessionid}
+        if action == "get":
+            r = requests.get(url, headers=headers, cookies=cookies)
+            checkget(r.status_code, 200, action, "device_install", sessionid, True)
+            text = json.loads(r.text)
+            print(json.dumps(text, indent=4))
+        elif action == "delete":
+            r = requests.delete(url, headers=headers, cookies=cookies)
+            checkget(r.status_code, 204, action, "device_install", sessionid, True)
+        else:
+            print("Unrecognised action: %s", action)
         logout(sessionid)
 
 if __name__ == '__main__':
