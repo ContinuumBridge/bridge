@@ -554,6 +554,7 @@ class ManageBridge:
                 if d["address"] == address:
                     found = True
                     excludedID = str(d["id"][3:])
+                    logger.debug('%s onZwaveExclude, excludeID: %s, zwaveShouldExcludeID: %s', ModuleName, address, self.zwaveShouldExcludeID)
                     if excludedID == self.zwaveShouldExcludeID:
                         self.sendControllerMsg("delete", "/api/bridge/v1/device_install/" + excludedID +"/")
                         msg = "Excluded " + d["friendly_name"]
