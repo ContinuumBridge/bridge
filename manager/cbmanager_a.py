@@ -554,17 +554,19 @@ class ManageBridge:
                 if d["address"] == address:
                     found = True
                     excludedID = str(d["id"][3:])
-                    logger.debug('%s onZwaveExclude, excludeID: %s, zwaveShouldExcludeID: %s', ModuleName, address, self.zwaveShouldExcludeID)
+                    logger.debug('%s onZwaveExclude, excludeID: %s, zwaveShouldExcludeID: %s', ModuleName, excludedID, self.zwaveShouldExcludeID)
                     if excludedID == self.zwaveShouldExcludeID:
                         self.sendControllerMsg("delete", "/api/bridge/v1/device_install/" + excludedID +"/")
                         msg = "Excluded " + d["friendly_name"]
                     elif self.zwaveShouldExcludeID == None:
+                        self.sendControllerMsg("delete", "/api/bridge/v1/device_install/" + excludedID +"/")
                         msg = "Excluded " + d["friendly_name"]
                     else:
                         self.sendControllerMsg("patch", "/api/bridge/v1/device_install/" + self.zwaveShouldExcludeID +"/", {"status": "uninstall_error"})
                         reactor.callLater(0.2, self.sendControllerMsg, "delete", "/api/bridge/v1/device_install/" + excludedID +"/")
                         msg = "Excluded " + d["friendly_name"]
                     break
+                self.getConfig()
             if not found:
                 if self.zwaveShouldExcludeID != None:
                     self.sendControllerMsg("patch", "/api/bridge/v1/device_install/" + self.zwaveShouldExcludeID +"/", {"status": "operational"})
@@ -1138,6 +1140,7 @@ class ManageBridge:
                     reactor.callLater(MIN_DELAY, self.discover)
             elif command == "restart":
                 logger.info('%s Received restart command', ModuleName)
+                self.getConfig()  # Get latest config before restarting
                 self.cbSendSuperMsg({"msg": "restart"})
                 self.restarting = True
                 self.setState("restarting")

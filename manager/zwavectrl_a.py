@@ -168,7 +168,7 @@ class ZwaveCtrl():
                     includeState = "waitInclude"
                     incStartTime = str(int(time.time()))
                     includedDevice = ""
-                    self.endMessage = "You should never see this message"
+                    self.endMessage = "Unexpected behavour. Most likely Z-Wave device did not finish interview"
                     URL = startIncludeUrl
                     body = []
                     includeTick = 0
