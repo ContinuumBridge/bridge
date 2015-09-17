@@ -207,7 +207,7 @@ class CbApp:
         self.friendlyLookup = {}
         self.configured = False
         self.status = "ok"
-        self.bridge_id = "unconfigure"
+        self.bridge_id = "unconfigured"
 
         if len(argv) < 3:
             logging.error("%s cbApp improper number of arguments", ModuleName)
@@ -276,6 +276,11 @@ class CbApp:
         self.bridge_id = config["bridge_id"]
         for adaptor in config["adaptors"]:
             iName = adaptor["id"]
+            initMsg = {
+                "id": self.id,
+                "appClass": self.appClass,
+                "request": "init"
+            }
             if iName not in self.adtInstances:
                 # Allows for adding extra adaptors on the fly
                 name = adaptor["name"]
@@ -283,11 +288,10 @@ class CbApp:
                 friendly_name = adaptor["friendly_name"]
                 self.friendlyLookup.update({iName: friendly_name})
                 self.adtInstances.append(iName)
-                initMsg = {"id": self.id,
-                           "appClass": self.appClass,
-                           "request": "init"}
                 self.cbFactory[iName] = CbClientFactory(self.onAdaptorMessage, initMsg)
                 reactor.connectUNIX(adtSoc, self.cbFactory[iName], timeout=30)
+            else:
+                self.sendMessage(initMsg, iName)
         # Connect to Concentrator socket
         if not self.configured:
             # Connect to the concentrator
@@ -398,8 +402,8 @@ class CbClient():
                            "body": [{"a": rx_n}]
                            }
                     self.sendMessage(ack, "conc")
-            else:
-                self.cbLog("warning", "Received message from client with no body")
+            elif not "status" in message:
+                self.cbLog("warning", "Received message from client with no body or status")
         except Exception as ex:
             self.cbLog("warning", "Client receive exception. Type: " + str(type(ex)) + "exception: " +  str(ex.args))
 
