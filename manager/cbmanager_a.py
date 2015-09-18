@@ -131,12 +131,16 @@ class ManageBridge:
         #self.sendStatusMsg("Bridge state: " + self.state)
 
     def reconnect(self):
-        logger.info('%s reconnecting conduit')
+        logger.info('%s Reconnecting conduit', ModuleName)
         try:
             self.nodejsProc.kill()
         except:
             logger.debug('%s reconnect, no node  process to kill', ModuleName)
         self.connectConduit()
+        reactor.callLater(MIN_DELAY*3, self.reconnectToConduit)
+
+    def reconnectToConduit(self):
+        self.cbSendConcMsg({"cmd": "reconnect"})
         
     def connectConduit(self):
         if CB_NO_CLOUD != "True":
@@ -859,6 +863,23 @@ class ManageBridge:
             reactor.callFromThread(self.sendStatusMsg, "Failed to upgrade. Reverting to previous version")
             return
         try:
+            subprocess.call(["mv", "../../bridge_clone/md5", "md5"])
+            a = subprocess.Popen(("find", "../../bridge_clone", "-type", "f", "-print0"), stdout=subprocess.PIPE)
+            b = subprocess.Popen(("sort", "-z"), stdin=a.stdout, stdout=subprocess.PIPE)
+            c = subprocess.Popen(("xargs", "-r0", "md5sum"), stdin=b.stdout, stdout=subprocess.PIPE)
+            md5New = subprocess.check_output(("md5sum"), stdin=c.stdout)
+            logger.debug('%s md5New: %s', ModuleName, md5New)
+            with open("md5", "r") as f:
+                md5Orig = f.read()
+            if md5New != md5Orig:
+                reactor.callFromThread(self.sendStatusMsg, "Failed to upgrade. Checksum did not match. Reverting to previous version")
+                return
+        except Exception as ex:
+            logger.error('%s Problems checking checksum', ModuleName)
+            logger.error("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
+            reactor.callFromThread(self.sendStatusMsg, "Failed to upgrade. Checksum problems. Reverting to previous version")
+            return
+        try:
             status = subprocess.check_output("../../bridge_clone/scripts/cbupgrade.py")
         except Exception as ex:
             logger.error('%s Unable to run upgrade script', ModuleName)
@@ -872,8 +893,8 @@ class ManageBridge:
         try:
             subprocess.call(["rm", "-rf", bridgeSave])
         except Exception as ex:
-            logger.warning('%s Could not remove bridgeSave', ModuleName)
-            logger.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
+            logger.info('%s Could not remove bridgeSave', ModuleName)
+            logger.info("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
         try:
             subprocess.call(["mv", bridgeDir, bridgeSave])
             logger.info('%s Moved bridgeDir to bridgeSave', ModuleName)

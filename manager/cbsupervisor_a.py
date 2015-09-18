@@ -52,6 +52,7 @@ class Supervisor:
         reactor.callLater(0.1, self.startConman)
         reactor.callInThread(self.iptables)
         reactor.callLater(1, self.startManager, False)
+        #reactor.callLater(120, self.disconnectTest)
         reactor.run()
 
     def startConman(self):
@@ -119,6 +120,9 @@ class Supervisor:
             if msg["status"] == "disconnected":
                 logging.info("%s onManagerMessage. disconnected", ModuleName)
                 self.onDisconnected()
+
+    def disconnectTest(self):
+        self.cbSendManagerMsg({"msg": "reconnect"})
 
     def onDisconnected(self):
         logging.debug("%s onDisconnected, disconnectCount: %s, self.starting: %s", ModuleName, str(self.disconnectCount), self.starting)

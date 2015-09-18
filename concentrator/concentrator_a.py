@@ -49,7 +49,7 @@ class Concentrator():
         self.connectConduit()
         reactor.run()
 
-    def connectConduit(self):
+    def connectConduit(self, status="starting"):
         initMsg = {
             "source": self.bridge_id,
             "destination": "cb",
@@ -58,7 +58,7 @@ class Concentrator():
                 "verb": "patch",
                 "resource": "/api/bridge/v1/bridge/" + self.bridge_id[3:] + "/",
                 "body": {
-                    "status": "starting"
+                    "status": status
                 }
             }
         }
@@ -70,7 +70,7 @@ class Concentrator():
             self.jsConnect.disconnect()
         except Exception as ex:
             self.cbLog("debug", "reconnectConduit exception: " + str(type(ex)) + " " +  str(ex.args))
-        self.connectConduit()
+        self.connectConduit(status="running")
 
     def onConfigure(self, config):
         """Config is based on what apps are available."""
@@ -152,6 +152,8 @@ class Concentrator():
                    "status": "ready"}
         elif cmd["cmd"] == "reconnect":
             self.reconnectConduit()
+            msg = {"id": self.id,
+                   "status": "ok"}
         else:
             msg = {"id": self.id,
                    "status": "ok"}
