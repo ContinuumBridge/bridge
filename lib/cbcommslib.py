@@ -274,6 +274,7 @@ class CbApp:
         #logging.debug("%s %s Config: %s", ModuleName, self.id, json.dumps(config, indent=4))
         # Connect to socket for each adaptor
         self.bridge_id = config["bridge_id"]
+        self.onConfigureMessage(config)  # Before adaptor sockets because adaptor messages were sometimes arriving first
         for adaptor in config["adaptors"]:
             iName = adaptor["id"]
             initMsg = {
@@ -301,8 +302,6 @@ class CbApp:
                       }
             self.cbFactory["conc"] = CbClientFactory(self.onConcMessage, initMsg)
             reactor.connectUNIX(concSocket, self.cbFactory["conc"], timeout=30)
-            # Now call the app's configure method & set self.configured = True
-            self.onConfigureMessage(config)
             self.configured = True
             reactor.callFromThread(self.onManagerStatus, config["connected"])
 
