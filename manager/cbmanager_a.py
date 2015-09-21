@@ -160,6 +160,14 @@ class ManageBridge:
         reactor.callLater(START_DELAY + 1, self.startElements)
         reactor.run()
 
+    def checkZwave(self):
+        zwayFilename = "/opt/z-way-server/z-way-server"
+        if os.path.isfile(zwayFilename):
+            self.zwave = True
+        else:
+            self.zwave = False
+        logger.info("%s Z-Wave installed on bridge: %s", ModuleName, self.zwave)
+
     def checkBluetooth(self):
         try:
             hci0 = subprocess.check_output(["hciconfig"])
@@ -222,13 +230,12 @@ class ManageBridge:
             reactor.callInThread(self.checkBluetooth)
         except Exception as ex:
             logger.warning("%s Unable to to call checkBluetooth, exception: %s %s", ModuleName, type(ex), str(ex.args))
-        #if self.configured:
-        #    self.removeSecondarySockets()
+        self.checkZwave()
         els = [{"id": "conc",
                 "socket": "SKT-MGR-CONC",
                 "exe": CONCENTRATOR_PATH
                }]
-        if CB_ZWAVE_BRIDGE:
+        if self.zwave:
             els.append(
                {"id": "zwave",
                 "socket": "SKT-MGR-ZWAVE",
@@ -533,7 +540,7 @@ class ManageBridge:
                        "msg": d}
                 self.cbSendConcMsg(msg)
         if CB_PERIPHERALS == "none" or not found:
-            if CB_ZWAVE_BRIDGE:
+            if self.zwave:
                 self.sendControllerMsg("patch", "/api/bridge/v1/bridge/" + self.bridge_id[3:] + "/", {"zwave": "include"})
                 self.elFactory["zwave"].sendMsg({"cmd": "discover"})
                 self.zwaveDiscovering = False
@@ -582,7 +589,7 @@ class ManageBridge:
 
     def zwaveExclude(self):
         logger.debug('%s zwaveExclude', ModuleName)
-        if CB_ZWAVE_BRIDGE:
+        if self.zwave:
             if not self.zExcluding:
                 self.zExcluding = True
                 self.elFactory["zwave"].sendMsg({"cmd": "exclude"})
@@ -1276,7 +1283,7 @@ class ManageBridge:
     def stopAll(self):
         #self.sendStatusMsg("Disconnecting. Goodbye, back soon ...")
         logger.info('%s Stopping concentrator', ModuleName)
-        if CB_ZWAVE_BRIDGE:
+        if self.zwave:
             self.elFactory["zwave"].sendMsg({"cmd": "stop"})
         self.cbSendConcMsg({"cmd": "stop"})
         # Give concentrator a change to stop before killing it and its sockets
