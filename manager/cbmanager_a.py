@@ -870,7 +870,7 @@ class ManageBridge:
             reactor.callFromThread(self.sendStatusMsg, "Failed to upgrade. Reverting to previous version")
             return
         try:
-            subprocess.call(["mv", "../../bridge_clone/md5", "md5"])
+            subprocess.call(["mv", "-f", "../../bridge_clone/md5", "md5"])
             a = subprocess.Popen(("find", "../../bridge_clone", "-type", "f", "-print0"), stdout=subprocess.PIPE)
             b = subprocess.Popen(("sort", "-z"), stdin=a.stdout, stdout=subprocess.PIPE)
             c = subprocess.Popen(("xargs", "-r0", "md5sum"), stdin=b.stdout, stdout=subprocess.PIPE)
