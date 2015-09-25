@@ -5,17 +5,18 @@
 # Proprietary and confidential
 # Written by Peter Claydon
 #
-START_DELAY = 0.2                        # Delay between starting each adaptor or app
-CONDUIT_WATCHDOG_MAXTIME = 120           # Max time with no message before notifying supervisor
-CONDUIT_MAX_DISCONNECT_COUNT = 120       # Max number of messages before notifying supervisor
-ELEMENT_WATCHDOG_INTERVAL = 120          # Interval at which to check apps/adaptors have communicated
-ELEMENT_POLL_INTERVAL = 30               # Delay between polling each element
-APP_STOP_DELAY = 3                       # Time to allow apps/adaprts to stop before killing them
-MIN_DELAY = 1                            # Min time to wait when a delay is needed
-CONNECTION_WATCHDOG_INTERVAL = 60*60*1.5 # Reboot if no messages received for this time
-WATCHDOG_CID = "CID65"                   # Client ID to send watchdog messages to
-WATCHDOG_SEND_INTERVAL = 60*30           # How often to send messages to watchdog client
-WATCHDOG_START_DELAY = 60                # How long to wait before sending first watchdog message
+START_DELAY = 0.2                          # Delay between starting each adaptor or app
+CONDUIT_WATCHDOG_MAXTIME = 120             # Max time with no message before notifying supervisor
+CONDUIT_MAX_DISCONNECT_COUNT = 120         # Max number of messages before notifying supervisor
+ELEMENT_WATCHDOG_INTERVAL = 120            # Interval at which to check apps/adaptors have communicated
+ELEMENT_POLL_INTERVAL = 30                 # Delay between polling each element
+APP_STOP_DELAY = 3                         # Time to allow apps/adaprts to stop before killing them
+MIN_DELAY = 1                              # Min time to wait when a delay is needed
+CONNECTION_WATCHDOG_INTERVAL = 60*60*1.5   # Reboot if no messages received for this time
+CONNECTION_WATCHDOG_INTERVAL_1 = 60*10     # Startup to first connection watchdog check
+WATCHDOG_CID = "CID65"                     # Client ID to send watchdog messages to
+WATCHDOG_SEND_INTERVAL = 60*30             # How often to send messages to watchdog client
+WATCHDOG_START_DELAY = 120                 # How long to wait before sending first watchdog message
 
 ModuleName = "Manager"
 id = "manager"
@@ -99,6 +100,7 @@ class ManageBridge:
         self.state = "stopped"
         self.concNoApps = False
         self.firstWatchdog = True
+        self.firstConnectionWatchdog = True
         self.elements = {}
         self.appProcs = {}
         self.concConfig = []
@@ -211,7 +213,7 @@ class ManageBridge:
 
     def startElements(self):
         # First start connection watchdog, in case anything goes wrong
-        reactor.callLater(CONNECTION_WATCHDOG_INTERVAL, self.connectionWatchdog)
+        reactor.callLater(CONNECTION_WATCHDOG_INTERVAL_1, self.connectionWatchdog)
         reactor.callLater(WATCHDOG_START_DELAY, self.sendWatchdogMsg)
         # Initiate comms with supervisor, which started the manager in the first place
         s = CB_SOCKET_DIR + "SKT-SUPER-MGR"
@@ -1034,7 +1036,9 @@ class ManageBridge:
     def connectionWatchdog(self):
         """ The final defence. Requests a reboot if no messages received for a long time. """
         logger.debug('%s connectionWatchdog, rxCount: %s', ModuleName, self.rxCount)
-        if self.rxCount == 0:
+        if self.firstConnectionWatchdog: # Needed because NTP may have updated time cause this to be called too soon
+            self.firstConnectionWatchdog = False
+        elif self.rxCount == 0:
             logger.debug('%s connectionWatchdog, rxCount: %si, sending reboot message to supervisor', ModuleName, self.rxCount)
             self.cbSendSuperMsg({"msg": "reboot"})
         else:
