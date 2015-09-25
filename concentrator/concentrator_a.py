@@ -31,6 +31,7 @@ class Concentrator():
         self.readyApps = []
         self.cbFactory = {}
         self.appInstances = []
+        self.sendQueue = []
         self.conc_mode = os.getenv('CB_CONCENTRATOR', 'client')
 
         if len(argv) < 3:
@@ -47,6 +48,7 @@ class Concentrator():
         self.managerFactory = CbClientFactory(self.onManager, initMsg)
         self.managerConnect = reactor.connectUNIX(managerSocket, self.managerFactory, timeout=10)
         self.connectConduit()
+        reactor.callLater(0.1, self.sendMessage)  # Loop to ensure messages are not send too close together (node problem)
         reactor.run()
 
     def connectConduit(self, status="starting"):
@@ -128,14 +130,24 @@ class Concentrator():
                 self.cbLog("warning", "onControllerMessage. Unexpected app message: " + str(json.dumps(msg, indent=4)))
                 self.cbLog("warning", "Exception: " + str(type(inst)) + " " +  str(inst.args))
 
+    def sendMessage(self):
+        # Send messages at regular intervals as node doesn't like them too close together
+        try:
+            if self.sendQueue:
+                msg = self.sendQueue.pop()
+                self.concFactory.sendMsg(msg)
+        except Exception as ex:
+            self.cbLog("warning", "Failed to send message to bridge controller: " + str(msg))
+            self.cbLog("warning", "Exception: " + str(type(ex)) + " " +  str(ex.args))
+        reactor.callLater(0.1, self.sendMessage)
+
+    def queueMessage(self, msg):
+        self.sendQueue.append(msg)
+
     def onManagerMessage(self, msg):
         #self.cbLog("debug", "Received from manager: " + str(json.dumps(msg, indent=4)))
         msg["time_sent"] = isotime()
-        try:
-            self.concFactory.sendMsg(msg)
-        except Exception as inst:
-            self.cbLog("warning", "Failed to send message to bridge controller: " + str(msg))
-            self.cbLog("warning", "Exception: " + str(type(inst)) + " " +  str(inst.args))
+        self.queueMessage(msg)
 
     def onManager(self, cmd):
         if cmd["cmd"] == "msg":
@@ -203,7 +215,7 @@ class Concentrator():
             else:
                 if msg["destination"].startswith("CID"):
                     msg["source"] = self.bridge_id + "/" + msg["source"]
-                    self.concFactory.sendMsg(msg)
+                    self.queueMessage(msg)
                 else:
                     self.cbLog("warning","Illegal desination in app message. Should be CIDn: " + str(json.dumps(msg, indent=4)))
         except Exception as ex:

@@ -581,11 +581,11 @@ class ManageBridge:
             if not found:
                 if self.zwaveShouldExcludeID != None:
                     self.sendControllerMsg("patch", "/api/bridge/v1/device_install/" + self.zwaveShouldExcludeID +"/", {"status": "operational"})
-                msg= "Excluded Z-Wave device at address " + address + ".\n Device interview may not have been completed.\n You may need to rerun discover devices?"
+                msg= "Excluded Z-Wave device at address " + address
         self.sendControllerMsg("patch", "/api/bridge/v1/bridge/" + self.bridge_id[3:] + "/", {"zwave": "operational"})
         self.zExcluding = False
         self.zwaveShouldExcludeID = None
-        reactor.callLater(0.5, self.sendStatusMsg, msg)
+        self.sendStatusMsg(msg)
 
     def zwaveExclude(self):
         logger.debug('%s zwaveExclude', ModuleName)
