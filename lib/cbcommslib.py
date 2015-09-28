@@ -350,13 +350,30 @@ class CbClient():
     keep is the number of message bodies to keep if messages are not acknowleged by the client.
     CBClient will attempt to resend message bodies that are kept.
     """
-    def __init__(self, aid , cid, keep=3):
+    def __init__(self, aid , cid, keep=50):
         self.aid = aid
         self.cid = cid
         self.keep = keep
         self.onClientMessage = None
         self.count = 0
         self.bodies = []
+        self.saveFile =  CB_CONFIG_DIR + self.aid + ".save"
+
+    def loadSaved(self):
+        try:
+            if os.path.isfile(self.saveFile):
+                with open(self.saveFile, 'r') as f:
+                    self.bodies = json.load(f)
+            self.count = len(self.bodies)
+            self.cbLog("debug", "Loaded saved unsent messages. count: " + str(count))
+        except Exception as ex:
+            self.cbLog("warning", "Problem loading unsent messages. Exception. Type: " + str(type(ex)) + "exception: " +  str(ex.args))
+        finally:
+            try:
+                os.remove(self.saveFile)
+                self.cbLog("debug", "deleted saved messages file")
+            except Exception as ex:
+                self.cbLog("debug", "Cannot remove unsent messages file. Exception. Type: " + str(type(ex)) + "exception: " +  str(ex.args))
 
     def send(self, body):
         body["n"] = self.count
@@ -370,6 +387,7 @@ class CbClient():
                    "body": self.bodies
                   }
         self.sendMessage(message, "conc")
+        self.cbLog("debug", "sending message: " + str(message))
 
     def receive(self, message):
         try:
@@ -405,6 +423,15 @@ class CbClient():
                 self.cbLog("warning", "Received message from client with no body or status")
         except Exception as ex:
             self.cbLog("warning", "Client receive exception. Type: " + str(type(ex)) + "exception: " +  str(ex.args))
+
+    def save(self):
+        try:
+            if self.bodies:
+                with open(self.saveFile, 'w') as f:
+                    json.dump(bodies, f)
+                    self.cbLog("info", "Saved unsent messages")
+        except Exception as ex:
+            self.cbLog("warning", "Problem saving unsent messages exception. Type: " + str(type(ex)) + "exception: " +  str(ex.args))
 
 class CbClientProtocol(LineReceiver):
     def __init__(self, processMsg, initMsg):
