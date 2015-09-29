@@ -364,8 +364,10 @@ class CbClient():
             if os.path.isfile(self.saveFile):
                 with open(self.saveFile, 'r') as f:
                     self.bodies = json.load(f)
-            self.count = len(self.bodies)
-            self.cbLog("debug", "Loaded saved unsent messages. count: " + str(count))
+            for c in self.bodies:
+                if c["n"] > self.count:
+                    self.count = c["n"]
+            self.cbLog("debug", "Loaded saved unsent messages. count: " + str(self.count))
         except Exception as ex:
             self.cbLog("warning", "Problem loading unsent messages. Exception. Type: " + str(type(ex)) + "exception: " +  str(ex.args))
         finally:
@@ -405,11 +407,16 @@ class CbClient():
                         if b["a"] == 0:
                             self.bodies = []
                         else:
+                            self.cbLog("debug", "bodies before removal: " + str(self.bodies))
+                            removeList = []
                             for sent in self.bodies:
+                                self.cbLog("debug", "sent_n: " + str(sent["n"]) + ", b_a: " + str(b["a"]))
                                 if sent["n"] <= b["a"]:
-                                    self.bodies.remove(sent)
-                                    #self.cbLog("debug", "Removed body " + str(b["a"]) + " from queue")
-                                    #self.cbLog("debug", "bodies " + str(self.bodies))
+                                    removeList.append(sent)
+                            for r in removeList:
+                                self.bodies.remove(r)
+                                self.cbLog("debug", "Removed body " + str(r) + " from queue")
+                                self.cbLog("debug", "bodies " + str(self.bodies))
                     elif self.onClientMessage:
                         self.onClientMessage(b)
                 if sendAck:
@@ -428,8 +435,9 @@ class CbClient():
         try:
             if self.bodies:
                 with open(self.saveFile, 'w') as f:
-                    json.dump(bodies, f)
+                    json.dump(self.bodies, f)
                     self.cbLog("info", "Saved unsent messages")
+                    self.cbLog("debug", "saving bodies:: " + str(self.bodies))
         except Exception as ex:
             self.cbLog("warning", "Problem saving unsent messages exception. Type: " + str(type(ex)) + "exception: " +  str(ex.args))
 
