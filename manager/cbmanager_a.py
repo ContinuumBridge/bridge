@@ -46,8 +46,11 @@ if CB_SIM_LEVEL == '1':
     from simdiscover import SimDiscover
 
 CB_INC_UPGRADE_URL = 'https://github.com/ContinuumBridge/cbridge/releases/download/Incremental/bridge_clone_inc.tar.gz'
+CB_INC_MD5_URL = 'https://github.com/ContinuumBridge/cbridge/releases/download/Incremental/bridge_clone_inc.md5'
 CB_FULL_UPGRADE_URL = 'https://github.com/ContinuumBridge/cbridge/releases/download/Full/bridge_clone.tar.gz'
-CB_DEV_UPGRADE_URL = 'https://github.com/ContinuumBridge/cbridge/releases/download/Dev/bridge_clone.tar.gz'
+CB_FULL_MD5_URL = 'https://github.com/ContinuumBridge/cbridge/releases/download/Full/bridge_clone.md5'
+CB_DEV_UPGRADE_URL = 'https://github.com/ContinuumBridge/cbridge/releases/download/Dev/bridge_clone_inc.tar.gz'
+CB_DEV_MD5_URL = 'https://github.com/ContinuumBridge/cbridge/releases/download/Dev/bridge_clone_inc.md5'
 CONCENTRATOR_PATH = CB_BRIDGE_ROOT + "/concentrator/concentrator.py"
 ZWAVE_PATH = CB_BRIDGE_ROOT + "/manager/z-wave-ctrl.py"
 USB_DEVICES_FILE = CB_BRIDGE_ROOT + "/manager/usb_devices.json"
@@ -840,10 +843,13 @@ class ManageBridge:
             u = command.split()
             if len(u) == 1:
                 upgradeURL = CB_INC_UPGRADE_URL
+                md5URL = CB_INC_MD5_URL
             elif u[1] == "full":
                 upgradeURL = CB_FULL_UPGRADE_URL
+                md5URL = CB_FULL_MD5_URL
             elif u[1] == "dev":
                 upgradeURL = CB_DEV_UPGRADE_URL
+                md5URL = CB_DEV_MD5_URL
             else:
                 self.sendStatusMsg("Unknown upgrade type. Ignoring")
                 return
@@ -858,10 +864,26 @@ class ManageBridge:
         logger.debug('%s tarFile: %s', ModuleName, tarFile)
         try:
             urllib.urlretrieve(upgradeURL, tarFile)
+            urllib.urlretrieve(md5URL, "md5")
         except Exception as ex:
             logger.error('%s Cannot access GitHub file to upgrade', ModuleName)
             logger.error("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
             reactor.callFromThread(self.sendStatusMsg, "Cannot access GitHub file to upgrade")
+            return
+        try:
+            md5a = subprocess.check_output(["md5sum", tarFile])
+            md5 = md5a.split()[0]
+            with open("md5", "r") as f:
+                md5Origa = f.read()
+            md5Orig = md5Origa.split()[0]
+            logger.debug("md5: %s, md5Orig: %s", md5, md5Orig)
+            if md5 != md5Orig:
+                reactor.callFromThread(self.sendStatusMsg, "Failed to upgrade. Checksum did not match. Reverting to previous version")
+                return
+        except Exception as ex:
+            logger.error('%s Problems checking checksum', ModuleName)
+            logger.error("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
+            reactor.callFromThread(self.sendStatusMsg, "Failed to upgrade. Checksum problems. Reverting to previous version")
             return
         try:
             subprocess.check_call(["tar", "xfz",  tarFile, "--overwrite", "-C", CB_HOME])
@@ -870,23 +892,6 @@ class ManageBridge:
             logger.error('%s Unable to extract tarFile %s', ModuleName, tarFile)
             logger.error("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
             reactor.callFromThread(self.sendStatusMsg, "Failed to upgrade. Reverting to previous version")
-            return
-        try:
-            subprocess.call(["mv", "-f", "../../bridge_clone/md5", "md5"])
-            a = subprocess.Popen(("find", "../../bridge_clone", "-type", "f", "-print0"), stdout=subprocess.PIPE)
-            b = subprocess.Popen(("sort", "-z"), stdin=a.stdout, stdout=subprocess.PIPE)
-            c = subprocess.Popen(("xargs", "-r0", "md5sum"), stdin=b.stdout, stdout=subprocess.PIPE)
-            md5New = subprocess.check_output(("md5sum"), stdin=c.stdout)
-            logger.debug('%s md5New: %s', ModuleName, md5New)
-            with open("md5", "r") as f:
-                md5Orig = f.read()
-            if md5New != md5Orig:
-                reactor.callFromThread(self.sendStatusMsg, "Failed to upgrade. Checksum did not match. Reverting to previous version")
-                return
-        except Exception as ex:
-            logger.error('%s Problems checking checksum', ModuleName)
-            logger.error("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
-            reactor.callFromThread(self.sendStatusMsg, "Failed to upgrade. Checksum problems. Reverting to previous version")
             return
         try:
             status = subprocess.check_output("../../bridge_clone/scripts/cbupgrade.py")
