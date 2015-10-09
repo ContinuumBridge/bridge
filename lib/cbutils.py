@@ -52,3 +52,10 @@ def nicetime(timeStamp):
     now = time.strftime('%H:%M:%S, %d-%m-%Y', localtime)
     return now
 
+niceTime = nicetime
+
+def timeCorrect():
+    if time.time() < 32000000:
+        return False
+    else:
+        return True

@@ -389,7 +389,7 @@ class CbClient():
                    "body": self.bodies
                   }
         self.sendMessage(message, "conc")
-        self.cbLog("debug", "sending message: " + str(message))
+        #self.cbLog("debug", "sending message: " + str(message))
 
     def receive(self, message):
         try:
@@ -407,16 +407,16 @@ class CbClient():
                         if b["a"] == 0:
                             self.bodies = []
                         else:
-                            self.cbLog("debug", "bodies before removal: " + str(self.bodies))
+                            #self.cbLog("debug", "bodies before removal: " + str(self.bodies))
                             removeList = []
                             for sent in self.bodies:
-                                self.cbLog("debug", "sent_n: " + str(sent["n"]) + ", b_a: " + str(b["a"]))
+                                #self.cbLog("debug", "sent_n: " + str(sent["n"]) + ", b_a: " + str(b["a"]))
                                 if sent["n"] <= b["a"]:
                                     removeList.append(sent)
                             for r in removeList:
                                 self.bodies.remove(r)
-                                self.cbLog("debug", "Removed body " + str(r) + " from queue")
-                                self.cbLog("debug", "bodies " + str(self.bodies))
+                                #self.cbLog("debug", "Removed body " + str(r) + " from queue")
+                                #self.cbLog("debug", "bodies " + str(self.bodies))
                     elif self.onClientMessage:
                         self.onClientMessage(b)
                 if sendAck:
