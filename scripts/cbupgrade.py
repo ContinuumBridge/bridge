@@ -27,6 +27,23 @@ try:
     subprocess.call(["cp", "../../bridge_clone/scripts/cbshell.logrotate", "/etc/logrotate.d/cbshell"])
     #subprocess.call(["cp", "../../bridge_clone/scripts/UpdateXMLs.sh", "/opt/z-way-server/ZDDX/UpdateXMLs.sh"])
     #subprocess.call(["cd /opt/z-way-server/ZDDX;" "./UpdateXMLs.sh"])
+    if not os.path.exists("/etc/sakis3g.conf"):
+        subprocess.call(["cp", "../../bridge_clone/bridgeconfig/sakis3g.conf", "/etc/sakis3g.conf"])
+    else:
+        i = open("/etc/sakis3g.conf", 'r')
+        o = open("sakis3g.tmp", 'w') 
+        found = False
+        for line in i:
+            logging.info("%s Processing sakis3g line: %s", ModuleName, line)
+            if "OTHER=" in line:
+                found = True
+            o.write(line)
+        if not found:
+            o.write("OTHER=\"USBMODEM\"")
+        i.close()
+        o.close()
+        subprocess.call(["mv", "sakis3g.tmp", "/etc/sakis3g.conf"])
+
     if not os.path.exists("../../bridge_clone/node_modules"):
         subprocess.call(["cp", "-r", "../../bridge/node_modules", "../../bridge_clone/node_modules"])
         logging.info("%s Copied old node_modules", ModuleName)
