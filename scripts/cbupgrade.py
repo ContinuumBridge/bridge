@@ -25,8 +25,11 @@ try:
     subprocess.call(["cp", "../../bridge_clone/scripts/fstab", "/etc/fstab"])
     subprocess.call(["cp", "../../bridge_clone/scripts/rsyslog.logrotate", "/etc/logrotate.d/rsyslog"])
     subprocess.call(["cp", "../../bridge_clone/scripts/cbshell.logrotate", "/etc/logrotate.d/cbshell"])
-    #subprocess.call(["cp", "../../bridge_clone/scripts/UpdateXMLs.sh", "/opt/z-way-server/ZDDX/UpdateXMLs.sh"])
-    #subprocess.call(["cd /opt/z-way-server/ZDDX;" "./UpdateXMLs.sh"])
+    if os.path.exists("/opt/z-way-server/ZDDX"):
+        subprocess.call(["../../bridge_clone/scripts/cbUpdateXMLs.sh"])
+        logging.info("%s Updated z-way-server XMLs", ModuleName)
+    else:
+        logging.info("%s No z-way-server. Did not update z-way-server XMLs", ModuleName)
     if not os.path.exists("/etc/sakis3g.conf"):
         subprocess.call(["cp", "../../bridge_clone/bridgeconfig/sakis3g.conf", "/etc/sakis3g.conf"])
     else:
