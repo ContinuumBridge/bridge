@@ -48,8 +48,8 @@ if __name__ == '__main__':
         print json.dumps(d)
         sys.exit()
     try:
-        p.expect('.*', timeout=3)
-        p.expect('.*', timeout=3)
+        p.expect('\r\n', timeout=3)
+        p.expect('\r\n', timeout=3)
     except:
         logging.error('%s Nothing returned from pexpect', ModuleName)
         d = {"status": "error"}        
@@ -59,8 +59,8 @@ if __name__ == '__main__':
     endTime = startTime + DISCOVERY_TIME
     while time.time() < endTime:
         try:
-            p.expect('.*', timeout=10)
-            raw = p.after.split()
+            p.expect('\r\n', timeout=10)
+            raw = p.before.split()
             logging.debug('%s raw data: %s', ModuleName, raw)
             addr = raw[0]
             name = ""

@@ -1038,13 +1038,17 @@ class ManageBridge:
             levels = "No battery level information available at this time"
         self.sendStatusMsg(levels)
 
+    def forgetZwave(self):
+        logger.info("%s Z-Wave not present, forgetting about it", ModuleName)
+        del(self.elements["zwave"])
+
     def connectionWatchdog(self):
         """ The final defence. Requests a reboot if no messages received for a long time. """
         logger.debug('%s connectionWatchdog, rxCount: %s', ModuleName, self.rxCount)
         if self.firstConnectionWatchdog: # Needed because NTP may have updated time cause this to be called too soon
             self.firstConnectionWatchdog = False
         elif self.rxCount == 0:
-            logger.debug('%s connectionWatchdog, rxCount: %si, sending reboot message to supervisor', ModuleName, self.rxCount)
+            logger.debug('%s connectionWatchdog, rxCount: %s, sending reboot message to supervisor', ModuleName, self.rxCount)
             self.cbSendSuperMsg({"msg": "reboot"})
         else:
             self.rxCount = 0
@@ -1607,8 +1611,12 @@ class ManageBridge:
         elif msg["status"] == "error":
                 logger.warning('%s Error status received from %s.', ModuleName, msg["id"])
                 self.sendStatusMsg("Error status received from " + msg["id"])
+        elif msg["status"] == "no_zwave":
+            self.elFactory["zwave"].sendMsg({"cmd": "stop"})
+            reactor.callLater(MIN_DELAY, self.forgetZwave)
+            self.zwave = False
         elif msg["status"] != "ok":
-            logger.debug('%s Messagge from client: %s', ModuleName, msg)
+            logger.debug('%s Message from client: %s', ModuleName, msg)
  
 if __name__ == '__main__':
     m = ManageBridge()

@@ -157,6 +157,7 @@ class ZwaveCtrl():
         found = []
         posting = False
         error_count = 0
+        count404 = 0
         while self.state != "stopping" and error_count < 4:
             if self.include:
                 if includeState == "notIncluding":
@@ -266,116 +267,128 @@ class ZwaveCtrl():
                 self.logThread("error", "Exception: " + str(type(ex)) + " " +  str(ex.args))
             else:
                 error_count = 0
-                if r.status_code != 200:
+                if r.status_code == 404:
+                    count404 += 1
+                elif r.status_code != 200:
                     self.logThread("debug", "non-200 response: " + str(r.status_code))
-            try:
-                dat = r.json()
-                #self.logThread("debug", "dat: " + str(dat))
-            except:
-                try:
-                    self.logThread("warning", "Could not load JSON in response, text: " + str(r.text) + ", URL: " + URL)
-                    self.fromTime = str(int(time.time() - 1))
-                except Exception as ex:
-                    self.logThread("error", "error in accessing z-way")
-                    self.logThread("error", "Exception: " + str(type(ex)) + " " +  str(ex.args))
-                    self.fromTime = str(int(time.time() - 1))
-            else:
-                if dat:
-                    if "updateTime" in dat:
-                        self.fromTime = str(dat["updateTime"])
-                    if self.exclude:
-                        if "controller.data.lastExcludedDevice" in dat:
-                            excludedDevice = str(dat["controller.data.lastExcludedDevice"]["value"])
-                            if excludedDevice != "None" and excludedDevice != 0:
-                                self.logThread("debug", "found excludedDevice; " + str( excludedDevice))
-                                foundDevice = True
-                    if self.include:
-                        if "controller.data.lastIncludedDevice" in dat:
-                            includedDevice = str(dat["controller.data.lastIncludedDevice"]["value"])
-                            if includedDevice != "None":
-                                foundDevice = True
-                            self.logThread("debug", "includedDevice " + includedDevice)
-                        if "devices" in dat:
-                            self.logThread("debug", "devices in dat")
-                            for d in dat["devices"].keys():
-                                self.logThread("debug", "device: " + d)
-                                if d == includedDevice:
-                                    for k in dat["devices"][d].keys():
-                                        for j in dat["devices"][d][k].keys():
-                                            if j == "nodeInfoFrame":
-                                                command_classes = dat["devices"][d][k][j]["value"]
-                                                nodeInfoFrameFound = True
-                                                self.logThread("debug", "command_classes: " + str(command_classes))
-                                            elif j == "vendorString":
-                                                vendorString = dat["devices"][d][k][j]["value"]
-                                                self.logThread("debug", "vendorString: " + vendorString) 
-                                            elif j == "deviceTypeString":
-                                                deviceTypeString = dat["devices"][d][k][j]["value"]
-                                                self.logThread("debug", "zwave name: " + deviceTypeString)
-                                            elif j == "manufacturerProductId":
-                                                manufacturerProductId = dat["devices"][d][k][j]["value"]
-                                                self.logThread("debug", "manufacturerProductId: " + str(manufacturerProductId))
-                                            elif j == "manufacturerProductType":
-                                                manufacturerProductType = dat["devices"][d][k][j]["value"]
-                                                self.logThread("debug", "manufacturerProductType : " + str(manufacturerProductType))
-                                    if nodeInfoFrameFound and not foundData:
-                                        if vendorString == "":
-                                            if waitForVendorString == 3:
-                                                self.logThread("debug", "found device with no vendorString")
-                                                for dev in self.zwave_devices:
-                                                    self.logThread("debug", "found device: " + str(command_classes))
-                                                    self.logThread("debug", "comparing found device to: " + str(dev))
-                                                    if str(command_classes) != None:
-                                                        if len(dev["command_classes"]) != len(command_classes):
-                                                            self.logThread("debug", "lengths do not match")
-                                                            found = False
-                                                        else:
-                                                            self.logThread("debug", "lengths match")
-                                                            found = True
-                                                            for c in dev["command_classes"]:
-                                                                self.logThread("debug", "command_class: " + str(c))
-                                                                if c not in command_classes:
+                else:
+                    count404 = 0
+                    try:
+                        dat = r.json()
+                        #self.logThread("debug", "dat: " + str(dat))
+                    except:
+                        try:
+                            self.logThread("warning", "Could not load JSON in response, text: " + str(r.text) + ", URL: " + URL)
+                            self.fromTime = str(int(time.time() - 1))
+                        except Exception as ex:
+                            self.logThread("error", "error in accessing z-way")
+                            self.logThread("error", "Exception: " + str(type(ex)) + " " +  str(ex.args))
+                            self.fromTime = str(int(time.time() - 1))
+                    else:
+                        if dat:
+                            if "updateTime" in dat:
+                                self.fromTime = str(dat["updateTime"])
+                            if self.exclude:
+                                if "controller.data.lastExcludedDevice" in dat:
+                                    excludedDevice = str(dat["controller.data.lastExcludedDevice"]["value"])
+                                    if excludedDevice != "None" and excludedDevice != 0:
+                                        self.logThread("debug", "found excludedDevice; " + str( excludedDevice))
+                                        foundDevice = True
+                            if self.include:
+                                if "controller.data.lastIncludedDevice" in dat:
+                                    includedDevice = str(dat["controller.data.lastIncludedDevice"]["value"])
+                                    if includedDevice != "None":
+                                        foundDevice = True
+                                    self.logThread("debug", "includedDevice " + includedDevice)
+                                if "devices" in dat:
+                                    self.logThread("debug", "devices in dat")
+                                    for d in dat["devices"].keys():
+                                        self.logThread("debug", "device: " + d)
+                                        if d == includedDevice:
+                                            for k in dat["devices"][d].keys():
+                                                for j in dat["devices"][d][k].keys():
+                                                    if j == "nodeInfoFrame":
+                                                        command_classes = dat["devices"][d][k][j]["value"]
+                                                        nodeInfoFrameFound = True
+                                                        self.logThread("debug", "command_classes: " + str(command_classes))
+                                                    elif j == "vendorString":
+                                                        vendorString = dat["devices"][d][k][j]["value"]
+                                                        self.logThread("debug", "vendorString: " + vendorString) 
+                                                    elif j == "deviceTypeString":
+                                                        deviceTypeString = dat["devices"][d][k][j]["value"]
+                                                        self.logThread("debug", "zwave name: " + deviceTypeString)
+                                                    elif j == "manufacturerProductId":
+                                                        manufacturerProductId = dat["devices"][d][k][j]["value"]
+                                                        self.logThread("debug", "manufacturerProductId: " + str(manufacturerProductId))
+                                                    elif j == "manufacturerProductType":
+                                                        manufacturerProductType = dat["devices"][d][k][j]["value"]
+                                                        self.logThread("debug", "manufacturerProductType : " + str(manufacturerProductType))
+                                            if nodeInfoFrameFound and not foundData:
+                                                if vendorString == "":
+                                                    if waitForVendorString == 3:
+                                                        self.logThread("debug", "found device with no vendorString")
+                                                        for dev in self.zwave_devices:
+                                                            self.logThread("debug", "found device: " + str(command_classes))
+                                                            self.logThread("debug", "comparing found device to: " + str(dev))
+                                                            if str(command_classes) != None:
+                                                                if len(dev["command_classes"]) != len(command_classes):
+                                                                    self.logThread("debug", "lengths do not match")
                                                                     found = False
-                                                                    break
-                                                            if found:
-                                                                name = dev["name"]
-                                                                self.logThread("debug", "matched device. name: " +  name)
-                                                                self.endMessage = "Found Z-Wave device: " + name
-                                                                break
+                                                                else:
+                                                                    self.logThread("debug", "lengths match")
+                                                                    found = True
+                                                                    for c in dev["command_classes"]:
+                                                                        self.logThread("debug", "command_class: " + str(c))
+                                                                        if c not in command_classes:
+                                                                            found = False
+                                                                            break
+                                                                    if found:
+                                                                        name = dev["name"]
+                                                                        self.logThread("debug", "matched device. name: " +  name)
+                                                                        self.endMessage = "Found Z-Wave device: " + name
+                                                                        break
+                                                            else:
+                                                                self.logThread("debug", "Incomplete Z-Wave interview")
+                                                                self.endMessage = "Problem interviewing Z-Wave device. Please Z-exclude & try again"
+                                                        if not found:
+                                                            self.logThread("debug", "not found")
+                                                            name = ""
+                                                            self.endMessage = "No known Z-Wave device found"
+                                                        foundData = True
                                                     else:
-                                                        self.logThread("debug", "Incomplete Z-Wave interview")
-                                                        self.endMessage = "Problem interviewing Z-Wave device. Please Z-exclude & try again"
-                                                if not found:
-                                                    self.logThread("debug", "not found")
-                                                    name = ""
-                                                    self.endMessage = "No known Z-Wave device found"
-                                                foundData = True
-                                            else:
-                                                waitForVendorString += 1
-                                        else:
-                                            name = vendorString + " " + str(manufacturerProductId) + " " + str(manufacturerProductType)
-                                            self.logThread("debug", "found device with vendorString: " + name)
-                                            self.endMessage = "Found Z-Wave device: " + name
-                                            foundData = True
-                                        if foundData:
-                                            self.logThread("debug", "found name: " + name)
-                                            self.found.append({"protocol": "zwave",
-                                                               "name": name,
-                                                               #"mac_addr": "XXXXX" + str(d),
-                                                               "address": str(d),
-                                                               "manufacturer_name": vendorString,
-                                                               "model_number": manufacturerProductId,
-                                                               #"command_classes": command_classes
-                                                              })
-                    else: # not including
-                        for g in self.getStrs:
-                            if g["match"] in dat:
-                                #self.logThread("debug", "found: " + g["address"] + ", " +  g["commandClass"])
-                                self.sendParameter(dat[g["match"]], time.time(), g["address"], g["commandClass"], g["instance"], g["value"])
+                                                        waitForVendorString += 1
+                                                else:
+                                                    name = vendorString + " " + str(manufacturerProductId) + " " + str(manufacturerProductType)
+                                                    self.logThread("debug", "found device with vendorString: " + name)
+                                                    self.endMessage = "Found Z-Wave device: " + name
+                                                    foundData = True
+                                                if foundData:
+                                                    self.logThread("debug", "found name: " + name)
+                                                    self.found.append({"protocol": "zwave",
+                                                                       "name": name,
+                                                                       #"mac_addr": "XXXXX" + str(d),
+                                                                       "address": str(d),
+                                                                       "manufacturer_name": vendorString,
+                                                                       "model_number": manufacturerProductId,
+                                                                       #"command_classes": command_classes
+                                                                      })
+                            else: # not including
+                                for g in self.getStrs:
+                                    if g["match"] in dat:
+                                        #self.logThread("debug", "found: " + g["address"] + ", " +  g["commandClass"])
+                                        self.sendParameter(dat[g["match"]], time.time(), g["address"], g["commandClass"], g["instance"], g["value"])
             if posting:
                 posting = False
             else:
                 time.sleep(MIN_DELAY)
+            if count404 > 5:
+                self.logThread("warning", "count404 > 5. Off down the pub. (Probably z-wave.me installed, but not Razberry board)")
+                msg = {
+                    "id": self.id,
+                    "status": "no_zwave"
+                }
+                reactor.callFromThread(self.cbSendManagerMsg, msg)
+                break
 
     def sendUserMessage(self):
         msg = {"id": self.id,
