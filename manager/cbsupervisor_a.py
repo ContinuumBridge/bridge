@@ -33,6 +33,7 @@ RESTART_INTERVAL = 10             # Time between telling manager to stop and sta
 EXIT_WAIT = 2                     # On SIGINT, time to wait before exit after manager signalled to stop
 SAFETY_INTERVAL = 300             # Delay before rebooting if manager failed to start
 NTP_UPDATE_INTERVAL = 12*3600     # How often to run ntpd to sync time
+TEN_MINUTES = 10*3600             # As it says on the tin
 
 class Supervisor:
     def __init__(self):
@@ -44,6 +45,7 @@ class Supervisor:
         self.connected = False
         self.checkingManager = False
         self.disconnectCount = 0
+        self.conduitConnectAttempt = 0
         self.timeStamp = 0
         self.managerPings = 0
         self.timeChanged = False
@@ -120,6 +122,8 @@ class Supervisor:
             if msg["status"] == "disconnected":
                 logging.info("%s onManagerMessage. disconnected", ModuleName)
                 self.onDisconnected()
+            else:
+                self.conduitConnectAttempt = 0
 
     def disconnectTest(self):
         self.cbSendManagerMsg({"msg": "reconnect"})
@@ -134,11 +138,14 @@ class Supervisor:
 
     def checkDisconnected(self, connected):
         if connected:
-            logging.info("%s onDisconnected. Manager disconnected, conman connected. Requesting reconnect", ModuleName)
-            #self.cbSendManagerMsg({"msg": "stopall"})
-            self.cbSendManagerMsg({"msg": "reconnect"})
-            #self.starting = True
-            #reactor.callLater(RESTART_INTERVAL, self.checkManagerStopped, 0)
+            logging.info("%s onDisconnected. Manager disconnected, conman connected. conduitConnectAttempt: %s", ModuleName, self.conduitConnectAttempt)
+            if self.conduitConnectAttempt == 0:
+                self.cbSendManagerMsg({"msg": "reconnect"})
+                self.conduitConnectAttempt = 1
+            else:
+                reactor.callLater(self.conduitConnectAttempt*TEN_MINUTES, self.cbSendManagerMsg, {"msg": "reconnect"})
+                if self.conduitConnectAttempt < 6:
+                    self.conduitConnectAttempt += 1
             self.disconnectCount = 0
         else:
             logging.info("%s onDisconnected. Manager disconnected, conman disconnected. Asking conman to reconnect", ModuleName)
