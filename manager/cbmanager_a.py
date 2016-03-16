@@ -7,7 +7,7 @@
 #
 START_DELAY = 0.2                          # Delay between starting each adaptor or app
 CONDUIT_WATCHDOG_MAXTIME = 120             # Max time with no message before notifying supervisor
-CONDUIT_MAX_DISCONNECT_COUNT = 120         # Max number of messages before notifying supervisor
+CONDUIT_MAX_DISCONNECT_COUNT = 10          # Max number of messages before notifying supervisor
 ELEMENT_WATCHDOG_INTERVAL = 120            # Interval at which to check apps/adaptors have communicated
 ELEMENT_POLL_INTERVAL = 30                 # Delay between polling each element
 APP_STOP_DELAY = 3                         # Time to allow apps/adaprts to stop before killing them
@@ -143,6 +143,13 @@ class ManageBridge:
             logger.debug('%s reconnect, no node  process to kill', ModuleName)
         self.connectConduit()
         reactor.callLater(MIN_DELAY*3, self.reconnectToConduit)
+
+    def disconnectConduit(self):
+        logger.info('%s disconnectConduit', ModuleName)
+        try:
+            self.nodejsProc.kill()
+        except:
+            logger.debug('%s reconnect, no node  process to kill', ModuleName)
 
     def reconnectToConduit(self):
         self.cbSendConcMsg({"cmd": "reconnect"})
@@ -1083,6 +1090,8 @@ class ManageBridge:
             self.stopApps()
             reactor.callLater(APP_STOP_DELAY, self.killAppProcs)
             reactor.callLater(APP_STOP_DELAY + MIN_DELAY, self.stopAll)
+        elif msg["msg"] == "disconnect":
+            self.disconnectConduit()
         elif msg["msg"] == "reconnect":
             self.reconnect()
         else:
@@ -1116,10 +1125,18 @@ class ManageBridge:
                 self.controllerConnected = True
                 self.disconnectedCount = 0
             else:
+                logger.debug("%s Disconnected message from conduit", ModuleName)
                 if self.controllerConnected == True:
                     self.notifyApps(False)
                 self.controllerConnected = False
                 self.disconnectedCount += 1
+                if self.disconnectedCount > CONDUIT_MAX_DISCONNECT_COUNT and not CB_NO_CLOUD:
+                    logger.info('%s Disconnected from bridge controller. Notifying supervisor', ModuleName)
+                    resp = {"msg": "status",
+                            "status": "disconnected"
+                           }
+                    self.cbSendSuperMsg(resp)
+            #logger.warning('%s processConduitStatus, disconnectedCount: %d', ModuleName, self.disconnectedCount)
  
     def onResourceMsg(self, msg):
         try:

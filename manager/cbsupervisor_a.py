@@ -33,7 +33,7 @@ RESTART_INTERVAL = 10             # Time between telling manager to stop and sta
 EXIT_WAIT = 2                     # On SIGINT, time to wait before exit after manager signalled to stop
 SAFETY_INTERVAL = 300             # Delay before rebooting if manager failed to start
 NTP_UPDATE_INTERVAL = 12*3600     # How often to run ntpd to sync time
-TEN_MINUTES = 10*3600             # As it says on the tin
+TEN_MINUTES = 10*60             # As it says on the tin
 
 class Supervisor:
     def __init__(self):
@@ -45,6 +45,7 @@ class Supervisor:
         self.connected = False
         self.checkingManager = False
         self.disconnectCount = 0
+        self.checkingPing = False
         self.conduitConnectAttempt = 0
         self.timeStamp = 0
         self.managerPings = 0
@@ -102,7 +103,7 @@ class Supervisor:
             logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
 
     def onManagerMessage(self, msg):
-        #logging.debug("%s onManagerMessage received message: %s", ModuleName, msg)
+        logging.debug("%s onManagerMessage received message: %s", ModuleName, msg)
         # Regardless of message content, timeStamp is the time when we last heard from the manager
         self.timeStamp = time.time()
         if msg["msg"] == "restart":
@@ -129,27 +130,36 @@ class Supervisor:
         self.cbSendManagerMsg({"msg": "reconnect"})
 
     def onDisconnected(self):
-        logging.debug("%s onDisconnected, disconnectCount: %s, self.starting: %s", ModuleName, str(self.disconnectCount), self.starting)
-        if self.disconnectCount > 0 and not self.starting:
+        logging.debug("%s onDisconnected, disconnectCount: %s, self.checkingPing: %s", ModuleName, str(self.disconnectCount), str(self.checkingPing))
+        if self.disconnectCount > 0 and not self.checkingPing:
+            self.checkingPing = True
             d = threads.deferToThread(self.conman.checkPing)
             d.addCallback(self.checkDisconnected)
         else:
             self.disconnectCount += 1
 
     def checkDisconnected(self, connected):
+        self.checkingPing = False
         if connected:
-            logging.info("%s onDisconnected. Manager disconnected, conman connected. conduitConnectAttempt: %s", ModuleName, self.conduitConnectAttempt)
+            logging.info("%s checkDisconnected. Manager disconnected, conman connected. conduitConnectAttempt: %s", ModuleName, self.conduitConnectAttempt)
             if self.conduitConnectAttempt == 0:
+                logging.debug("%s checkDisconnected. Sending reconnect", ModuleName)
                 self.cbSendManagerMsg({"msg": "reconnect"})
                 self.conduitConnectAttempt = 1
             else:
-                reactor.callLater(self.conduitConnectAttempt*TEN_MINUTES, self.cbSendManagerMsg, {"msg": "reconnect"})
+                logging.debug("%s checkDisconnected. conduitConnectAttempt: %s", ModuleName, str(self.conduitConnectAttempt))
+                self.cbSendManagerMsg({"msg": "disconnect"})
+                reactor.callLater(self.conduitConnectAttempt*TEN_MINUTES, self.reconnectConduit)
                 if self.conduitConnectAttempt < 6:
                     self.conduitConnectAttempt += 1
             self.disconnectCount = 0
         else:
-            logging.info("%s onDisconnected. Manager disconnected, conman disconnected. Asking conman to reconnect", ModuleName)
+            logging.info("%s checkDisconnected. Manager disconnected, conman disconnected. Asking conman to reconnect", ModuleName)
             self.conman.setConnected(False)
+
+    def reconnectConduit(self):
+        logging.debug("%s reconnectConduit", ModuleName)
+        self.cbSendManagerMsg({"msg": "reconnect"})
 
     def checkManagerStopped(self, count):
         if os.path.exists(CB_MANAGER_EXIT):
