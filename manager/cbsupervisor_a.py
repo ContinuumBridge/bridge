@@ -317,7 +317,7 @@ class Supervisor:
     def restartCbridge(self):
         try:
             logging.info("%s Restarting cbridge", ModuleName)
-            call(["service", "cbridge", "restart"])
+            call(["/etc/init.d/cbridge", "restart"])
         except Exception as ex:
             logging.warning("%s Unable to restart cbridge", ModuleName)
             logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
