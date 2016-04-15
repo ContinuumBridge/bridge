@@ -33,7 +33,7 @@ RESTART_INTERVAL = 10             # Time between telling manager to stop and sta
 EXIT_WAIT = 2                     # On SIGINT, time to wait before exit after manager signalled to stop
 SAFETY_INTERVAL = 300             # Delay before rebooting if manager failed to start
 NTP_UPDATE_INTERVAL = 12*3600     # How often to run ntpd to sync time
-TEN_MINUTES = 10*60               # As it says on the tin
+FIVE_MINUTES = 5*60               # As it says on the tin
 
 class Supervisor:
     def __init__(self):
@@ -102,7 +102,7 @@ class Supervisor:
             logging.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
 
     def onManagerMessage(self, msg):
-        logging.debug("%s onManagerMessage received message: %s", ModuleName, msg)
+        #logging.debug("%s onManagerMessage received message: %s", ModuleName, msg)
         # Regardless of message content, timeStamp is the time when we last heard from the manager
         self.timeStamp = time.time()
         if msg["msg"] == "restart":
@@ -145,8 +145,8 @@ class Supervisor:
             else:
                 logging.debug("%s checkDisconnected. conduitConnectAttempt: %s", ModuleName, str(self.conduitConnectAttempt))
                 self.cbSendManagerMsg({"msg": "disconnect"})
-                reactor.callLater(self.conduitConnectAttempt*TEN_MINUTES, self.reconnectConduit)
-                if self.conduitConnectAttempt < 6:
+                reactor.callLater(self.conduitConnectAttempt*FIVE_MINUTES, self.reconnectConduit)
+                if self.conduitConnectAttempt < 8:
                     self.conduitConnectAttempt += 1
         else:
             logging.info("%s checkDisconnected. Manager disconnected, conman disconnected. Asking conman to reconnect", ModuleName)
