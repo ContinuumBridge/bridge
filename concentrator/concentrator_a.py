@@ -5,7 +5,6 @@
 # Proprietary and confidential
 # Written by Peter Claydon
 #
-ModuleName = "Concentrator"
 
 import sys
 import time
@@ -23,6 +22,13 @@ from cbcommslib import CbServerProtocol
 from cbcommslib import CbServerFactory
 from cbcommslib import isotime
 from cbconfig import *
+from cbclient import CBClient
+
+class WebsocketClient(CBClient):
+
+    def onConnect(self, response):
+        self.logger.info("WebSocketClient Server connected: {0}".format(response.peer))
+        self.factory.resetDelay()
 
 class Concentrator():
     def __init__(self, argv):
@@ -47,32 +53,33 @@ class Concentrator():
                    "status": "req-config"} 
         self.managerFactory = CbClientFactory(self.onManager, initMsg)
         self.managerConnect = reactor.connectUNIX(managerSocket, self.managerFactory, timeout=10)
-        self.connectConduit()
-        reactor.callLater(0.1, self.sendMessage)  # Loop to ensure messages are not send too close together (node problem)
+        self.connectWS()
+        reactor.callLater(0.1, self.sendQueued)  # Loop to ensure messages are not send too close together (node problem)
         reactor.run()
 
-    def connectConduit(self, status="starting"):
-        initMsg = {
-            "source": self.bridge_id,
-            "destination": "cb",
-            "time_sent": isotime(),
+    def connectWS(self):
+        self.ws = WebsocketClient(is_bridge=True, reactor=reactor)
+        self.ws.onMessage = self.onControllerMessage
+        self.ws.onOpen = self.onWSOpen
+        self.ws.sendMessage = self.sendMessage
+
+    def onWSOpen(self):
+        destination = "cb",
+        body = {
+            "verb": "patch",
+            "resource": "/api/bridge/v1/bridge/" + self.bridge_id[3:] + "/",
             "body": {
-                "verb": "patch",
-                "resource": "/api/bridge/v1/bridge/" + self.bridge_id[3:] + "/",
-                "body": {
-                    "status": status
-                }
+                "status": "running"
             }
         }
-        self.concFactory = CbClientFactory(self.onControllerMessage, initMsg)
-        self.jsConnect = reactor.connectTCP("localhost", 5000, self.concFactory, timeout=30)
+        self.sendMessage(destination, body)
 
     def reconnectConduit(self):
         try:
             self.jsConnect.disconnect()
         except Exception as ex:
             self.cbLog("debug", "reconnectConduit exception: " + str(type(ex)) + " " +  str(ex.args))
-        self.connectConduit(status="running")
+        self.WS()
 
     def onConfigure(self, config):
         """Config is based on what apps are available."""
@@ -88,10 +95,10 @@ class Concentrator():
                     reactor.listenUNIX(appConcSoc, self.cbFactory[iName])
             self.cbLog("info", "onConfigure. appInstances: " + str(self.appInstances))
 
-    def onControllerMessage(self, msg):
-        #if "body" in msg:
-        #    if not "connected" in msg["body"]:
-        #        self.cbLog("debug", "Received from controller: " + str(json.dumps(msg, indent=4)))
+    def onControllerMessage(self, msg, isBinary):
+        if "body" in msg:
+            if not "connected" in msg["body"]:
+                self.cbLog("debug", "Received from controller: " + str(json.dumps(msg, indent=4)))
         try:
             if not "destination" in msg:
                 msg["destination"] = self.bridge_id
@@ -130,7 +137,7 @@ class Concentrator():
                 self.cbLog("warning", "onControllerMessage. Unexpected app message: " + str(json.dumps(msg, indent=4)))
                 self.cbLog("warning", "Exception: " + str(type(inst)) + " " +  str(inst.args))
 
-    def sendMessage(self):
+    def sendQueued(self):
         # Send messages at regular intervals as node doesn't like them too close together
         try:
             if self.sendQueue:
@@ -139,7 +146,7 @@ class Concentrator():
         except Exception as ex:
             self.cbLog("warning", "Failed to send message to bridge controller: " + str(msg))
             self.cbLog("warning", "Exception: " + str(type(ex)) + " " +  str(ex.args))
-        reactor.callLater(0.1, self.sendMessage)
+        reactor.callLater(0.1, self.sendQueued)
 
     def queueMessage(self, msg):
         self.sendQueue.append(msg)

@@ -155,6 +155,8 @@ class ManageBridge:
         self.cbSendConcMsg({"cmd": "reconnect"})
         
     def connectConduit(self):
+        pass
+        """
         if CB_NO_CLOUD != "True":
             logger.info('%s Starting conduit', ModuleName)
             exe = "/opt/node/bin/node"
@@ -165,6 +167,7 @@ class ManageBridge:
                 logger.error('%s node failed to start. exe = %s. Exception: %s, %s', ModuleName, exe, type(ex), str(ex.args))
         else:
             logger.info('%s Running without Cloud Server', ModuleName)
+        """
 
     def initBridge(self):
         self.connectConduit()
