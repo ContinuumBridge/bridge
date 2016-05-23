@@ -28,6 +28,7 @@ class Concentrator():
     def __init__(self, argv):
         procname.setprocname('concentrator')
         self.status = "ok"
+        self.conduitOpen = False
         self.readyApps = []
         self.cbFactory = {}
         self.appInstances = []
@@ -61,20 +62,19 @@ class Concentrator():
             self.conduitPort = reactor.listenUNIX(s, self.conduitFactory, backlog=4)
         except Exception as ex:
             logging.error("Failed to open conduit port. Type: " + str(type(ex)) + "exception: " +  str(ex.args))
-        if True:
-        #try:
+        try:
             logging.info(" Starting conduit")
             exe = CB_BRIDGE_ROOT + "/concentrator/conduit.py"
             self.conduitProc = Popen([exe])
-        #except Exception as ex:
-        #    logging.error("Conduit failed to start. Type: " + str(type(ex)) + "exception: " +  str(ex.args))
+        except Exception as ex:
+            logging.error("Conduit failed to start. Type: " + str(type(ex)) + "exception: " +  str(ex.args))
 
     def reconnectConduit(self):
         try:
-            self.jsConnect.disconnect()
+            self.conduitFactory.disconnect()
         except Exception as ex:
             self.cbLog("debug", "reconnectConduit exception: " + str(type(ex)) + " " +  str(ex.args))
-        self.WS()
+        self.connectConduit()
 
     def onConfigure(self, config):
         """Config is based on what apps are available."""
@@ -91,11 +91,16 @@ class Concentrator():
             self.cbLog("info", "onConfigure. appInstances: " + str(self.appInstances))
 
     def onControllerMessage(self, msg):
-        self.cbLog("debug", "Received from controller: " + str(msg))
-        if "body" in msg:
-            if not "connected" in msg["body"]:
-                self.cbLog("debug", "Received from controller: " + str(json.dumps(msg, indent=4)))
-        elif "init" in msg:
+        #self.cbLog("debug", "Received from controller: " + str(msg))
+        if "status" in msg:
+            if msg["status"] == "open":
+                self.conduitOpen = True
+            elif msg["status"] == "closed":
+                self.conduitOpen = False
+        #if "body" in msg:
+        #    if not "connected" in msg["body"]:
+        #        self.cbLog("debug", "Received from controller: " + str(json.dumps(msg, indent=4)))
+        if "init" in msg:
                 self.cbLog("debug", "Conduit connected")
         try:
             if not "destination" in msg:
@@ -138,9 +143,10 @@ class Concentrator():
     def sendQueued(self):
         # Send messages at regular intervals as node doesn't like them too close together
         try:
-            if self.sendQueue:
-                msg = self.sendQueue.pop()
-                self.conduitFactory.sendMsg(msg)
+            if self.conduitOpen:
+                if self.sendQueue:
+                    msg = self.sendQueue.pop()
+                    self.conduitFactory.sendMsg(msg)
         except Exception as ex:
             self.cbLog("warning", "Failed to send message to bridge controller: " + str(msg))
             self.cbLog("warning", "Exception: " + str(type(ex)) + " " +  str(ex.args))
@@ -177,9 +183,16 @@ class Concentrator():
         self.cbSendManagerMsg(msg)
 
     def doStop(self):
-        d1 = defer.maybeDeferred(self.jsConnect.disconnect)
+        msg = {
+            "status": "stop"
+        }
+        self.conduitFactory.sendMsg(msg)
+        reactor.callLater(1, self.disconnect)
+
+    def disconnect(self):
+        #d1 = defer.maybeDeferred(self.jsConnect.disconnect)
         d2 = defer.maybeDeferred(self.managerConnect.disconnect)
-        d = defer.gatherResults([d1, d2], consumeErrors=True)
+        d = defer.gatherResults([d2], consumeErrors=True)
         d.addCallback(self.goodbye)
 
     def goodbye(self, status):

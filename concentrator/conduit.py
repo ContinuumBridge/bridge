@@ -15,48 +15,36 @@ from cbcommslib import CbClientProtocol
 from cbcommslib import CbClientFactory
 from cbconfig import *
 
-class MyBridgeClient(CBClient):
+class Conduit(CBClient):
 
     def onConnect(self, response):
         self.logger.info("MyBridgeClient Server connected: {0}".format(response.peer))
         self.factory.resetDelay()
 
     def onOpen(self):
-        self.logger.info("WebSocket connection open.")
+        self.logger.info("WebSocket connection open")
 
-        initMsg = {"init": "OK"}
+        initMsg = {"status": "open"}
         self.concFactory = CbClientFactory(self.onConcentrator, initMsg)
         self.concConnect = reactor.connectUNIX("/tmp/cbridge/SKT-CONC-COND", self.concFactory, timeout=10)
 
     def onConcentrator(self, message):
-        self.logger.debug("onConcentrator, message" + str(message))
-        self.sendMessage(message["destination"], message["body"])
+        #self.logger.debug("onConcentrator, message" + str(message))
+        if "status" in message:
+            if message["status"] == "stop":
+                self.destroySocket()
+                reactor.stop()
+        else:
+            self.sendMessage(message["destination"], message["body"])
 
     def onMessage(self, message, isBinary):
         self.logger.info("onMessage: " + str(message))
         self.concFactory.sendMsg(json.loads(message))
 
     def onClose(self, wasClean, code, reason):
-        print "CBClientProtocol onClose"
+        self.logger.info("WebSocket connection closed")
+        self.concFactory.sendMsg({"status": "closed"})
 
-def goForIt():
-    destination = "cb",
-    body = {
-        "verb": "patch",
-        "resource": "/api/bridge/v1/bridge/106/",
-        "body": {
-        "status": "running"
-        }
-    }
-    client.sendMessage(destination, body)
-    #client.sendMessage("CID52", {"key": "value"})
-    reactor.callLater(4, goForIt)
-
-#format = "%(asctime)s %(levelname)s: %(name)s %(message)s"
-#logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format=format)
-#logger = logging.getLogger('CBClient')
-
-client = MyBridgeClient(is_bridge=True, reactor=reactor)
-#reactor.callLater(10, goForIt)
+conduit = Conduit(is_bridge=True, reactor=reactor)
 
 reactor.run()

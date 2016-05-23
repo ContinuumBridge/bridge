@@ -147,7 +147,7 @@ class CBClient(object):
         cookieJar = CookieJar()
         agent = CookieAgent(Agent(self.reactor), cookieJar)
         data = '{"key": "' + self.auth_key + '"}'
-        print "self.auth_url is", self.auth_url
+        self.logger.info("self.auth_url is: {0}".format(self.auth_url))
         d = agent.request(
             'POST',
             self.auth_url,
