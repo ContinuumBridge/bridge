@@ -64,7 +64,7 @@ class Supervisor:
 
     def startManager(self, restart):
         self.starting = True
-        self.manageNTP(False)
+        self.manageNTP("notSyncd")
         # Try to remove all sockets, just in case
         for f in glob.glob(CB_SOCKET_DIR + "SKT-*"):
             os.remove(f)
@@ -263,30 +263,36 @@ class Supervisor:
         reactor.callLater(REBOOT_WAIT, self.reboot)
 
     def manageNTP(self, syncd):
-        if not syncd:
+        if syncd == "notSyncd":
             logging.info("%s Calling ntpd to update time, syncd: %s", ModuleName, syncd)
             d = threads.deferToThread(self.manageNTPThread)
             d.addCallback(self.manageNTP)
+        elif syncd == "syncd":
+            reactor.callLater(NTP_UPDATE_INTERVAL, self.manageNTP, "notSyncd")
         else:
-            reactor.callLater(NTP_UPDATE_INTERVAL, self.manageNTP, False)
+           pass  # Not managing NTP
 
     def manageNTPThread(self):
         logging.debug("%s manageNTPThread", ModuleName)
         try:
-            syncd = False
-            while not syncd:
+            ntpStatus = "notSyncd"
+            while ntpStatus == "notSyncd":
                 s = check_output(["sudo", "/usr/sbin/ntpd", "-p", "/var/run/ntpd.pid", "-g", "-q"])
                 logging.info("%s NTP time updated %s", ModuleName, str(s))
                 if "time" in str(s):
                     self.timeChanged = True
-                    syncd = True
+                    ntpStatus = "syncd"
                 else:
                     time.sleep(10)
-            return syncd
+            return ntpStatus
         except Exception as ex:
             logging.warning("%s Cannot run NTP. Exception: %s %s", ModuleName, type(ex), str(ex.args))
-            time.sleep(10)
-            return False
+            if "CalledProcessError" in str(type(ex)): 
+                logging.warning("%s Cannot run NTP, CalledProcessError. Assiming NTP is already running and giving up", ModuleName)
+                return "noNTP"
+            else:
+                time.sleep(10)
+                return "notSyncd"
         
     def reboot(self):
         logging.info("%s Rebooting", ModuleName)
