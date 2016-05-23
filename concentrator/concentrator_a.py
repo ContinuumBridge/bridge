@@ -16,19 +16,13 @@ from twisted.protocols.basic import LineReceiver
 from twisted.internet import threads
 from twisted.internet import defer
 from twisted.internet import reactor
+from subprocess import Popen
 from cbcommslib import CbClientProtocol
 from cbcommslib import CbClientFactory
 from cbcommslib import CbServerProtocol
 from cbcommslib import CbServerFactory
 from cbcommslib import isotime
 from cbconfig import *
-from cbclient import CBClient
-
-class WebsocketClient(CBClient):
-
-    def onConnect(self, response):
-        self.logger.info("WebSocketClient Server connected: {0}".format(response.peer))
-        self.factory.resetDelay()
 
 class Concentrator():
     def __init__(self, argv):
@@ -39,6 +33,8 @@ class Concentrator():
         self.appInstances = []
         self.sendQueue = []
         self.conc_mode = os.getenv('CB_CONCENTRATOR', 'client')
+        format = "%(asctime)s %(levelname)s: %(name)s %(message)s"
+        logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format=format)
 
         if len(argv) < 3:
             self.cbLog("error", "Improper number of arguments")
@@ -53,26 +49,25 @@ class Concentrator():
                    "status": "req-config"} 
         self.managerFactory = CbClientFactory(self.onManager, initMsg)
         self.managerConnect = reactor.connectUNIX(managerSocket, self.managerFactory, timeout=10)
-        self.connectWS()
-        reactor.callLater(0.1, self.sendQueued)  # Loop to ensure messages are not send too close together (node problem)
+        self.connectConduit()
+        reactor.callLater(1, self.sendQueued)  # Loop to ensure messages are not send too close together (node problem)
         reactor.run()
 
-    def connectWS(self):
-        self.ws = WebsocketClient(is_bridge=True, reactor=reactor)
-        self.ws.onMessage = self.onControllerMessage
-        self.ws.onOpen = self.onWSOpen
-        self.ws.sendMessage = self.sendMessage
-
-    def onWSOpen(self):
-        destination = "cb",
-        body = {
-            "verb": "patch",
-            "resource": "/api/bridge/v1/bridge/" + self.bridge_id[3:] + "/",
-            "body": {
-                "status": "running"
-            }
-        }
-        self.sendMessage(destination, body)
+    def connectConduit(self):
+        # Open a socket for communicating with the conduit
+        try:
+            s = CB_SOCKET_DIR + "SKT-CONC-COND"
+            self.conduitFactory = CbServerFactory(self.onControllerMessage)
+            self.conduitPort = reactor.listenUNIX(s, self.conduitFactory, backlog=4)
+        except Exception as ex:
+            logging.error("Failed to open conduit port. Type: " + str(type(ex)) + "exception: " +  str(ex.args))
+        if True:
+        #try:
+            logging.info(" Starting conduit")
+            exe = CB_BRIDGE_ROOT + "/concentrator/conduit.py"
+            self.conduitProc = Popen([exe])
+        #except Exception as ex:
+        #    logging.error("Conduit failed to start. Type: " + str(type(ex)) + "exception: " +  str(ex.args))
 
     def reconnectConduit(self):
         try:
@@ -95,10 +90,13 @@ class Concentrator():
                     reactor.listenUNIX(appConcSoc, self.cbFactory[iName])
             self.cbLog("info", "onConfigure. appInstances: " + str(self.appInstances))
 
-    def onControllerMessage(self, msg, isBinary):
+    def onControllerMessage(self, msg):
+        self.cbLog("debug", "Received from controller: " + str(msg))
         if "body" in msg:
             if not "connected" in msg["body"]:
                 self.cbLog("debug", "Received from controller: " + str(json.dumps(msg, indent=4)))
+        elif "init" in msg:
+                self.cbLog("debug", "Conduit connected")
         try:
             if not "destination" in msg:
                 msg["destination"] = self.bridge_id
@@ -142,7 +140,7 @@ class Concentrator():
         try:
             if self.sendQueue:
                 msg = self.sendQueue.pop()
-                self.concFactory.sendMsg(msg)
+                self.conduitFactory.sendMsg(msg)
         except Exception as ex:
             self.cbLog("warning", "Failed to send message to bridge controller: " + str(msg))
             self.cbLog("warning", "Exception: " + str(type(ex)) + " " +  str(ex.args))
