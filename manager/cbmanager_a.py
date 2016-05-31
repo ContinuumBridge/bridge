@@ -6,8 +6,7 @@
 # Written by Peter Claydon
 #
 START_DELAY = 0.2                          # Delay between starting each adaptor or app
-CONDUIT_WATCHDOG_MAXTIME = 120             # Max time with no message before notifying supervisor
-CONDUIT_MAX_DISCONNECT_COUNT = 10          # Max number of messages before notifying supervisor
+CONDUIT_WATCHDOG_MAXTIME = 180             # Max time with no message before notifying supervisor
 ELEMENT_WATCHDOG_INTERVAL = 120            # Interval at which to check apps/adaptors have communicated
 ELEMENT_POLL_INTERVAL = 30                 # Delay between polling each element
 APP_STOP_DELAY = 3                         # Time to allow apps/adaprts to stop before killing them
@@ -17,6 +16,7 @@ CONNECTION_WATCHDOG_INTERVAL_1 = 60*10     # Startup to first connection watchdo
 WATCHDOG_CID = "CID65"                     # Client ID to send watchdog messages to
 WATCHDOG_SEND_INTERVAL = 60*30             # How often to send messages to watchdog client
 WATCHDOG_START_DELAY = 120                 # How long to wait before sending first watchdog message
+DISCONNECT_NOTIFY_TIME = 120               # Time between conduit closed and notifying supervisor
 
 ModuleName = "Manager"
 id = "manager"
@@ -84,7 +84,6 @@ class ManageBridge:
         self.version = v
         logger.info("%s Bridge version =  %s", ModuleName, v)
         logger.info("%s ************************************************************", ModuleName)
-        logger.info("%s CB_NO_CLOUD = %s", ModuleName, CB_NO_CLOUD)
         self.bridge_id = CB_BID
         logger.info("%s CB_BID = %s", ModuleName, CB_BID)
         self.bridgeStatus = "ok" # Used to set status for sending to supervisor
@@ -132,46 +131,18 @@ class ManageBridge:
         else:
             self.state = action
         logger.info('%s state = %s', ModuleName, self.state)
-        self.sendControllerMsg("patch", "/api/bridge/v1/bridge/" + self.bridge_id[3:] + "/", {"status": self.state})
-        #self.sendStatusMsg("Bridge state: " + self.state)
-
-    def reconnect(self):
-        logger.info('%s Reconnecting conduit', ModuleName)
-        try:
-            self.nodejsProc.kill()
-        except:
-            logger.debug('%s reconnect, no node  process to kill', ModuleName)
-        self.connectConduit()
-        reactor.callLater(MIN_DELAY*3, self.reconnectToConduit)
+        if self.state == "running" or self.state == "stopping" or self.state == "stopped" or self.state == "restarting":
+            self.sendControllerMsg("patch", "/api/bridge/v1/bridge/" + self.bridge_id[3:] + "/", {"status": self.state})
 
     def disconnectConduit(self):
         logger.info('%s disconnectConduit', ModuleName)
-        try:
-            self.nodejsProc.kill()
-        except:
-            logger.debug('%s reconnect, no node  process to kill', ModuleName)
+        self.cbSendConcMsg({"cmd": "disconnect"})
 
     def reconnectToConduit(self):
+        logger.info('%s reconnectToconduit', ModuleName)
         self.cbSendConcMsg({"cmd": "reconnect"})
         
-    def connectConduit(self):
-        pass
-        """
-        if CB_NO_CLOUD != "True":
-            logger.info('%s Starting conduit', ModuleName)
-            exe = "/opt/node/bin/node"
-            path = CB_BRIDGE_ROOT + "/nodejs/index.js"
-            try:
-                self.nodejsProc = subprocess.Popen([exe, path,  CB_CONTROLLER_ADDR, CB_BRIDGE_EMAIL, CB_BRIDGE_PASSWORD])
-            except Exception as ex:
-                logger.error('%s node failed to start. exe = %s. Exception: %s, %s', ModuleName, exe, type(ex), str(ex.args))
-        else:
-            logger.info('%s Running without Cloud Server', ModuleName)
-        """
-
     def initBridge(self):
-        self.connectConduit()
-        # Give time for node interface to start
         reactor.callLater(START_DELAY + 1, self.startElements)
         reactor.run()
 
@@ -1096,17 +1067,13 @@ class ManageBridge:
         elif msg["msg"] == "disconnect":
             self.disconnectConduit()
         elif msg["msg"] == "reconnect":
-            self.reconnect()
+            self.reconnectToConduit()
         else:
             if "connection" in msg:
                 self.connection = msg["connection"]
-            if time.time() - self.timeLastConduitMsg > CONDUIT_WATCHDOG_MAXTIME and not CB_NO_CLOUD: 
-                logger.info('%s Not heard from conduit for %s. Notifyinng supervisor', ModuleName, CONDUIT_WATCHDOG_MAXTIME)
-                resp = {"msg": "status",
-                        "status": "disconnected"
-                       }
-            elif self.disconnectedCount > CONDUIT_MAX_DISCONNECT_COUNT and not CB_NO_CLOUD:
-                logger.info('%s Disconnected from bridge controller. Notifying supervisor', ModuleName)
+            logger.debug('%s onSuperMessage, timeLastConduitMsg: %s', ModuleName, str(self.timeLastConduitMsg))
+            if time.time() - self.timeLastConduitMsg > CONDUIT_WATCHDOG_MAXTIME:
+                logger.info('%s Not heard from conduit for %s seconds. Notifyinng supervisor', ModuleName, CONDUIT_WATCHDOG_MAXTIME)
                 resp = {"msg": "status",
                         "status": "disconnected"
                        }
@@ -1118,29 +1085,29 @@ class ManageBridge:
 
     def processConduitStatus(self, msg):
         self.timeLastConduitMsg = time.time()
+        logger.debug('%s processConduitStatus, timeLastConduitMsg: %s', ModuleName, str(self.timeLastConduitMsg))
         if not "body" in msg:
             logger.warning('%s Unrecognised command received from controller', ModuleName)
             return
         else:
             if msg["body"]["connected"] == True:
-                if self.controllerConnected == False:
-                    self.notifyApps(True)
+                logger.debug("%s Connected message from conduit", ModuleName)
                 self.controllerConnected = True
-                self.disconnectedCount = 0
-            else:
+                self.notifyApps(True)
+            elif msg["body"]["connected"] == False:
                 logger.debug("%s Disconnected message from conduit", ModuleName)
-                if self.controllerConnected == True:
-                    self.notifyApps(False)
                 self.controllerConnected = False
-                self.disconnectedCount += 1
-                if self.disconnectedCount > CONDUIT_MAX_DISCONNECT_COUNT and not CB_NO_CLOUD:
-                    logger.info('%s Disconnected from bridge controller. Notifying supervisor', ModuleName)
-                    resp = {"msg": "status",
-                            "status": "disconnected"
-                           }
-                    self.cbSendSuperMsg(resp)
-            #logger.warning('%s processConduitStatus, disconnectedCount: %d', ModuleName, self.disconnectedCount)
+                self.notifyApps(False)
+                reactor.callLater(DISCONNECT_NOTIFY_TIME, self.recheckConduitStatus)
  
+    def recheckConduitStatus(self):
+        if self.controllerConnected == False:
+            logger.info('%s Disconnected from bridge controller. Notifying supervisor', ModuleName)
+            resp = {"msg": "status",
+                    "status": "disconnected"
+                   }
+            self.cbSendSuperMsg(resp)
+
     def onResourceMsg(self, msg):
         try:
             if msg["body"]["resource"] == "/api/bridge/v1/current_bridge/bridge":
@@ -1399,14 +1366,16 @@ class ManageBridge:
 
     def elementWatchdog(self):
         """ Checks that all apps and adaptors have communicated within the designated interval. """
-        #logger.debug('%s elementWatchdog, elements: %s', ModuleName, str(self.elements))
+        logger.debug('%s elementWatchdog, elements: %s', ModuleName, str(self.elements))
         if self.state == "running":
             for e in self.elements:
-                if self.elements[e] == False:
-                    if e != "conc":
-                        logger.warning('%s %s has not communicated within watchdog interval', ModuleName, e)
-                        self.sendStatusMsg("Watchdog timeout for " + e)
-                        break
+                if e == "conc":
+                    self.timeLastConduitMsg = time.time()
+                    logger.debug('%s elementWatchdog, timeLastConduitMsg: %s', ModuleName, str(self.timeLastConduitMsg))
+                elif self.elements[e] == False:
+                    logger.warning('%s %s has not communicated within watchdog interval', ModuleName, e)
+                    self.sendStatusMsg("Watchdog timeout for " + e)
+                    break
                 else:
                     self.elements[e] = False
             if self.firstWatchdog:
@@ -1555,11 +1524,12 @@ class ManageBridge:
             logger.warning("%s ConfigureZwave. Exception: %s %s", ModuleName, type(ex), str(ex.args))
 
     def onClientMessage(self, msg):
-        #logger.debug('%s Received msg; %s', ModuleName, msg)
+        logger.debug('%s Received msg; %s', ModuleName, msg)
         if not "status" in msg:
             logger.warning('%s No status key in message from client; %s', ModuleName, msg)
             return
         if msg["status"] == "control_msg":
+            self.elements[msg["id"]] = True
             del msg["status"]
             self.onControlMessage(msg)
             return

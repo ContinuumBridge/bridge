@@ -45,6 +45,6 @@ class Conduit(CBClient):
         self.logger.info("WebSocket connection closed")
         self.concFactory.sendMsg({"status": "closed"})
 
-conduit = Conduit(is_bridge=True, reactor=reactor)
+conduit = Conduit(is_bridge=True, reactor=reactor, key=CB_BRIDGE_KEY)
 
 reactor.run()

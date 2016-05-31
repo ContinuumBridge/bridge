@@ -55,13 +55,17 @@ class Concentrator():
         reactor.run()
 
     def connectConduit(self):
+        self.cbLog("debug", "connectConduit called")
         # Open a socket for communicating with the conduit
         try:
             s = CB_SOCKET_DIR + "SKT-CONC-COND"
             self.conduitFactory = CbServerFactory(self.onControllerMessage)
             self.conduitPort = reactor.listenUNIX(s, self.conduitFactory, backlog=4)
+            self.startConduit()
         except Exception as ex:
             logging.error("Failed to open conduit port. Type: " + str(type(ex)) + "exception: " +  str(ex.args))
+
+    def startConduit(self):
         try:
             logging.info(" Starting conduit")
             exe = CB_BRIDGE_ROOT + "/concentrator/conduit.py"
@@ -69,12 +73,25 @@ class Concentrator():
         except Exception as ex:
             logging.error("Conduit failed to start. Type: " + str(type(ex)) + "exception: " +  str(ex.args))
 
-    def reconnectConduit(self):
+    def disconnectConduit(self, reconnect=False):
         try:
-            self.conduitFactory.disconnect()
+            self.cbLog("debug", "reconnectConduit called")
+            msg = {
+                "status": "stop"
+            }
+            self.conduitFactory.sendMsg(msg)
         except Exception as ex:
-            self.cbLog("debug", "reconnectConduit exception: " + str(type(ex)) + " " +  str(ex.args))
-        self.connectConduit()
+            self.cbLog("info", "reconnectConduit exception, proceeding to killConduit: " + str(type(ex)) + " " +  str(ex.args))
+        reactor.callLater(0.1, self.killConduit, reconnect)
+
+    def killConduit(self, reconnect):
+        self.cbLog("debug", "killConduit called")
+        try:
+            self.conduitProc.kill()
+        except Exception as ex:
+            self.cbLog("debug", "killConduit exception. This is OK: " + str(type(ex)) + " " +  str(ex.args))
+        if reconnect:
+            self.startConduit()
 
     def onConfigure(self, config):
         """Config is based on what apps are available."""
@@ -95,19 +112,28 @@ class Concentrator():
         if "status" in msg:
             if msg["status"] == "open":
                 self.conduitOpen = True
+                self.cbLog("debug", "Conduit connected")
+                manMessage = {
+                    "id": self.id,
+                    "status": "control_msg",
+                    "body": {"connected": True}
+                }
             elif msg["status"] == "closed":
                 self.conduitOpen = False
-        #if "body" in msg:
-        #    if not "connected" in msg["body"]:
-        #        self.cbLog("debug", "Received from controller: " + str(json.dumps(msg, indent=4)))
-        if "init" in msg:
-                self.cbLog("debug", "Conduit connected")
+                self.cbLog("debug", "Conduit disconnected")
+                manMessage = {
+                    "id": self.id,
+                    "status": "control_msg",
+                    "body": {"connected": False}
+                }
+            self.cbSendManagerMsg(manMessage)
+            return
         try:
             if not "destination" in msg:
                 msg["destination"] = self.bridge_id
-        except Exception as inst:
+        except Exception as ex:
             self.cbLog("warning", "onControllerMessage. Unexpected message: " + str(json.dumps(msg, indent=4)))
-            self.cbLog("warning", "Exception: " + str(type(inst)) + " " +  str(inst.args))
+            self.cbLog("warning", "Exception type: " + str(type(ex)) + ", args: " +  str(ex.args))
             return
         if msg["destination"] == self.bridge_id or msg["destination"] == "broadcast":
             try:
@@ -136,16 +162,16 @@ class Concentrator():
                             self.cbLog("info", "Received message before app ready: " + dest[1])
                 else:
                     self.cbLog("warning", "onControllerMessage. Received message with desination: " + msg["destination"])
-            except Exception as inst:
+            except Exception as ex:
                 self.cbLog("warning", "onControllerMessage. Unexpected app message: " + str(json.dumps(msg, indent=4)))
-                self.cbLog("warning", "Exception: " + str(type(inst)) + " " +  str(inst.args))
+                self.cbLog("warning", "Exception: " + str(type(ex)) + " " +  str(ex.args))
 
     def sendQueued(self):
         # Send messages at regular intervals as node doesn't like them too close together
         try:
             if self.conduitOpen:
                 if self.sendQueue:
-                    msg = self.sendQueue.pop()
+                    msg = self.sendQueue.pop(0)
                     self.conduitFactory.sendMsg(msg)
         except Exception as ex:
             self.cbLog("warning", "Failed to send message to bridge controller: " + str(msg))
@@ -161,6 +187,7 @@ class Concentrator():
         self.queueMessage(msg)
 
     def onManager(self, cmd):
+        self.cbLog("debug", "Received from manager: " + str(json.dumps(cmd, indent=4)))
         if cmd["cmd"] == "msg":
             self.onManagerMessage(cmd["msg"])
             msg = {"id": self.id,
@@ -173,8 +200,12 @@ class Concentrator():
             self.onConfigure(cmd["config"])
             msg = {"id": self.id,
                    "status": "ready"}
+        elif cmd["cmd"] == "disconnect":
+            self.disconnectConduit()
+            msg = {"id": self.id,
+                   "status": "ok"}
         elif cmd["cmd"] == "reconnect":
-            self.reconnectConduit()
+            self.disconnectConduit(reconnect=True)
             msg = {"id": self.id,
                    "status": "ok"}
         else:
