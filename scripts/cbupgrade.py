@@ -33,19 +33,19 @@ try:
     if not os.path.exists("/etc/sakis3g.conf"):
         subprocess.call(["cp", "../../bridge_clone/bridgeconfig/sakis3g.conf", "/etc/sakis3g.conf"])
     else:
-        i = open("/etc/sakis3g.conf", 'r')
-        o = open("sakis3g.tmp", 'w') 
+        logging.info("Processing thisbridge.sh")
+        i = open("/opt/cbridge/thisbridge.sh", 'r')
+        o = open("thisbridge.tmp", 'w') 
         found = False
         for line in i:
-            logging.info("%s Processing sakis3g line: %s", ModuleName, line)
-            if "OTHER=" in line:
+            if "CB_SFTP_PASSWORD" in line:
                 found = True
             o.write(line)
         if not found:
-            o.write("OTHER=\"USBMODEM\"")
+            o.write("CB_SFTP_PASSWORD=\"DTfC,3[!7kB[AfxB\"")
         i.close()
         o.close()
-        subprocess.call(["mv", "sakis3g.tmp", "/etc/sakis3g.conf"])
+        subprocess.call(["mv", "thisbridge.tmp", "/opt/cbridge/thisbridge.sh"])
 
     if not os.path.exists("../../bridge_clone/node_modules"):
         subprocess.call(["cp", "-r", "../../bridge/node_modules", "../../bridge_clone/node_modules"])
