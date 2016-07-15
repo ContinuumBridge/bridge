@@ -30,6 +30,7 @@ import subprocess
 import json
 import urllib
 import pexpect
+import pysftp
 from twisted.internet import threads
 from twisted.internet import reactor, defer
 from twisted.internet import task
@@ -931,42 +932,35 @@ class ManageBridge:
         # Call in threaad as it can take some time & watchdog still going
         reactor.callInThread(self.upgradeBridge, command)
 
-    def uploadLog(self, logFile, dropboxPlace, status):
+    def uploadLog(self, logFile, ftpPlace):
         try:
-            f = open(logFile, 'rb')
+            subprocess.call(["cp", logFile, ftpPlace])
         except Exception as ex:
             logger.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
-            status = "Could not open log file for upload: " + logFile
+            status = "Could not locate file for upload: " + logFile
         else:
             try:
-                response = self.client.put_file(dropboxPlace, f)
-                #logger.debug('%s Dropbox log upload response: %s', ModuleName, response)
+                ftpPassword = os.getenv('CB_SFTP_PASSWORD', 'NONE')
+                cnopts = pysftp.CnOpts()
+                cnopts.hostkeys = None
+                srv = pysftp.Connection(host="ftp.continuumbridge.com", username="bridgelogs", password=ftpPassword, cnopts=cnopts)
+                srv.chdir('logs')
+                srv.put(ftpPlace)
+                srv.close()
+                status = "File successfully uploaded"
             except Exception as ex:
                 logger.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
                 status = "Could not upload log file: " + logFile
         reactor.callFromThread(self.sendStatusMsg, status)
+        try:
+            subprocess.call(["rm", ftpPlace])
+        except Exception as ex:
+            logger.info("%s Exception: could not remove copied file after ftp%s %s", ModuleName, type(ex), str(ex.args))
 
     def sendLog(self, path, fileName):
-        status = "Logfile upload failed"
-        access_token = os.getenv('CB_DROPBOX_TOKEN', 'NO_TOKEN')
-        logger.info('%s Dropbox access token %s', ModuleName, access_token)
-        try:
-            self.client = DropboxClient(access_token)
-            status = "Log file uploaded OK" 
-        except Exception as ex:
-            logger.warning('%s Dropbox access token did not work %s', ModuleName, access_token)
-            logger.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
-            status = "Dropbox access token did not work"
-            self.sendStatusMsg(status)
-        else:
-            hostname = "unknown"
-            with open('/etc/hostname', 'r') as hostFile:
-                hostname = hostFile.read()
-            if hostname.endswith('\n'):
-                hostname = hostname[:-1]
-            dropboxPlace = '/' + hostname + '-' + fileName
-            logger.info('%s Uploading %s to %s', ModuleName, path, dropboxPlace)
-            reactor.callInThread(self.uploadLog, path, dropboxPlace, status)
+        ftpPlace = CB_BID + '-' + fileName
+        logger.info('%s Uploading %s to %s', ModuleName, path, ftpPlace)
+        reactor.callInThread(self.uploadLog, path, ftpPlace)
 
     def onDeviceInstall(self, msg):
         logger.debug('%s onDeviceInstall', ModuleName)
