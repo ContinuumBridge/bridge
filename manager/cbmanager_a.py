@@ -30,7 +30,13 @@ import subprocess
 import json
 import urllib
 import pexpect
-import pysftp
+# Try to use sftp first
+try:
+    import pysftp
+    useSFTP = True
+except:
+    useSFTP = False
+import ftplib
 from twisted.internet import threads
 from twisted.internet import reactor, defer
 from twisted.internet import task
@@ -933,24 +939,36 @@ class ManageBridge:
         reactor.callInThread(self.upgradeBridge, command)
 
     def uploadLog(self, logFile, ftpPlace):
+        status = "Major logfile upload problem"
         try:
             subprocess.call(["cp", logFile, ftpPlace])
         except Exception as ex:
             logger.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
             status = "Could not locate file for upload: " + logFile
         else:
+            ftpPassword = os.getenv('CB_SFTP_PASSWORD', 'NONE')
             try:
-                ftpPassword = os.getenv('CB_SFTP_PASSWORD', 'NONE')
                 cnopts = pysftp.CnOpts()
                 cnopts.hostkeys = None
                 srv = pysftp.Connection(host="ftp.continuumbridge.com", username="bridgelogs", password=ftpPassword, cnopts=cnopts)
                 srv.chdir('logs')
                 srv.put(ftpPlace)
                 srv.close()
-                status = "File successfully uploaded"
+                status = ftpPlace + " successfully uploaded (sftp)"
             except Exception as ex:
-                logger.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
-                status = "Could not upload log file: " + logFile
+                logger.warning("%s Could not upload using sftp. Exception: %s %s", ModuleName, type(ex), str(ex.args))
+                status = "Could not upload log file using sftp: " + logFile
+                try:
+                    ftp = ftplib.FTP("ftp.continuumbridge.com")
+                    ftp.login("bridgelogs", ftpPassword)
+                    ftp.set_pasv(True)
+                    ftp.cwd("logs")
+                    uploadFile = open(ftpPlace, 'r')
+                    ftp.storlines("STOR " + ftpPlace, uploadFile)
+                    status = ftpPlace + " successfully uploaded (ftp)"
+                except:
+                    logger.warning("%s Could not upload using ftp. Exception: %s %s", ModuleName, type(ex), str(ex.args))
+                    status = "Could not upload log file: " + logFile
         reactor.callFromThread(self.sendStatusMsg, status)
         try:
             subprocess.call(["rm", ftpPlace])

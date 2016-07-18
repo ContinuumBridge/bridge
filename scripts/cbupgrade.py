@@ -30,22 +30,20 @@ try:
         logging.info("%s Updated z-way-server XMLs", ModuleName)
     else:
         logging.info("%s No z-way-server. Did not update z-way-server XMLs", ModuleName)
-    if not os.path.exists("/etc/sakis3g.conf"):
-        subprocess.call(["cp", "../../bridge_clone/bridgeconfig/sakis3g.conf", "/etc/sakis3g.conf"])
-    else:
-        logging.info("Processing thisbridge.sh")
-        i = open("/opt/cbridge/thisbridge.sh", 'r')
-        o = open("thisbridge.tmp", 'w') 
-        found = False
-        for line in i:
-            if "CB_SFTP_PASSWORD" in line:
-                found = True
-            o.write(line)
-        if not found:
-            o.write("CB_SFTP_PASSWORD=\"DTfC,3[!7kB[AfxB\"")
-        i.close()
-        o.close()
-        subprocess.call(["mv", "thisbridge.tmp", "/opt/cbridge/thisbridge.sh"])
+
+    logging.info("Processing thisbridge.sh to add CB_SFTP_PASSWORD")
+    i = open("/opt/cbridge/thisbridge/thisbridge.sh", 'r')
+    o = open("thisbridge.tmp", 'w') 
+    found = False
+    for line in i:
+        if "CB_SFTP_PASSWORD" in line:
+            found = True
+        o.write(line)
+    if not found:
+        o.write("export CB_SFTP_PASSWORD=\"DTfC,3[!7kB[AfxB\"")
+    i.close()
+    o.close()
+    subprocess.call(["mv", "thisbridge.tmp", "/opt/cbridge/thisbridge/thisbridge.sh"])
 
     if not os.path.exists("../../bridge_clone/node_modules"):
         subprocess.call(["cp", "-r", "../../bridge/node_modules", "../../bridge_clone/node_modules"])
