@@ -28,8 +28,8 @@ from cbcommslib import CbServerFactory
 ZWAVE_DEVICES_FILE   = "zwave_devices.json"
 DISCOVER_TIME        = 40.0
 INCLUDE_WAIT_TIME    = 5.0
-IPADDRESS            = 'localhost'
 MIN_DELAY            = 0.5
+IPADDRESS            = "localhost"
 PORT                 = "8083"
 baseUrl              = "http://" + IPADDRESS + ":" + PORT +"/"
 dataUrl              = baseUrl + 'ZWaveAPI/Data/'
@@ -138,9 +138,9 @@ class ZwaveCtrl():
             Don't change the "from" time when getting data until all data has been retrieved.
         """
         # Try to authenticate
-        url = "http://192.168.0.44:8083/ZAutomation/api/v1/login"
+        url = "http://localhost:8083/ZAutomation/api/v1/login"
         self.logThread("debug", "Authenticating")
-        payload = {"form": True, "login": "admin", "password": "admin", "keepme": False, "default_ui": 1}
+        payload = {"form": True, "login": "admin", "password": CB_ZWAVE_PASSWORD, "keepme": False, "default_ui": 1}
         headers = {'Content-Type': 'application/json'}
         r = requests.post(authUrl, headers=headers, data=json.dumps(payload))
         self.logThread("debug", "Authentication response: " + str(r.text))
@@ -244,7 +244,7 @@ class ZwaveCtrl():
                         excludeTick += 1
                         time.sleep(INCLUDE_WAIT_TIME)
             elif self.resetBoard:
-                URL = resetUrl
+                #URL = resetUrl
                 reactor.callFromThread(self.setState, "stopping")
                 self.resetBoard = False
                 self.logThread("debug", "Resetting RazBerry board")
@@ -275,7 +275,7 @@ class ZwaveCtrl():
                     count404 = 0
                     try:
                         dat = r.json()
-                        #self.logThread("debug", "dat: " + str(dat))
+                        #self.logThread("debug", "dat: {}".format(json.dumps(dat, indent=4)))
                     except:
                         try:
                             self.logThread("warning", "Could not load JSON in response, text: " + str(r.text) + ", URL: " + URL)
@@ -417,6 +417,7 @@ class ZwaveCtrl():
         self.exclude = True
 
     def onAdaptorMessage(self, msg):
+        #self.cbLog("debug", "onAdaptorMessage: {}".format(json.dumps(msg, indent=4)))
         if "request" in msg:
             if msg["request"] == "init":
                 resp = {"id": "zwave",
