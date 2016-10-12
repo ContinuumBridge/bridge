@@ -264,6 +264,7 @@ class Concentrator():
             else:
                 if msg["destination"].startswith("CID"):
                     msg["source"] = self.bridge_id + "/" + msg["source"]
+                    self.cbLog("debug", "Sending: " + str(json.dumps(msg, indent=4)))
                     self.queueMessage(msg)
                 else:
                     self.cbLog("warning","Illegal desination in app message. Should be CIDn: " + str(json.dumps(msg, indent=4)))

@@ -115,6 +115,7 @@ class CBClient(object):
         self.logger.info("CBClient Connected to {0}".format(response.peer))
 
     def _onConnect(self, response):
+        self.factory.resetDelay()
         self.onConnect(response)
 
     def onOpen(self):
