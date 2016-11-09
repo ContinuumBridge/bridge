@@ -1537,7 +1537,7 @@ class ManageBridge:
             logger.warning("%s ConfigureZwave. Exception: %s %s", ModuleName, type(ex), str(ex.args))
 
     def onClientMessage(self, msg):
-        logger.debug('%s Received msg; %s', ModuleName, msg)
+        #logger.debug('%s Received msg; %s', ModuleName, msg)
         if not "status" in msg:
             logger.warning('%s No status key in message from client; %s', ModuleName, msg)
             return
