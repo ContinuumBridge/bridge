@@ -30,6 +30,7 @@ import subprocess
 import json
 import urllib
 import pexpect
+import RPi.GPIO as GPIO
 # Try to use sftp first
 try:
     import pysftp
@@ -126,7 +127,17 @@ class ManageBridge:
         self.bluetooth = False
         self.rxCount = 1  # Used for watchdog. Set to 1 to overcome NTP change on startup issues
         self.upSince = 0  # To enable reporting
+        self.ledState = False
 
+        # Setup pin 26 as indicator LED
+        try:
+            GPIO.setmode(GPIO.BCM)
+            GPIO.setwarnings(False)
+            GPIO.setup(26, GPIO.OUT)
+            self.useLED = True
+        except Exception as ex:
+            self.useLED = False
+            logger.warning("Failed to set up LED. Exception: {}, {}".format(type(ex), ex.args))
         status = self.readConfig()
         logger.info('%s Read config status: %s', ModuleName, status)
         if CB_SIM_LEVEL == '1':
@@ -177,7 +188,20 @@ class ManageBridge:
         self.connectConduit()
         # Give time for node interface to start
         reactor.callLater(START_DELAY + 1, self.startElements)
+        reactor.callLater(START_DELAY + 0.5, self.manageLED)
         reactor.run()
+
+    def manageLED(self):
+        if self.useLED:
+            if self.controllerConnected:
+                self.ledState = True
+            else:
+                self.ledState = not self.ledState
+            if self.ledState:
+                GPIO.output(26,GPIO.HIGH)
+            else:
+                GPIO.output(26,GPIO.LOW)
+            reactor.callLater(0.5, self.manageLED)
 
     def checkZwave(self):
         zwayFilename = "/opt/z-way-server/z-way-server"
@@ -1353,6 +1377,9 @@ class ManageBridge:
             #    logger.debug('%s Socket %s renoved', ModuleName, socket)
             #except:
             #    logger.debug('%s Socket %s already renoved', ModuleName, socket)
+        # Turn off LED
+        if self.useLED:
+            GPIO.output(26,GPIO.LOW)
         logger.info('%s Stopping reactor', ModuleName)
         reactor.stop()
         # touch a file so that supervisor can see we have finished
