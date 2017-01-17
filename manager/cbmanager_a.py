@@ -17,6 +17,8 @@ CONNECTION_WATCHDOG_INTERVAL_1 = 60*10     # Startup to first connection watchdo
 WATCHDOG_CID = "CID65"                     # Client ID to send watchdog messages to
 WATCHDOG_SEND_INTERVAL = 60*30             # How often to send messages to watchdog client
 WATCHDOG_START_DELAY = 120                 # How long to wait before sending first watchdog message
+ZWAYLOGFILE = "/var/log/z-way-server.log"  # Log file (used to delete if it grows very quickly
+MAX_ZWAY_LOG_SIZE = 20000000               # If bigger than this, log will be delted
 
 ModuleName = "Manager"
 id = "manager"
@@ -1449,6 +1451,13 @@ class ManageBridge:
                 l = task.LoopingCall(self.pollElement)
                 l.start(ELEMENT_POLL_INTERVAL)
                 self.firstWatchdog = False
+        try:
+            if os.path.isfile(ZWAYLOGFILE):
+                if os.path.getsize(ZWAYLOGFILE) > MAX_ZWAY_LOG_SIZE:
+                    subprocess.call(["truncate", ZWAYLOGFILE, "--size", "0"])
+                    logger.info("{} elementWatchDog, truncated {}".format(ModuleName, ZWAYLOGFILE))
+        except Exception as ex:
+            logger.warning("{} elementWatchDog, could not truncate z-way logfile, exception: {}, {}".format(ModuleName, ex, ex.args))
         reactor.callLater(ELEMENT_WATCHDOG_INTERVAL, self.elementWatchdog)
 
     def pollElement(self):
