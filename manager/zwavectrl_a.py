@@ -364,6 +364,10 @@ class ZwaveCtrl():
                                                     foundData = True
                                                 if foundData:
                                                     self.logThread("debug", "found name: " + name)
+                                                    # Botch because different versions of the device have different vendor strings
+                                                    if name == "Aeotec 100 2":
+                                                        self.logThread("info", "Changing name from Aeotec 100 2 to Aeon Labs 100 2")
+                                                        name - "Aeon Labs 100 2"
                                                     self.found.append({"protocol": "zwave",
                                                                        "name": name,
                                                                        #"mac_addr": "XXXXX" + str(d),
