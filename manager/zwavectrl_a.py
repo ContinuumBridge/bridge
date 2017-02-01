@@ -244,8 +244,8 @@ class ZwaveCtrl():
                         excludeTick += 1
                         time.sleep(INCLUDE_WAIT_TIME)
             elif self.resetBoard:
-                #URL = resetUrl
-                reactor.callFromThread(self.setState, "stopping")
+                URL = resetUrl
+                #reactor.callFromThread(self.setState, "stopping")
                 self.resetBoard = False
                 self.logThread("debug", "Resetting RazBerry board")
             elif self.postToUrls:
@@ -513,9 +513,13 @@ class ZwaveCtrl():
         elif cmd["cmd"] == "stop":
             msg = {"id": self.id,
                    "status": "stopping"}
-            # Reset Razberry board before stopping
-            self.resetBoard = True
             reactor.callLater(2.5, self.doStop)
+        elif cmd["cmd"] == "action":
+            if "action" in cmd:
+                if cmd["action"] == "reset":
+                    self.resetBoard = True
+            msg = {"id": self.id,
+                   "status": "resetting"}
         elif cmd["cmd"] == "config":
             self.processConfig(cmd["config"])
             msg = {"id": self.id,

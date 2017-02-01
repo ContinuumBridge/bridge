@@ -1278,21 +1278,28 @@ class ManageBridge:
                 try:
                     action = command.split()
                     found = False
-                    for i in self.idToName:
-                        if self.idToName[i] == action[1]:
-                            found = True
+                    if action[1] == "zwave":
+                        self.elFactory["zwave"].sendMsg({"cmd": "action", "action": action[2]})
+                        logger.debug('%s action, sent %s to zwave', ModuleName, action[2])
+                        self.sendStatusMsg("Sent " + action[2] + " to " + action[1])
+                    else:
+                        for i in self.idToName:
+                            if self.idToName[i] == action[1]:
+                                found = True
+                                element = i
+                                break
+                        if found:
                             self.cbSendMsg({"cmd": "action",
                                             "action": action[2]}, 
-                                           i)
-                            logger.debug('%s action, sent %s to %s', ModuleName, action[2], self.idToName[i])
-                            self.sendStatusMsg("Sent " + action[2] + " to " + self.idToName[i])
-                            break
-                    if not found:
-                        self.sendStatusMsg("Action requested for unrecognised app or device")
+                                            element)
+                            logger.debug('%s action, sent %s to %s', ModuleName, action[2], action[1])
+                            self.sendStatusMsg("Sent " + action[2] + " to " + action[1])
+                        else:
+                            self.sendStatusMsg("Action requested for unrecognised app or device")
                 except Exception as ex:
                     logger.warning('%s Badly formed action command %s', ModuleName, str(action))
                     logger.warning("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
-                    self.sendStatusMsg("Usage: action <device name> <action>")
+                    self.sendStatusMsg("Usage: action device_name action_name")
             elif command == "z-exclude" or command == "z_exclude":
                 self.sendStatusMsg("Hello. This is bridge " + self.bridge_id)
             elif command == "":
