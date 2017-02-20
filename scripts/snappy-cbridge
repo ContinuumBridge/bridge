@@ -2,7 +2,7 @@
 # /etc/init.d/cbridge
 
 ### BEGIN INIT INFO
-# Provides:          snappy-spur
+# Provides:          snappy-cbridge
 # Required-Start:    $remote_fs $syslog
 # Required-Stop:     $remote_fs $syslog
 # Default-Start:     2 3 4 5
@@ -12,7 +12,7 @@
 ### END INIT INFO
 
 # If you want a command to always run, put it here
-NAME=snappy-spur
+NAME=snappy-cbridge
 #BRIDGEPATH=/opt/cbridge
 BRIDGEPATH=/home/petec/snappy-spur
 #THISBRIDGE=$BRIDGEPATH'/thisbridge/thisbridge.sh'
@@ -22,7 +22,7 @@ PIDFILE=/home/petec/snappytmp/$NAME.pid
 # Carry out specific functions when asked to by the system
 case "$1" in
   start)
-        echo -n "Starting snappy-spur: "
+        echo -n "Starting snappy-cbridge: "
         cd $BRIDGEPATH'/bridge/manager'
         if [ -f $THISBRIDGE ]; then
             # Must source so that exports affect the parent script
@@ -38,13 +38,13 @@ case "$1" in
         fi
 	;;
   stop)
-	echo -n "Stopping snappy-spur: "
+	echo -n "Stopping snappy-cbridge: "
 	start-stop-daemon --stop --signal 2 --quiet --pidfile $PIDFILE
 	rm $PIDFILE
 	echo "done."
 	;;
   restart)
-	echo "Restarting snappy-spur: "
+	echo "Restarting snappy-cbridge: "
 	sh $0 stop
 	sleep 10
 	sh $0 start
