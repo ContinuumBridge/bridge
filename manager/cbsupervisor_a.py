@@ -52,7 +52,8 @@ class Supervisor:
         signal.signal(signal.SIGINT, self.signalHandler)  # For catching SIGINT
         signal.signal(signal.SIGTERM, self.signalHandler)  # For catching SIGTERM
         reactor.callLater(0.1, self.startConman)
-        reactor.callInThread(self.iptables)
+        if CB_RASPBERRY:
+            reactor.callInThread(self.iptables)
         reactor.callLater(1, self.startManager, False)
         #reactor.callLater(120, self.disconnectTest)
         reactor.run()
@@ -60,11 +61,13 @@ class Supervisor:
     def startConman(self):
         logging.debug("%s startConman: CB_CELLULAR_PRIORITY: %s", ModuleName, CB_CELLULAR_PRIORITY)
         self.conman = conman.Conman()
-        self.conman.start(logFile=CB_LOGFILE, logLevel=CB_LOGGING_LEVEL, cellularPriority=CB_CELLULAR_PRIORITY)
+        if CB_RASPBERRY:
+            self.conman.start(logFile=CB_LOGFILE, logLevel=CB_LOGGING_LEVEL, cellularPriority=CB_CELLULAR_PRIORITY)
 
     def startManager(self, restart):
         self.starting = True
-        self.manageNTP(False)
+        if CB_RASPBERRY:
+            self.manageNTP(False)
         # Try to remove all sockets, just in case
         for f in glob.glob(CB_SOCKET_DIR + "SKT-*"):
             os.remove(f)

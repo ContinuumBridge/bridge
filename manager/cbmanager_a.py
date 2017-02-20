@@ -32,7 +32,6 @@ import subprocess
 import json
 import urllib
 import pexpect
-import RPi.GPIO as GPIO
 # Try to use sftp first
 try:
     import pysftp
@@ -52,6 +51,8 @@ from cbconfig import *
 from dropbox.client import DropboxClient, DropboxOAuth2Flow, DropboxOAuth2FlowNoRedirect
 from dropbox.rest import ErrorResponse, RESTSocketError
 import procname
+if CB_RASPBERRY:
+    import RPi.GPIO as GPIO
 if CB_SIM_LEVEL == '1':
     from simdiscover import SimDiscover
 
@@ -132,14 +133,17 @@ class ManageBridge:
         self.ledState = False
 
         # Setup pin 26 as indicator LED
-        try:
-            GPIO.setmode(GPIO.BCM)
-            GPIO.setwarnings(False)
-            GPIO.setup(26, GPIO.OUT)
-            self.useLED = True
-        except Exception as ex:
+        if CB_RASPBERRY:
+            try:
+                GPIO.setmode(GPIO.BCM)
+                GPIO.setwarnings(False)
+                GPIO.setup(26, GPIO.OUT)
+                self.useLED = True
+            except Exception as ex:
+                self.useLED = False
+                logger.warning("Failed to set up LED. Exception: {}, {}".format(type(ex), ex.args))
+        else:
             self.useLED = False
-            logger.warning("Failed to set up LED. Exception: {}, {}".format(type(ex), ex.args))
         status = self.readConfig()
         logger.info('%s Read config status: %s', ModuleName, status)
         if CB_SIM_LEVEL == '1':
@@ -177,7 +181,8 @@ class ManageBridge:
     def connectConduit(self):
         if CB_NO_CLOUD != "True":
             logger.info('%s Starting conduit', ModuleName)
-            exe = "/opt/node/bin/node"
+            #exe = "/opt/node/bin/node"
+            exe = "nodejs"
             path = CB_BRIDGE_ROOT + "/nodejs/index.js"
             try:
                 self.nodejsProc = subprocess.Popen([exe, path,  CB_CONTROLLER_ADDR, CB_BRIDGE_EMAIL, CB_BRIDGE_PASSWORD])
@@ -206,12 +211,15 @@ class ManageBridge:
             reactor.callLater(0.5, self.manageLED)
 
     def checkZwave(self):
-        zwayFilename = "/opt/z-way-server/z-way-server"
-        if os.path.isfile(zwayFilename):
-            self.zwave = True
+        if CB_RASPBERRY:
+            zwayFilename = "/opt/z-way-server/z-way-server"
+            if os.path.isfile(zwayFilename):
+                self.zwave = True
+            else:
+                self.zwave = False
+            logger.info("%s Z-Wave installed on bridge: %s", ModuleName, self.zwave)
         else:
             self.zwave = False
-        logger.info("%s Z-Wave installed on bridge: %s", ModuleName, self.zwave)
 
     def checkBluetooth(self):
         try:
@@ -271,10 +279,11 @@ class ManageBridge:
             logger.error('%s Cannot open supervisor socket %s', ModuleName, s)
             logger.error("%s Exception: %s %s", ModuleName, type(ex), str(ex.args))
 
-        try:
-            reactor.callInThread(self.checkBluetooth)
-        except Exception as ex:
-            logger.warning("%s Unable to to call checkBluetooth, exception: %s %s", ModuleName, type(ex), str(ex.args))
+        if CB_RASPBERRY:
+            try:
+                reactor.callInThread(self.checkBluetooth)
+            except Exception as ex:
+                logger.warning("%s Unable to to call checkBluetooth, exception: %s %s", ModuleName, type(ex), str(ex.args))
         self.checkZwave()
         els = [{"id": "conc",
                 "socket": "SKT-MGR-CONC",
@@ -660,8 +669,8 @@ class ManageBridge:
                 appRootDev = appRoot
                 adtRootDev = adtRoot
             else:   
-                appRootDev = "/home/" + CB_USERNAME + "/apps_dev/"
-                adtRootDev = "/home/" + CB_USERNAME + "/adaptors_dev/"
+                appRootDev = CB_HOME + "/apps_dev/"
+                adtRootDev = CB_HOME + "/adaptors_dev/"
             logger.debug('%s appRootDev: %s', ModuleName, appRootDev)
             logger.debug('%s adtRootDev: %s', ModuleName, adtRootDev)
         configFile = CB_CONFIG_DIR + "/bridge.config"
