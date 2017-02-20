@@ -1,0 +1,3 @@
+[submodule "conman"]
+	path = conman
+	url = https://github.com/ContinuumBridge/conman.git
