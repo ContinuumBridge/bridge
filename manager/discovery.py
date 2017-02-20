@@ -18,6 +18,7 @@ import os
 import pexpect
 import json
 import logging
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname( __file__ ), '../lib')))
 from cbconfig import *
 
 if __name__ == '__main__':

@@ -20,6 +20,7 @@ from subprocess import Popen
 from subprocess import check_output
 from twisted.internet import threads
 from twisted.internet import reactor, defer
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname( __file__ ), '../lib')))
 from cbcommslib import CbServerProtocol
 from cbcommslib import CbServerFactory
 from cbconfig import *

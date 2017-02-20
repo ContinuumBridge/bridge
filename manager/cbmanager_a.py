@@ -42,6 +42,7 @@ import ftplib
 from twisted.internet import threads
 from twisted.internet import reactor, defer
 from twisted.internet import task
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname( __file__ ), '../lib')))
 from cbcommslib import CbClientProtocol
 from cbcommslib import CbClientFactory
 from cbcommslib import CbServerProtocol

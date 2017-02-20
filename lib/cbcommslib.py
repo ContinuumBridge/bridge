@@ -26,6 +26,7 @@ import time
 import json
 import logging
 import procname
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname( __file__ ), '../../bridge/lib')))
 from cbconfig import *
 from twisted.internet.protocol import Protocol, Factory
 from twisted.internet.protocol import ClientFactory

@@ -14,6 +14,7 @@ import json
 import requests
 import procname
 from pprint import pprint
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname( __file__ ), '../lib')))
 from cbconfig import *
 from twisted.internet import task
 from twisted.internet import threads
