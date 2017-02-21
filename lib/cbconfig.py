@@ -15,7 +15,7 @@ def str2bool(v):
 
 CB_BRIDGE_ROOT = os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..'))
 CB_HOME = os.path.abspath(os.path.join(os.path.dirname( __file__ ), '../..'))
-CB_SNAPPY_DIR = "/var/snap/snappy_spur/common"
+CB_SNAPPY_DIR = "/var/snap/snappy-spur/common"
 #CB_SNAPPY_DIR = "/home/petec/snappytmp"
 CB_SOCKET_DIR = CB_SNAPPY_DIR + "/sockets/"
 CB_CONFIG_DIR = CB_SNAPPY_DIR + "/thisbridge/"
