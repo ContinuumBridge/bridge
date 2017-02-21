@@ -49,8 +49,6 @@ from cbcommslib import CbServerProtocol
 from cbcommslib import CbServerFactory
 from cbcommslib import isotime
 from cbconfig import *
-from dropbox.client import DropboxClient, DropboxOAuth2Flow, DropboxOAuth2FlowNoRedirect
-from dropbox.rest import ErrorResponse, RESTSocketError
 import procname
 if CB_RASPBERRY:
     import RPi.GPIO as GPIO
