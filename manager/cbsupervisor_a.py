@@ -27,6 +27,9 @@ from cbconfig import *
 sys.path.insert(0, CB_BRIDGE_ROOT + "/conman")
 import conman
 
+CB_BID = os.getenv('CB_BID', 'unconfigured')
+print("CB_CIB: {}".format(CB_BID))
+
 MANAGER_START_TIME = 3            # Time to allow for manager to start before starting to monitor it (secs)
 WATCHDOG_INTERVAL = 30            # Time between manager checks (secs)
 REBOOT_WAIT = 10                  # Time to allow bridge to stop before rebooting
