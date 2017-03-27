@@ -321,6 +321,7 @@ class CbApp:
                    "status": "ok"}
         elif cmd["cmd"] == "status":
             if "status" in cmd:
+                #logging.debug("%s %s processManager, calling onManagerStatus, status: %s", ModuleName, self.id, cmd["status"])
                 self.onManagerStatus(cmd["status"])
             msg = {"id": self.id,
                    "status": self.status}
@@ -356,6 +357,7 @@ class CbClient():
         self.keep = keep
         self.onClientMessage = None
         self.count = 0
+        self.connected = True  # If app doesn't use this, always try to send messages
         self.bodies = []
         self.saveFile =  CB_CONFIG_DIR + self.aid + ".save"
 
@@ -377,19 +379,29 @@ class CbClient():
             except Exception as ex:
                 self.cbLog("debug", "Cannot remove unsent messages file. Exception. Type: " + str(type(ex)) + "exception: " +  str(ex.args))
 
-    def send(self, body):
-        body["n"] = self.count
-        self.count += 1
-        self.bodies.append(body)
-        if len(self.bodies) > self.keep:
-            del self.bodies[0]
-        message = {
-                   "source": self.aid,
-                   "destination": self.cid,
-                   "body": self.bodies
-                  }
-        self.sendMessage(message, "conc")
-        #self.cbLog("debug", "sending message: " + str(message))
+    def setConnected(self, connected):
+        self.connected = connected
+        if self.connected:
+            self.send()  # As soon as we become reconnected, send anything that is stored
+
+    def send(self, body=None):
+        if body:
+            body["n"] = self.count
+            self.count += 1
+            self.bodies.append(body)
+            if len(self.bodies) > self.keep:
+                del self.bodies[0]
+        # Only send messages if we're connected to the bridge controller
+        if (self.connected and self.bodies):
+            message = {
+                       "source": self.aid,
+                       "destination": self.cid,
+                       "body": self.bodies
+                      }
+            self.sendMessage(message, "conc")
+            #self.cbLog("debug", "sending message: " + str(message))
+        else:
+            self.cbLog("{} Disconnected. Not sending message".format(aid))
 
     def receive(self, message):
         try:
