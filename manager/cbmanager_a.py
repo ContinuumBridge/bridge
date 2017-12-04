@@ -115,6 +115,7 @@ class ManageBridge:
         self.firstWatchdog = True
         self.firstConnectionWatchdog = True
         self.elements = {}
+        self.devices = []
         self.appProcs = {}
         self.concConfig = []
         self.appConfigured = []
