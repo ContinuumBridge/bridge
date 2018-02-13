@@ -65,7 +65,7 @@ CONCENTRATOR_PATH = CB_BRIDGE_ROOT + "/concentrator/concentrator.py"
 ZWAVE_PATH = CB_BRIDGE_ROOT + "/manager/z-wave-ctrl.py"
 USB_DEVICES_FILE = CB_BRIDGE_ROOT + "/manager/usb_devices.json"
 
-LOGFILE_MAXBYTES    = 10000000
+LOGFILE_MAXBYTES    = 500000
 LOGFILE_BACKUPCOUNT = 5
 logger = logging.getLogger('Logger')
 logger.setLevel(CB_LOGGING_LEVEL)
