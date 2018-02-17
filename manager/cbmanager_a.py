@@ -6,7 +6,7 @@
 # Written by Peter Claydon
 #
 START_DELAY = 0.2                          # Delay between starting each adaptor or app
-CONDUIT_WATCHDOG_MAXTIME = 180             # Max time with no message before notifying supervisor
+CONDUIT_WATCHDOG_MAXTIME = 60              # Max time with no message before notifying supervisor
 CONDUIT_MAX_DISCONNECT_COUNT = 10          # Max number of messages before notifying supervisor
 ELEMENT_WATCHDOG_INTERVAL = 120            # Interval at which to check apps/adaptors have communicated
 ELEMENT_POLL_INTERVAL = 30                 # Delay between polling each element
