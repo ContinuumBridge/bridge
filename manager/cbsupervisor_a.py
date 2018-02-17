@@ -22,6 +22,7 @@ from twisted.internet import threads
 from twisted.internet import reactor, defer
 from cbcommslib import CbServerProtocol
 from cbcommslib import CbServerFactory
+import pexpect
 from cbconfig import *
 sys.path.insert(0, CB_BRIDGE_ROOT + "/conman")
 import conman
@@ -34,6 +35,7 @@ EXIT_WAIT = 2                     # On SIGINT, time to wait before exit after ma
 SAFETY_INTERVAL = 300             # Delay before rebooting if manager failed to start
 NTP_UPDATE_INTERVAL = 12*3600     # How often to run ntpd to sync time
 FIVE_MINUTES = 5*60               # As it says on the tin
+NTP_TIMEOUT = 30                  # Time to wait for NTP command to succeed before giving up
 
 class Supervisor:
     def __init__(self):
@@ -64,7 +66,7 @@ class Supervisor:
 
     def startManager(self, restart):
         self.starting = True
-        self.manageNTP(False)
+        reactor.callLater(10, self.manageNTP, False)  # Added delay because of problem with Arkessa SIMs
         # Try to remove all sockets, just in case
         for f in glob.glob(CB_SOCKET_DIR + "SKT-*"):
             os.remove(f)
@@ -271,23 +273,25 @@ class Supervisor:
             reactor.callLater(NTP_UPDATE_INTERVAL, self.manageNTP, False)
 
     def manageNTPThread(self):
-        logging.debug("%s manageNTPThread", ModuleName)
+        success = False
+        cmd = "sudo /usr/sbin/ntpd -p /var/run/ntpd.pid -g -q"
         try:
-            syncd = False
-            while not syncd:
-                s = check_output(["sudo", "/usr/sbin/ntpd", "-p", "/var/run/ntpd.pid", "-g", "-q"])
-                logging.info("%s NTP time updated %s", ModuleName, str(s))
-                if "time" in str(s):
-                    self.timeChanged = True
-                    syncd = True
-                else:
-                    time.sleep(10)
-            return syncd
-        except Exception as ex:
-            logging.warning("%s Cannot run NTP. Exception: %s %s", ModuleName, type(ex), str(ex.args))
-            time.sleep(10)
-            return False
-        
+            p = pexpect.spawn(cmd)
+        except:
+            logging.warning("%s Cannot spawn ntp", ModuleName)
+        index = p.expect(['ntpd', pexpect.TIMEOUT, pexpect.EOF], timeout=NTP_TIMEOUT)
+        if index == 1 or index == 2:
+            logging.warning("%s %s did not succeed", ModuleName, cmd)
+            p.sendcontrol("c")
+        else:
+            logging.info("%s %s succeeded", ModuleName, cmd)
+            p.sendcontrol("c")
+            self.timeChanged = True
+            syncd = True
+            success = True
+        time.sleep(10)
+        return success
+
     def reboot(self):
         logging.info("%s Rebooting", ModuleName)
         try:
